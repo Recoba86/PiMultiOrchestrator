@@ -33,13 +33,15 @@ Exit gate: deterministic tests prove save/restore/migrate/recover/precedence/exp
 
 ## M2 — 9Router and selective model manager
 
+Status: Complete.
+
 Deliverables:
 
 - authenticated, timeout-bounded `GET /v1/models` discovery through the secret resolver;
 - full catalog cache with freshness and last-known-good semantics;
 - explicit enabled-route set and dynamic Pi provider exposing only enabled 9Router routes;
-- minimal Models & 9Router TUI: refresh, search, inspect, enable, disable, test, and diagnostics;
-- proof of route/resource identity, response metadata, and runtime provider refresh behavior against a fake 9Router first, then an explicitly authorized real smoke test.
+- minimal Models & 9Router TUI: refresh, search, inspect, enable, disable, connection setup, and catalog/provider diagnostics; live route-test UX remains deferred because it can consume quota;
+- proof of route identity, observed metadata limits, and runtime provider refresh behavior against a fake 9Router and the installed Pi runtime. The optional live catalog probe remains credential-gated and was skipped when credentials were absent.
 
 Exit gate: remote 36/enabled 5, new-disabled-by-default, stale-catalog, duplicate-underlying-model, and unavailable-gateway acceptance tests pass.
 

@@ -115,7 +115,7 @@ The extension MUST register `/orchestrator`. In interactive Pi mode it MUST open
 - **MOD-007:** Models & 9Router MUST support refresh, search/filter, enable, disable, inspect, route test, health display, pool assignment, source/resource display when known, and priority editing.
 - **MOD-008:** Add, Remove, Enable/Disable, Move Up, Move Down, Inspect, Test, and Edit Route Policy MUST persist through validated saves.
 - **MOD-009:** Runtime changes SHOULD activate while Pi is idle without restart when the installed API safely permits it.
-- **MOD-010:** An active route MUST NOT be removed mid-turn. Disable MUST be staged until idle and a valid replacement exists.
+- **MOD-010:** An active route MUST NOT be removed mid-turn. A milestone MAY block disable until the user explicitly switches to a valid replacement, or stage the disable until Pi is idle and a confirmed valid replacement exists; it MUST NOT silently switch to an unrelated model.
 - **MOD-011:** If 9Router is unavailable and a valid cached enabled catalog exists, the product MAY register it as stale and MUST show that state. With no valid cache, it MUST expose no invented 9Router routes and show recovery guidance.
 - **MOD-012:** Catalog data insufficient to distinguish resources MUST be marked ambiguous and MUST NOT be auto-merged.
 

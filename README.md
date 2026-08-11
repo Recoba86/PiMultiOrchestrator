@@ -4,9 +4,9 @@ Pi Multi-Orchestrator is a planned Pi extension for coordinating a Boss model an
 
 ## Status
 
-M0 and M1 are complete. M1 provides the offline configuration foundation only: strict versioned schemas, safe defaults, migrations, deterministic resolution, atomic JSON persistence, bounded history, recovery, import/export, and process-local mutation serialization.
+M0, M1, and M2 are complete. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface.
 
-This is not a production Pi extension yet. It has no extension entrypoint, TUI, network client, model execution, workers, routing engine, health engine, SQLite runtime state, or analytics collection.
+This is still an early extension, not the complete orchestrator. It has no pool editor, priority router, workers, Boss execution, health engine, SQLite runtime state, analytics collection, or full M9 control center.
 
 The implementation contract is split across:
 
@@ -41,7 +41,16 @@ npm test
 npm run check
 ```
 
-Tests use Node's built-in test runner and temporary directories only. They do not use Pi, 9Router, credentials, network access, paid models, or the live agent directory.
+Tests use Node's built-in runner, temporary directories, and a random loopback fake 9Router. They load the built extension into the installed Pi `0.84.1`, list only selected fake routes, and complete one deterministic fake streamed turn. They use no live credentials, paid models, external network, or live agent directory.
+
+Development loading is explicit; the extension is not installed into the live Pi directory:
+
+```sh
+PI_MULTI_ORCH_CONFIG_ROOT=/path/to/isolated/root \
+  pi --no-extensions -e ./dist/host/pi-extension.js
+```
+
+The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key. Other URL paths are rejected.
 
 ## Scope boundary
 
@@ -54,4 +63,4 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 also did not modify any live environment. The next authorized milestone is M2 only: the 9Router catalog and selective model manager, beginning with fake/local integration and explicit credential boundaries. See [Roadmap](docs/ROADMAP.md).
+M1 and M2 did not modify any live environment. The next milestone is M3 only: three execution-pool management and ordered route priorities. See [Roadmap](docs/ROADMAP.md).

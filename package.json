@@ -1,7 +1,7 @@
 {
   "name": "pi-multi-orchestrator",
   "version": "0.0.0-development",
-  "description": "Configuration foundation for a future Pi multi-model orchestrator",
+  "description": "Selective 9Router model manager and configuration foundation for Pi",
   "type": "module",
   "private": true,
   "files": [
@@ -13,6 +13,14 @@
     "./config": {
       "types": "./dist/core/config/index.d.ts",
       "import": "./dist/core/config/index.js"
+    },
+    "./ninerouter": {
+      "types": "./dist/core/ninerouter/index.d.ts",
+      "import": "./dist/core/ninerouter/index.js"
+    },
+    "./pi": {
+      "types": "./dist/host/pi-extension.d.ts",
+      "import": "./dist/host/pi-extension.js"
     }
   },
   "scripts": {
@@ -26,7 +34,11 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.1"
+  },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.1",
     "@types/node": "24.12.4",
     "typescript": "5.9.3"
   }

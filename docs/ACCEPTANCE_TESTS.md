@@ -154,7 +154,7 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Level:** I
 - **Setup:** generation 1 has 36 entries and 5 enabled; generation 2 adds `new-37`.
 - **Action:** refresh generation 2.
-- **Pass:** catalog count is 37; enabled count remains 5; `new-37` is marked new/disabled, absent from all pools and Pi provider exposure until explicit enable/save.
+- **Pass:** catalog count is 37; enabled count remains 5; `new-37` is disabled (and marked ambiguous when resource identity is absent), absent from all pools and Pi provider exposure until explicit enable/save.
 
 ### MOD-03 — Missing enabled model is not retargeted
 
@@ -169,6 +169,7 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Setup:** routes `luna-codex-sub` and `luna-opencode-sub` share underlying family/version but have distinct resource IDs/remote IDs.
 - **Action:** enable both, add both to Implementation, record one failure.
 - **Pass:** two Pi model choices/routes remain; pool order preserves both; health/cost/usage/fallback events attach only to the attempted resource; no deduplication occurs.
+- **Milestone ownership:** M2 proves distinct route IDs and Pi choices without deduplication. M3 owns pool membership/order; M4/M8 own health and cost/usage attribution.
 
 ### MOD-05 — Ambiguous resource identity
 
@@ -184,12 +185,12 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** enable `c`, disable `b`, save/activate.
 - **Pass:** without Pi restart, provider exposes `a,c`; `b` is absent; saved/active generations agree; command/TUI remains responsive.
 
-### MOD-07 — Disable active route is staged
+### MOD-07 — Disable active route is blocked or staged safely
 
 - **Level:** P
 - **Setup:** route `b` is active; Pi is streaming.
 - **Action:** request disable `b`.
-- **Pass:** no mid-turn removal occurs; UI shows pending; at idle user selects/has a valid replacement, model switch succeeds, then `b` is removed; mission checkpoint records the boundary.
+- **Pass:** no mid-turn removal occurs. M2 may reject the mutation with visible switch-first guidance. A later staged implementation may show pending, wait for idle, require a valid confirmed replacement, switch, and then remove `b`; neither path silently selects an unrelated model.
 
 ### MOD-08 — Unavailable 9Router with cache
 

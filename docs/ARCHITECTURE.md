@@ -120,11 +120,15 @@ Responsibilities:
 - return secret-bearing values in memory for the shortest practical lifetime;
 - redact failures before they leave the module.
 
-Approved stores may include Pi's auth provider, environment variables, and macOS Keychain. Configuration, history, SQLite, exports, analytics, and diagnostics store the reference/type only. M2 chooses the first store after an authorized integration proof.
+Approved stores may include Pi's auth provider, environment variables, and macOS Keychain. Configuration, history, SQLite, exports, analytics, and diagnostics store the reference/type only. M2 implements environment references only. Discovery resolves the value at the request boundary; Pi provider registration receives `$ENV_NAME`, never the resolved value. Pi auth and Keychain resolution remain unavailable rather than falling back to plaintext.
 
 ### 5.4 `catalog` and `host/pi-provider-bridge`
 
 `catalog` fetches and validates the full 9Router catalog, assigns a generation, preserves last-known-good data, and reconciles stable local route records without auto-enabling new rows.
+
+M2 keeps `ConfigV1` at schema version 1: its existing gateway, route, exact remote ID, resource, enabled-state, and `SecretRef` fields already cover authoritative user choices. Catalog generations, freshness, failures, and missing status are runtime observations in a separately validated `catalog.json`; they are absent from config history and export. Each cache snapshot is bound to its normalized gateway base, so changing endpoints withholds old catalog rows until the new endpoint refreshes successfully.
+
+The persistent gateway ID is `ninerouter` because all M1 stable IDs must begin with a letter. Its `kind` and Pi provider namespace are `9router`; these identifiers are deliberately distinct.
 
 `pi-provider-bridge` registers one native Pi provider namespace for enabled 9Router routes. Its model refresh projection is:
 
@@ -135,7 +139,7 @@ full catalog generation
     = Pi model definitions for enabled routes only
 ```
 
-The full catalog never becomes the Pi provider's model list. A TUI save that changes enabled routes publishes a new config generation, refreshes/re-registers the provider while Pi is idle, verifies the effective model set, and then reports activation. If activation fails, configuration remains saved but is marked pending/error; the previous safe registry generation remains active.
+The full catalog never becomes the Pi provider's model list. A TUI save that changes enabled routes publishes a new config generation and re-registers the provider model projection immediately when safe. Pi `0.84.1` replaces the supplied provider model list in place, so a failed validation leaves the prior registry intact. If activation fails, configuration remains saved and the UI reports the runtime error for a later reconciliation.
 
 ### 5.5 `policy`
 
@@ -226,13 +230,13 @@ MissionPolicy {
 }
 ```
 
-`Route.id` is local and stable. `remoteModelId` is what is sent to 9Router. `resourceId` distinguishes subscription/API/combo resources. `underlyingFamily` is optional metadata for diversity, never identity. If discovery cannot populate resource identity, the route is ambiguous until user configuration or a richer 9Router API resolves it.
+`Route.id` is local and stable. `remoteModelId` is what is sent to 9Router. `resourceId` distinguishes subscription/API/combo resources. `underlyingFamily` is optional metadata for diversity, never identity. If discovery cannot populate resource identity, the row is marked ambiguous and remains disabled by default; an explicit user enable preserves the exact remote ID and an unknown-resource warning without merging it with another row.
 
 No resolved credential field exists in these schemas.
 
 ## 7. Configuration and scope
 
-M1 accepts an injected configuration root and never reads a live Pi directory. M2 will derive that root from Pi exports such as `getAgentDir()` and `CONFIG_DIR_NAME`; implementation must not hard-code `.pi`.
+M1 accepts an injected configuration root and never reads a live Pi directory. M2 derives the default root from Pi's `getAgentDir()` export and supports the explicit `PI_MULTI_ORCH_CONFIG_ROOT` test/development override; it does not hard-code `.pi`.
 
 Conceptual locations:
 
@@ -240,6 +244,7 @@ Conceptual locations:
 <agentDir>/pi-multi-orchestrator/
   config.json                  global human-portable config
   history/                     prior valid config generations
+  catalog.json                 validated M2 runtime cache, not exported
   runtime.sqlite               missions, health, catalog, analytics, audit (M6+)
   backups/                     validated runtime database backups (M6+)
 
@@ -281,6 +286,8 @@ Objects merge only through declared fields. Ordinary arrays replace wholesale. P
 - The SDK creates AgentSession instances and controls models/tools/sessions.
 - Pi's bundled subagent example launches separate `pi --mode json -p --no-session` child processes, streams JSON events, applies model/tool arguments, caps output, limits concurrency, and propagates abort.
 
+M2 loads `dist/host/pi-extension.js` explicitly with `-e`. Its config root is `PI_MULTI_ORCH_CONFIG_ROOT` when set, otherwise `join(getAgentDir(), "pi-multi-orchestrator")`; no `.pi` path is hard-coded. Isolated acceptance also sets `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, and `PI_OFFLINE=1`.
+
 ### 8.2 Custom layers required
 
 Pi does not natively provide:
@@ -313,15 +320,17 @@ Pi session JSONL is not canonical mission storage because it is branch-oriented,
 9Router's documented compatibility API includes authenticated `GET /v1/models` and model request endpoints under `/v1/*`. Discovery uses the compatibility catalog, not an undocumented static route list.
 
 ```text
-GET <gateway base>/v1/models
+GET <configured-v1-base>/models
   Authorization: resolved only at request boundary when required
   AbortSignal + configured timeout
 
-POST <gateway base>/v1/chat/completions (through Pi provider)
+POST <configured-v1-base>/chat/completions (through Pi provider)
   model: Route.remoteModelId
 ```
 
-M2 must validate the deployed version without printing its URL, headers, or credentials. The compatibility catalog is sufficient for model IDs but may not expose subscription/account identity, underlying family, context limits, costs, health, or the actual member chosen by a combo. Those fields remain unknown until a documented management endpoint, response metadata, or explicit user mapping supplies them.
+The configured base includes `/v1`; a bare origin is normalized to `/v1`, while other paths are rejected. Normalization removes trailing slashes and rejects credentials, query/fragment state, non-HTTP(S) schemes, and non-loopback plaintext HTTP. It never appends a second `/v1` or downgrades HTTPS.
+
+The optional live M2 catalog probe was skipped because the required environment variables were absent. Fake acceptance proves exact model IDs and the supported compatibility shape only; subscription/account identity, underlying family, costs, health, combo membership, and actual member selection remain unknown until a documented live response exposes them.
 
 Boundary rule:
 
@@ -336,14 +345,14 @@ Boundary rule:
 1. User selects Refresh
 2. CatalogClient fetches /v1/models with secret resolver + timeout
 3. Validate response size/schema and create catalog generation N
-4. Reconcile by stable remote/resource identity
-   - known route: update last-seen metadata
-   - new route: create disabled
-   - missing route: mark unavailable/stale; never retarget
+4. Reconcile by exact remote identity
+   - known configured route: preserve local identity and enabled state
+   - new catalog row: visible but not configured/enabled
+   - missing configured route: derive unavailable/missing status; never retarget
 5. Persist generation transactionally
 6. TUI previews changes
-7. User enables/disables/reorders and saves config generation C
-8. At Pi idle boundary, ProviderBridge projects enabled valid routes
+7. User enables/disables and saves config generation C (pool order begins in M3)
+8. ProviderBridge blocks removal of the active route; otherwise it projects enabled valid routes
 9. Pi registry refresh/re-register occurs
 10. Verify effective provider model IDs; mark C active or pending/error
 ```
@@ -599,7 +608,7 @@ Pure tests use in-memory values and fixed clocks/IDs for config merge/migration,
 
 ### Real Pi smoke
 
-An explicitly authorized smoke package is loaded from the repository or a temporary project location, never copied into live global config implicitly. It verifies command registration, custom component open/close, provider register/refresh/remove, session reload, model switch boundary, and one selected real 9Router route only when credentials/fixture authorization is present.
+An explicitly loaded development package is loaded from the repository or a temporary project location, never copied into live global config implicitly. M2 acceptance loaded the extension into installed Pi `0.84.1` with isolated agent/session/config roots, listed exactly five enabled fake routes, exposed all four commands through RPC, and completed one OpenAI-compatible streamed fake turn with the exact result `PI_FAKE_9ROUTER_OK`. It made no live provider call.
 
 Offline/integration evidence MUST be labeled as such and never reported as real-provider proof.
 
@@ -609,14 +618,14 @@ These unknowns do not weaken requirements; the named milestone must prove the im
 
 | ID | Required proof | Milestone | Failure response |
 |---|---|---|---|
-| POC-01 | Dynamic native-provider refresh changes only this provider's enabled models in Pi `0.84.1`, including active-model disable behavior. | M2 | Use safe unregister/register at idle; never edit Pi settings automatically. |
-| POC-02 | Deployed 9Router `/v1/models` fields can distinguish model, provider/resource, aliases, and combos. | M2 | Require explicit local resource mapping and mark ambiguous entries disabled. |
+| POC-01 | Dynamic native-provider refresh changes only this provider's enabled models in Pi `0.84.1`, including active-model disable behavior. | M2 | Proven for fake routes: in-place re-registration replaces this provider's models; active-route disable is blocked until the user switches. |
+| POC-02 | Deployed 9Router `/v1/models` fields can distinguish model, provider/resource, aliases, and combos. | M2 | Live probe skipped without credentials; exact IDs are preserved, unproven resource fields remain unknown, and rows are never merged by name. |
 | POC-03 | 9Router responses expose authoritative actual route/account after internal combo fallback. | M2/M4 | Treat combo as opaque and label actual route/cost/diversity unknown. |
 | POC-04 | Provider status/headers and Pi events are sufficient to classify quota/rate/auth/timeout across supported transports. | M4 | Use conservative unknown classification and bounded Boss-visible recovery. |
 | POC-05 | Packaged extension can launch the same current Pi executable, stream JSON, terminate its process tree, and avoid recursive orchestrator loading. | M5 | Use a narrowly configured SDK child runner if process invocation is not portable. |
 | POC-06 | `node:sqlite` works under all supported Pi launch modes, including standalone/Bun if supported. | M6 | Select one compatible SQLite driver; keep logical schema and tests unchanged. |
 | POC-07 | Custom component listeners/overlays dispose correctly across `/reload`, `/resume`, `/fork`, and shutdown. | M9 | Close the Control Center on lifecycle change and reopen from canonical state. |
-| POC-08 | Approved credential source integrates with a native Pi provider without persisting plaintext in package config/history. | M2 | Route remains unavailable with setup guidance; no literal-secret fallback. |
+| POC-08 | Approved credential source integrates with a native Pi provider without persisting plaintext in package config/history. | M2 | Proven with an environment reference and synthetic fake key; Pi receives `$ENV_NAME`, while unsupported stores remain unavailable with no literal fallback. |
 | POC-09 | Actual token/cache/cost metadata available per supported 9Router/Pi route. | M8 | Persist null/unknown and avoid fabricated cost/quality comparisons. |
 
 ## 22. Deliberate limits

@@ -120,3 +120,10 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Rationale:** A model change can preserve transcript context, but replaying a side-effecting turn can duplicate changes.
 - **Alternatives:** Immediate removal/switch or automatic whole-turn replay.
 - **Consequences:** The TUI shows pending activation and recovery choices; canonical state, not hidden model state, carries continuity.
+
+## ADR-018 — M2 reuses ConfigV1 and projects selected 9Router routes into Pi
+
+- **Decision:** M2 keeps semantic schema version 1. The config gateway ID is the schema-valid `ninerouter`; the Pi provider namespace is `9router`. Authoritative connection and enabled-route choices use the existing gateway/route fields, while a separate versioned `catalog.json` stores validated last-known-good discovery state. The configured base is the `/v1` base. M2 resolves environment references only, passes `$ENV_NAME` to Pi, and blocks disabling the active 9Router model until the user switches.
+- **Rationale:** M1 already models every durable M2 choice. Catalog freshness is runtime evidence, not user configuration; separating it avoids a needless migration and prevents cache state entering history/export. Pi `0.84.1` can replace one extension provider's model list without restart, and blocking the active route is the smallest safe policy.
+- **Alternatives:** Add ConfigV2 fields for catalog status; copy the full catalog into Pi; persist plaintext credentials; implement Keychain writes; stage an automatic replacement model.
+- **Consequences:** New catalog rows remain unconfigured/disabled; rows without resource identity are visibly ambiguous and an explicit enable keeps an unknown-resource warning without auto-merging. Cache snapshots are bound to the normalized gateway base and are withheld after an endpoint change until refresh. Missing enabled routes retain exact local identity but leave the provider projection, failed refresh keeps the last-good cache, pools remain unchanged until M3, and Keychain/Pi-auth resolution is explicitly unavailable in M2.
