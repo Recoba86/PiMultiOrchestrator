@@ -4,7 +4,9 @@ Pi Multi-Orchestrator is a planned Pi extension for coordinating a Boss model an
 
 ## Status
 
-M0 is a specification freeze and repository foundation. This repository intentionally contains no production extension, package manifest, credentials, or live Pi configuration.
+M0 and M1 are complete. M1 provides the offline configuration foundation only: strict versioned schemas, safe defaults, migrations, deterministic resolution, atomic JSON persistence, bounded history, recovery, import/export, and process-local mutation serialization.
+
+This is not a production Pi extension yet. It has no extension entrypoint, TUI, network client, model execution, workers, routing engine, health engine, SQLite runtime state, or analytics collection.
 
 The implementation contract is split across:
 
@@ -28,6 +30,19 @@ M0 inspected the installed runtime on 2026-08-12:
 
 Evidence and proof-of-concept boundaries are recorded in [Architecture](docs/ARCHITECTURE.md).
 
+## Local checks
+
+Requires Node.js `>=22.19.0` and npm.
+
+```sh
+npm install
+npm run typecheck
+npm test
+npm run check
+```
+
+Tests use Node's built-in test runner and temporary directories only. They do not use Pi, 9Router, credentials, network access, paid models, or the live agent directory.
+
 ## Scope boundary
 
 M0 did not:
@@ -39,4 +54,4 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-The next mission is M1 only: configuration, persistence primitives, schemas, migrations, and deterministic tests. See [Roadmap](docs/ROADMAP.md).
+M1 also did not modify any live environment. The next authorized milestone is M2 only: the 9Router catalog and selective model manager, beginning with fake/local integration and explicit credential boundaries. See [Roadmap](docs/ROADMAP.md).

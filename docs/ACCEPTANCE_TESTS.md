@@ -7,7 +7,7 @@ Every implementation test MUST record its level, fixture versions, action, expec
 Levels:
 
 - **U — Unit:** pure or temporary-local deterministic test; no network/model call.
-- **I — Integration:** fake 9Router, fake Pi child, real temp filesystem/SQLite; no paid/live provider.
+- **I — Integration:** fake 9Router, fake Pi child, and real temporary storage authorized by the owning milestone (temporary filesystem in M1; SQLite from M6); no paid/live provider.
 - **P — Real Pi smoke:** installed Pi runtime with no provider call unless stated.
 - **L — Authorized live route:** real 9Router/provider. Optional for ordinary CI and run only with explicit credentials/fixture authorization.
 

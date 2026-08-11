@@ -6,6 +6,8 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 ## M0 — Specification freeze and repository foundation
 
+Status: Complete.
+
 Deliverables:
 
 - authoritative product, architecture, acceptance, decision, and roadmap documents;
@@ -16,14 +18,15 @@ Exit gate: all required documents exist, internal references and Markdown pass c
 
 ## M1 — Foundation and configuration engine
 
+Status: Complete.
+
 Deliverables:
 
 - TypeScript package skeleton using the installed/supported Pi package contract;
 - versioned global configuration and trusted project override schemas;
 - validation, defaults, deterministic merge rules, migration, atomic save, history, rollback, and corruption recovery;
 - secret-reference types that cannot serialize resolved secret values;
-- runtime-state storage proof of concept, including `node:sqlite` portability under supported Pi launch modes;
-- analytics event schema and a no-content event sink from day one;
+- metadata-only analytics configuration controls, with no event collection or storage;
 - fake clock/filesystem boundaries only where deterministic tests require them.
 
 Exit gate: deterministic tests prove save/restore/migrate/recover/precedence/export-redaction behavior. No live Pi configuration is changed.
@@ -79,6 +82,7 @@ Exit gate: success, malformed result, crash, timeout, cancel, concurrency, outpu
 Deliverables:
 
 - mission lifecycle, transactional checkpoints, lease/recovery, and resume;
+- runtime-state storage proof of concept, including `node:sqlite` portability under supported Pi launch modes;
 - role-specific Task Packets with explicit size/content limits;
 - evidence validation and promotion into canonical state;
 - Pi session entry containing only the mission pointer and status, not duplicated full state.
@@ -100,7 +104,7 @@ Exit gate: reviewer rejection, failed tests, missing evidence, retry, alternate 
 
 Deliverables:
 
-- durable metadata events and query projections;
+- privacy-minimal metadata collection, durable events, and query projections;
 - mission, agent, token, cost, route, pool, Boss, and fallback reports;
 - explainable, sample-size-aware pool-specific recommendations;
 - explicit Apply/Ignore/Details actions with no silent mutation.

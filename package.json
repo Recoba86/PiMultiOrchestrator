@@ -1,0 +1,33 @@
+{
+  "name": "pi-multi-orchestrator",
+  "version": "0.0.0-development",
+  "description": "Configuration foundation for a future Pi multi-model orchestrator",
+  "type": "module",
+  "private": true,
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "exports": {
+    "./config": {
+      "types": "./dist/core/config/index.d.ts",
+      "import": "./dist/core/config/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"const fs=require('node:fs'); for (const path of ['dist','dist-test']) fs.rmSync(path,{recursive:true,force:true})\"",
+    "clean:test": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "npm run clean:test && tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "typescript": "5.9.3"
+  }
+}

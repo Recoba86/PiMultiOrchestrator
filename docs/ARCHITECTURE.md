@@ -105,6 +105,12 @@ Responsibilities:
 
 Configuration I/O is serialized. Each save obtains an exclusive mutation lock, creates a history copy of the current valid revision, writes a same-directory temporary file with restrictive permissions, flushes, renames atomically, and only then publishes the new generation.
 
+M1 implements this boundary under `src/core/config/`: `types` and `schema` own the strict data contract; `defaults`, `migrations`, `resolve`, and `serialize` are pure; `store`, `history`, and `transfer` own the injected-root filesystem boundary. Stored files wrap semantic `ConfigV1` in a storage envelope containing a monotonic generation and timestamp; exports contain only semantic configuration.
+
+The mutation lock is a FIFO process-local promise queue with expected-generation conflict checks. Cross-process coordination is deferred to M10. Active/history writes use mode `0600`, directories use `0700`, file contents are flushed before same-directory atomic rename, and parent-directory flush is best effort because supported filesystems differ. History retains the newest 20 prior valid generations. A successful rename may publish one optional no-content audit callback; M1 provides no event collection or durable sink. A normal load never mutates disk: if the active file is corrupt, it can expose the newest valid history snapshot in memory with `repairRequired`; explicit recovery copies the corrupt bytes to quarantine and activates a valid snapshot under a fresh generation.
+
+Stable configuration IDs are lowercase kebab identifiers, start with a letter, contain only ASCII lowercase letters/digits/hyphens, and are at most 64 characters.
+
 ### 5.3 `secrets`
 
 Responsibilities:
@@ -226,7 +232,7 @@ No resolved credential field exists in these schemas.
 
 ## 7. Configuration and scope
 
-Use Pi exports such as `getAgentDir()` and `CONFIG_DIR_NAME`; do not hard-code `.pi` in implementation.
+M1 accepts an injected configuration root and never reads a live Pi directory. M2 will derive that root from Pi exports such as `getAgentDir()` and `CONFIG_DIR_NAME`; implementation must not hard-code `.pi`.
 
 Conceptual locations:
 
@@ -234,8 +240,8 @@ Conceptual locations:
 <agentDir>/pi-multi-orchestrator/
   config.json                  global human-portable config
   history/                     prior valid config generations
-  runtime.sqlite               missions, health, catalog, analytics, audit
-  backups/                     validated runtime database backups
+  runtime.sqlite               missions, health, catalog, analytics, audit (M6+)
+  backups/                     validated runtime database backups (M6+)
 
 <project>/<CONFIG_DIR_NAME>/pi-multi-orchestrator.json
                                optional trusted, secret-free project override
@@ -426,7 +432,7 @@ blocked -> running only through explicit resume/recovery
 
 Every transition checks expected prior status and canonical generation. Compare-and-swap prevents a stale worker/Boss result from overwriting newer state.
 
-### 14.2 SQLite responsibility
+### 14.2 SQLite responsibility (M6+)
 
 The logical store is SQLite with WAL/transactions and restrictive file permissions. Minimum tables/projections:
 
@@ -441,7 +447,7 @@ The logical store is SQLite with WAL/transactions and restrictive file permissio
 
 A state-changing transaction writes the new snapshot and corresponding event together. Large source/output content is not copied into the database; bounded evidence or workspace artifact hashes/references are stored.
 
-M1 must prove `node:sqlite` in the supported Node runtime and Pi's standalone/Bun distribution. The local Node `v22.23.0` probe passed but emitted an experimental warning. If the supported standalone host cannot load it, M1 selects one compatible SQLite driver while preserving the logical schema. This is the only open physical persistence choice.
+M6 must prove `node:sqlite` in the supported Node runtime and Pi's standalone/Bun distribution before implementing canonical runtime state. The historical M0 local Node `v22.23.0` probe passed but emitted an experimental warning; it is evidence, not M1 implementation. If a supported standalone host cannot load it, M6 selects one compatible SQLite driver while preserving the logical schema. M1 uses only the JSON configuration store and does not open SQLite.
 
 ### 14.3 Recovery
 
@@ -588,7 +594,7 @@ Pure tests use in-memory values and fixed clocks/IDs for config merge/migration,
 
 - Fake 9Router HTTP server returns catalog generations, malformed/oversized payloads, status classes, retry-after, and request metadata.
 - Fake Pi child executable emits the documented JSON event shapes and simulates success, malformed result, failure, hang, cancellation, and output overflow.
-- Temporary directories exercise real atomic file writes, history, locks, SQLite transactions, migration rollback, and corruption recovery.
+- Temporary directories exercise real atomic file writes, history, process-local locks, migration rollback, and corruption recovery. SQLite transaction tests begin with M6.
 - Pi provider bridge tests use the exported runtime types/fakes without credentials.
 
 ### Real Pi smoke
@@ -608,7 +614,7 @@ These unknowns do not weaken requirements; the named milestone must prove the im
 | POC-03 | 9Router responses expose authoritative actual route/account after internal combo fallback. | M2/M4 | Treat combo as opaque and label actual route/cost/diversity unknown. |
 | POC-04 | Provider status/headers and Pi events are sufficient to classify quota/rate/auth/timeout across supported transports. | M4 | Use conservative unknown classification and bounded Boss-visible recovery. |
 | POC-05 | Packaged extension can launch the same current Pi executable, stream JSON, terminate its process tree, and avoid recursive orchestrator loading. | M5 | Use a narrowly configured SDK child runner if process invocation is not portable. |
-| POC-06 | `node:sqlite` works under all supported Pi launch modes, including standalone/Bun if supported. | M1 | Select one compatible SQLite driver; keep logical schema and tests unchanged. |
+| POC-06 | `node:sqlite` works under all supported Pi launch modes, including standalone/Bun if supported. | M6 | Select one compatible SQLite driver; keep logical schema and tests unchanged. |
 | POC-07 | Custom component listeners/overlays dispose correctly across `/reload`, `/resume`, `/fork`, and shutdown. | M9 | Close the Control Center on lifecycle change and reopen from canonical state. |
 | POC-08 | Approved credential source integrates with a native Pi provider without persisting plaintext in package config/history. | M2 | Route remains unavailable with setup guidance; no literal-secret fallback. |
 | POC-09 | Actual token/cache/cost metadata available per supported 9Router/Pi route. | M8 | Persist null/unknown and avoid fabricated cost/quality comparisons. |

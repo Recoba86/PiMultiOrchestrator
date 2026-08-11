@@ -238,7 +238,7 @@ The extension MUST register `/orchestrator`. In interactive Pi mode it MUST open
 
 ### 11.1 Collection
 
-- **AN-001:** Metadata collection MUST begin with M1 engine operations even before the dashboard exists.
+- **AN-001:** M1 MUST define only the metadata-only analytics configuration boundary. Operational metadata collection and durable analytics begin with M8, before the dashboard exists; earlier milestones MUST NOT create an undeclared telemetry store.
 - **AN-002:** Events SHOULD capture timestamp, mission, role, pool, route, underlying model, provider/resource, subscription/API classification, input/output/cache tokens, duration, outcome, failure class, fallback edge, reviewer/test result, first-pass outcome, escalation count, and calculable cost.
 - **AN-003:** Unavailable provider metadata MUST remain `unknown`; the system MUST NOT invent actual route, token, cost, or quota values.
 - **AN-004:** Full prompts, source code, secrets, credentials, and full conversations MUST NOT be persisted for analytics by default.

@@ -1,6 +1,6 @@
 # Architecture decision log
 
-All records are accepted for M0 unless marked otherwise. A later milestone may supersede a record only with a new decision entry and migration impact.
+Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later milestone may supersede a record only with a new decision entry and migration impact.
 
 ## ADR-001 — Pi is the initial host harness
 
@@ -65,12 +65,12 @@ All records are accepted for M0 unless marked otherwise. A later milestone may s
 - **Alternatives:** Silent priority tuning or no recommendations.
 - **Consequences:** Recommendation generation and configuration mutation are separate audited actions.
 
-## ADR-010 — Privacy-minimal analytics begins in M1
+## ADR-010 — Analytics configuration begins in M1; collection begins in M8
 
-- **Decision:** Record operational metadata from the first engine milestone, but not prompts, source, secrets, or full conversations by default.
-- **Rationale:** Later optimization needs baseline history without creating a content archive.
+- **Decision:** M1 defines a disabled-by-default, metadata-only analytics policy but records no events. Privacy-minimal collection and storage begin with M8, and never include prompts, source, secrets, or full conversations by default.
+- **Rationale:** M1 has no runtime engine or analytics store; delaying collection avoids speculative telemetry while preserving a validated policy boundary.
 - **Alternatives:** Add telemetry late or persist full traces.
-- **Consequences:** Unknown fields remain unknown; estimated cost and route attribution are explicitly labeled.
+- **Consequences:** M1 tests only configuration validation/export boundaries. M8 owns event semantics, unknown fields, estimated-cost labels, and durable storage.
 
 ## ADR-011 — Workers initially use isolated child Pi processes
 
@@ -84,7 +84,14 @@ All records are accepted for M0 unless marked otherwise. A later milestone may s
 - **Decision:** Human-editable configuration remains versioned JSON; transactional mission/health/analytics data uses SQLite; Pi session entries store only a mission pointer/status.
 - **Rationale:** JSON is portable for import/export, while concurrent event/query data needs transactions and indexes.
 - **Alternatives:** All JSON files, all SQLite, or storing everything in Pi session JSONL.
-- **Consequences:** M1 must prove the SQLite driver under supported Node and standalone Pi launch modes before freezing the physical driver.
+- **Consequences:** M1 owns only versioned JSON configuration. M6 must prove the SQLite driver under supported Node and standalone Pi launch modes before freezing the physical runtime-state driver.
+
+## ADR-017 — M1 uses a strict standard-library configuration engine
+
+- **Decision:** M1 uses strict hand-written validation, deterministic JSON, an injected root, atomic same-directory rename, bounded history, a process-local mutation queue, and an optional no-content post-commit audit callback with no default sink. Loading a corrupt active file may expose the newest valid history snapshot in memory, but only explicit recovery quarantines and repairs disk state.
+- **Rationale:** Node provides the required primitives without a runtime schema, database, locking, or telemetry dependency. Explicit recovery preserves evidence and prevents startup from silently rewriting user data.
+- **Alternatives:** Add a schema framework, use SQLite for configuration, silently restore at load, or add cross-process locking before a second writer exists.
+- **Consequences:** Unknown fields are rejected, arrays preserve declared order and replace wholesale, secret values are structurally absent, and cross-process writer coordination remains an M10 hardening concern.
 
 ## ADR-013 — Secrets are references, never ordinary configuration
 
