@@ -1,10 +1,17 @@
 # Repository instructions for coding agents
 
-## Start here
+## Startup gate
 
-1. Read `docs/PRODUCT_SPEC.md` and `docs/ARCHITECTURE.md` before planning or editing.
-2. Read `docs/ACCEPTANCE_TESTS.md`, `docs/DECISIONS.md`, and the assigned milestone in `docs/ROADMAP.md`.
-3. Inspect the installed Pi version and types before relying on a Pi API. Do not assume M0's `0.84.1` baseline is still current.
+Before implementation work:
+
+1. Read this file and `docs/CURRENT_STATE.md`.
+2. Verify `git status`, current branch, HEAD, and worktree ownership.
+3. Read `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`, `docs/DECISIONS.md`, and the assigned milestone in `docs/ROADMAP.md`.
+4. Verify that the requested mission is authorized and that its dependencies are accepted.
+5. Do not assume in-progress capabilities are stable.
+6. Inspect the installed Pi version and types before relying on a Pi API; M0's `0.84.1` baseline may be stale.
+
+Project-state rules and source precedence are defined in `docs/PROJECT_STATE_POLICY.md`.
 
 ## Scope discipline
 
@@ -14,6 +21,8 @@
 - Preserve configuration compatibility. Schema changes require versioning, migration, rollback coverage, and an updated decision/specification when semantics change.
 - Add the smallest deterministic test that proves each behavior change. Real-provider smoke tests are separate, explicit, and never an ordinary CI prerequisite.
 - Do not declare the whole product complete because one milestone or test suite passes.
+- Do not make optimistic completion claims or rewrite project-state documents from intention alone.
+- Do not treat `CURRENT_STATE.md` as stronger evidence than Git, tests, and the accepted handoff.
 
 ## Safety
 
@@ -29,3 +38,15 @@
 - Report exact commands, exit status, and results. Do not describe offline/fake tests as live proof.
 - Report files changed, unresolved risks, skipped gates, and whether any live environment was modified.
 - Only the Boss/final orchestrator may declare a mission complete after its configured acceptance gates pass.
+
+Before completing an authorized milestone:
+
+1. Run the required tests and checks and record exact results.
+2. Determine accepted state from Git, verification evidence, and the authorized handoff.
+3. Update `docs/CURRENT_STATE.md`.
+4. Update `docs/RELEASE_STATE.md` if release, compatibility, stability, or rollback information changed.
+5. Append or update `docs/DEVELOPMENT_LOG.md` and update `docs/ROADMAP.md`.
+6. Update `README.md`; update architecture, specification, decisions, and acceptance tests only when warranted.
+7. Commit the documentation with the milestone unless the mission says otherwise.
+
+Never modify live Pi configuration unless explicitly authorized, and never claim release or acceptance based only on planned scope or implementation intent.

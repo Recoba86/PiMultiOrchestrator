@@ -6,7 +6,7 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 ## M0 — Specification freeze and repository foundation
 
-Status: Complete.
+Status: ACCEPTED / PASS.
 
 Deliverables:
 
@@ -18,7 +18,7 @@ Exit gate: all required documents exist, internal references and Markdown pass c
 
 ## M1 — Foundation and configuration engine
 
-Status: Complete.
+Status: ACCEPTED / PASS.
 
 Deliverables:
 
@@ -31,7 +31,9 @@ Deliverables:
 
 Exit gate: deterministic tests prove save/restore/migrate/recover/precedence/export-redaction behavior. No live Pi configuration is changed.
 
-## M2 — 9Router and selective model manager
+## M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC
+
+Status: IN PROGRESS — NOT ACCEPTED.
 
 Status: Complete.
 
@@ -46,6 +48,8 @@ Deliverables:
 Exit gate: remote 36/enabled 5, new-disabled-by-default, stale-catalog, duplicate-underlying-model, and unavailable-gateway acceptance tests pass.
 
 ## M3 — Pool and profile manager
+
+Status: PLANNED — NOT AUTHORIZED. Planner acceptance of M2 is required first.
 
 Deliverables:
 

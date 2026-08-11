@@ -18,6 +18,14 @@ The implementation contract is split across:
 
 Future agents must read [AGENTS.md](AGENTS.md) before changing the repository.
 
+## Project state
+
+For the authoritative current development snapshot, read [Current state](docs/CURRENT_STATE.md) first.
+
+- [Release state](docs/RELEASE_STATE.md) — actual stability, packaging, compatibility, and release claims
+- [Development log](docs/DEVELOPMENT_LOG.md) — milestone outcomes and accepted evidence
+- [Project state policy](docs/PROJECT_STATE_POLICY.md) — truth hierarchy and update rules
+
 ## Validated host baseline
 
 M0 inspected the installed runtime on 2026-08-12:
