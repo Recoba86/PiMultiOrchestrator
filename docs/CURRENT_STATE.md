@@ -10,12 +10,12 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M2 development, in another worktree |
-| Last accepted milestone | M1 — Configuration Foundation |
-| Last accepted commit | `b451408a57306cdb0c0cd9d4b41f76edd92c9395` |
+| Development phase | Accepted M2; DOCS-2 integration awaiting Planner review |
+| Last accepted milestone | M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC |
+| Accepted M2 commit | `43f810cc9c6fbda50abd69b94d5f8aad1597756a` |
 | Configuration schema | Version 1 |
-| Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`, M0 read-only validation) |
-| Most recently validated Node.js | `v22.23.0` (M0 baseline) |
+| Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
+| Most recently validated Node.js | `v22.23.0` |
 
 ## Development status
 
@@ -23,69 +23,84 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | M0 — Specification Freeze | ACCEPTED / PASS |
 | M1 — Configuration Foundation | ACCEPTED / PASS |
-| M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC | IN PROGRESS ELSEWHERE — NOT YET ACCEPTED |
+| M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC | ACCEPTED / PASS |
+| M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor | NOT STARTED — NOT YET AUTHORIZED until the Planner accepts the DOCS-2 handoff |
 
 ## Stable / accepted capabilities
 
-The accepted product implementation is the M1 offline configuration foundation only:
+M2 adds these accepted capabilities to the M1 configuration foundation:
 
-- TypeScript package and project foundation;
-- strict version 1 configuration schema and validation;
-- exactly three execution pools represented in configuration;
-- stable route/resource identity fields;
-- Boss, role, and profile configuration foundations;
-- deterministic migrations, serialization, and scope resolution;
-- atomic configuration persistence with bounded history and explicit recovery;
-- validated import/export without resolved secrets;
-- defaults < global < trusted project < mission precedence;
-- same-process mutation serialization; and
-- deterministic temporary-local tests.
+- a real Pi extension entrypoint loaded explicitly from the local development build;
+- a dynamic `9router` Pi provider exposing only explicitly enabled routes;
+- separate complete remote catalog and enabled Pi model set;
+- exact remote model IDs, stable local route identity, and distinct routes for distinct resources;
+- new catalog models disabled by default and missing configured models retained as unavailable;
+- an endpoint-bound, validated last-known-good catalog cache;
+- environment-backed `SecretRef` resolution at the network boundary with no raw credential persistence;
+- `/orchestrator`, `/9router-models`, `/9router-refresh`, and `/9router-status`;
+- a searchable TUI model manager with explicit enable/disable flow and active-model disable protection;
+- fake 9Router catalog and OpenAI-compatible chat endpoints; and
+- passing actual Pi model-list, completion, and RPC command integration tests.
 
-These are configuration capabilities, not runtime orchestration.
+These capabilities do not yet implement full multi-agent orchestration.
 
-## Not implemented or not accepted
+## M2 acceptance evidence
 
-- production Pi extension runtime or stable installable package;
-- real 9Router integration or accepted real-route proof;
-- selective model TUI or pool editor;
-- runtime routing, health, fallback, or circuit breaking;
-- workers/subagents or Boss runtime;
-- Context Broker or Canonical Mission State runtime;
-- quality escalation or runtime quality gates;
-- analytics engine, recommendations, or auto-tuning; and
-- production packaging or release.
+| Evidence | Result |
+|---|---|
+| Deterministic and fake integration tests | `58/58 PASS` |
+| Actual Pi with fake model catalog | PASS — expected enabled fake routes: `5`; Pi exposed: `5` |
+| Actual Pi with fake completion | PASS — `PI_FAKE_9ROUTER_OK` |
+| Actual Pi RPC command test | PASS |
+| Paid calls | `0` |
+| Live Pi configuration modified | NO |
+| 9Router configuration modified | NO |
+| Credentials persisted | NO |
+| Keychain modified | NO |
 
-## Current risks and deferred work
+## Open risks and not-yet-verified work
 
-- Configuration writes are serialized only within one process; cross-process locking is deferred.
-- Parent-directory `fsync` is best effort across filesystems.
-- SQLite/runtime-state compatibility across supported Pi launch modes is not proven.
-- Stable 9Router resource identity requires the M2 proof of concept.
-- Actual model/resource attribution inside an opaque 9Router combo may remain unknown.
+### Live 9Router metadata
 
-## Current authorized work
+The live probe was skipped because credentials were not present in the Codex environment. The following remain unverified:
 
-**M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC**
+- real live model count;
+- live metadata shape;
+- stable resource/provider identity;
+- subscription/account identity; and
+- combo attribution.
 
-State: **IN PROGRESS — NOT YET ACCEPTED**
+Fake-gateway metadata behavior is not proof of live 9Router metadata.
 
-M2 work is occurring outside this documentation worktree. Its final commit, test evidence, and acceptance result are unknown here.
+### Human TUI smoke
+
+Automated Pi-native TUI callback and RPC tests passed. A real human keyboard-driven TUI smoke has not yet been performed. This is open validation, not an M2 acceptance blocker.
+
+### Deferred capabilities
+
+- pool manager and priority editing;
+- execution router and health/circuit-breaker runtime;
+- workers/subagents and Boss runtime;
+- Context Broker and Canonical Mission State runtime;
+- quality escalation;
+- analytics collection, storage, dashboard, and auto-tuning;
+- cross-process configuration locking; and
+- Keychain credential adapter.
 
 ## Next milestone rule
 
-M3 is not authorized. It requires Planner acceptance of M2 first.
+M3 is not started and is not yet authorized. The Planner must accept the DOCS-2 handoff before authorizing M3.
 
-## Accepted evidence
+## Accepted evidence history
 
 - M0: `56cb8e04b3aefdbfe28e41f20794570a61751029` — `docs: freeze initial orchestrator specification` — ACCEPTED / PASS.
-- M1: `b451408a57306cdb0c0cd9d4b41f76edd92c9395` — `feat(core): add configuration foundation` — ACCEPTED / PASS.
-- M1 verification supplied by the Planner: tests `41/41 PASS`; typecheck PASS; aggregate check PASS; accepted worktree clean.
-- M1 live impact: Pi configuration not modified; 9Router not contacted or modified; credentials not accessed; paid calls not made.
+- M1: `b451408a57306cdb0c0cd9d4b41f76edd92c9395` — `feat(core): add configuration foundation` — ACCEPTED / PASS; `41/41` tests, typecheck, and aggregate check passed.
+- M2: `43f810cc9c6fbda50abd69b94d5f8aad1597756a` — `feat(pi): add selective 9Router model manager` — ACCEPTED / PASS; evidence recorded above.
 
 ## Assumptions agents must not make
 
-- Do not assume M2 passes or that its work is present in this checkout.
-- Do not assume the live Pi installation has this extension installed.
-- Do not assume a real 9Router inference or accepted live integration smoke has passed.
+- Do not assume this extension is installed in the live Pi configuration.
+- Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime-operational.
-- Do not assume a GitHub remote, tag, release, or stable package exists.
+- Do not assume M3 is authorized or implemented.
+- Do not assume a GitHub remote, tag, public release, or stable package exists.

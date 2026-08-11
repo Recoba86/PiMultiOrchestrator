@@ -2,26 +2,24 @@
 
 Last updated: 2026-08-12
 
-This file records releasable product state. It does not promote development progress; see [Current state](CURRENT_STATE.md) for active work.
+This file records releasable product state. It does not promote development progress; see [Current state](CURRENT_STATE.md) for the operational snapshot.
 
 ## Current release snapshot
 
 | Field | State |
 |---|---|
-| Development HEAD | Branch-dependent; inspect Git. The documentation worktree started from accepted M1, while unaccepted M2 development is elsewhere. |
-| Last accepted milestone | M1 — Configuration Foundation |
-| Last accepted commit | `b451408a57306cdb0c0cd9d4b41f76edd92c9395` |
-| Current development milestone | M2 — IN PROGRESS / NOT ACCEPTED |
-| Latest stable product release | None |
-| Product version | None assigned |
+| Latest accepted development milestone | M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC |
+| Accepted development commit | `43f810cc9c6fbda50abd69b94d5f8aad1597756a` |
+| Public stable release | NONE |
+| Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
-| Release tag | None |
-| Release commit | None |
-| GitHub remote/release | None as of the accepted M1 state |
-| Stable installable Pi package | None claimed |
+| Release tag | NONE |
+| Release commit | NONE |
+| GitHub release | NONE |
+| Installable production release | NONE |
 | Production-ready | NO |
-| Release rollback target | None; no release exists |
-| Accepted development recovery reference | M1 commit `b451408a57306cdb0c0cd9d4b41f76edd92c9395` |
+| Release rollback target | NONE; no release exists |
+| Accepted development recovery reference | M2 commit `43f810cc9c6fbda50abd69b94d5f8aad1597756a` |
 
 Milestone acceptance does not itself create a product release.
 
@@ -30,21 +28,24 @@ Milestone acceptance does not itself create a product release.
 | Evidence | Current result |
 |---|---|
 | Configuration schema | Version 1 |
-| M1 deterministic tests | `41/41 PASS` (Planner-supplied accepted evidence) |
-| M1 typecheck | PASS |
-| M1 aggregate check | PASS |
-| Tested Pi versions | `0.84.1` API/types inspected read-only during M0; no production extension runtime claimed |
-| Tested Node.js versions | `v22.23.0` most recently validated baseline; package requires `>=22.19.0` |
-| Fake gateway validation | Not accepted yet; M2 responsibility |
-| Real gateway validation | None accepted |
-| Real inference validation | None accepted |
+| Deterministic and fake integration suite | `58/58 PASS` |
+| Typecheck | PASS |
+| Aggregate check | PASS |
+| Tested Pi version | `0.84.1` |
+| Tested Node.js version | `22.23.0`; package requires `>=22.19.0` |
+| Fake gateway integration | PASS |
+| Actual Pi with fake gateway | PASS — model list, completion, and RPC command |
+| Real live 9Router catalog | NOT VERIFIED — credential-gated probe was skipped |
+| Real paid inference | NOT PERFORMED |
+
+Fake-gateway behavior does not prove the live 9Router model count, metadata shape, resource/provider identity, subscription/account identity, or combo attribution.
 
 ## Known release blockers and limitations
 
-- The accepted implementation is an offline configuration foundation, not a Pi orchestration runtime.
-- M2 catalog, provider bridge, TUI, resource-identity, and controlled runtime proofs are unaccepted.
-- Later routing, workers, durable mission state, quality gates, analytics, hardening, packaging, install, upgrade, and rollback milestones are not complete.
-- No public artifact, tag, compatibility matrix, installation guide, or independent release review exists.
+- No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
+- The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
+- Pool management, routing, workers, Boss execution, durable mission state, quality escalation, analytics, hardening, and packaging milestones remain incomplete.
+- A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record
 

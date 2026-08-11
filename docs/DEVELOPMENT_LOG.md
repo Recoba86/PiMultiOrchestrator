@@ -33,19 +33,19 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Live environment impact:** Pi configuration unchanged; 9Router not contacted or modified; credentials not accessed; no paid calls.
 - **Next authorized milestone:** M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC.
 
-## M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC
+## M2 — 9Router Integration + Selective Model Manager
 
-- **Status:** IN PROGRESS — NOT ACCEPTED
+- **Status:** ACCEPTED / PASS
 - **Starting HEAD:** `b451408a57306cdb0c0cd9d4b41f76edd92c9395`
-- **Accepted/final HEAD:** Unknown
-- **Commit:** Unknown
+- **Accepted/final HEAD:** `43f810cc9c6fbda50abd69b94d5f8aad1597756a`
+- **Commit:** `feat(pi): add selective 9Router model manager`
 - **Purpose:** Prove catalog discovery, selective route exposure, minimal model management, stable resource identity, and controlled Pi runtime behavior within the authorized M2 boundaries.
-- **Major outcomes:** Unknown; work is occurring in another worktree and is not authoritative here.
-- **Tests/evidence:** Final tests and acceptance evidence unknown.
-- **Important decisions:** No new M2 decision is accepted in this log.
-- **Deferred work:** To be recorded only after M2 review.
-- **Live environment impact:** Unknown; do not infer impact from in-progress work.
-- **Next authorized milestone:** None. M3 requires Planner acceptance of M2.
+- **Major outcomes:** Real Pi extension entrypoint; 9Router client; `SecretResolver` boundary; selective model manager; catalog/runtime separation; provider reconciliation; TUI commands; fake 9Router integration; actual Pi runtime proof.
+- **Tests/evidence:** `58/58` tests PASS; typecheck PASS; aggregate check PASS; real Pi fake model-list PASS with `5` expected and `5` exposed routes; real Pi fake completion PASS with `PI_FAKE_9ROUTER_OK`; actual Pi RPC command PASS; zero paid calls.
+- **Important decisions:** `ConfigV1` remains schema version 1; gateway config ID is `ninerouter`; Pi provider namespace is `9router`; M2 supports environment `SecretRef` only; cache is bound to the normalized endpoint; an active route cannot be disabled while active; newly discovered models remain disabled; missing models remain configured but unavailable.
+- **Deferred work:** M3 pool management; routing/workers; live metadata verification; human keyboard-driven TUI smoke; Keychain support; analytics.
+- **Live environment impact:** Pi configuration unchanged; 9Router configuration unchanged; no credentials persisted; Keychain unchanged; no paid calls.
+- **Next authorized milestone:** None. M3 requires Planner acceptance of the DOCS-2 handoff.
 
 ## Future milestone entry template
 

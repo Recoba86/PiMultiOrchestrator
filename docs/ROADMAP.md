@@ -33,9 +33,7 @@ Exit gate: deterministic tests prove save/restore/migrate/recover/precedence/exp
 
 ## M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC
 
-Status: IN PROGRESS — NOT ACCEPTED.
-
-Status: Complete.
+Status: ACCEPTED / PASS.
 
 Deliverables:
 
@@ -47,9 +45,9 @@ Deliverables:
 
 Exit gate: remote 36/enabled 5, new-disabled-by-default, stale-catalog, duplicate-underlying-model, and unavailable-gateway acceptance tests pass.
 
-## M3 — Pool and profile manager
+## M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor
 
-Status: PLANNED — NOT AUTHORIZED. Planner acceptance of M2 is required first.
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 

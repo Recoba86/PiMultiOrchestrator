@@ -4,9 +4,9 @@ Pi Multi-Orchestrator is a planned Pi extension for coordinating a Boss model an
 
 ## Status
 
-M0, M1, and M2 are complete. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface.
+M0, M1, and M2 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface.
 
-This is still an early extension, not the complete orchestrator. It has no pool editor, priority router, workers, Boss execution, health engine, SQLite runtime state, analytics collection, or full M9 control center.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. It has no pool editor, priority router, workers, Boss execution, health engine, SQLite runtime state, analytics collection, or full M9 control center.
 
 The implementation contract is split across:
 
@@ -71,4 +71,4 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 and M2 did not modify any live environment. The next milestone is M3 only: three execution-pool management and ordered route priorities. See [Roadmap](docs/ROADMAP.md).
+M1 and M2 did not modify any live environment. M3 is next planned but is not started or authorized until the Planner accepts the DOCS-2 handoff. See [Roadmap](docs/ROADMAP.md).
