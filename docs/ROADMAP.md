@@ -47,17 +47,20 @@ Exit gate: remote 36/enabled 5, new-disabled-by-default, stale-catalog, duplicat
 
 ## M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
 
 Deliverables:
 
 - exactly three ordered execution pools;
-- role-to-execution-class mapping;
-- route add/remove/enable/reorder operations;
-- Boss profiles and budget/quality policy presets as data;
-- pool/profile TUI management and persistence.
+- route add/remove, per-pool enable/disable, and reorder operations using the existing schema;
+- persistent list-order priority with history and serialized same-process mutations;
+- one generic Pi-native pool editor reused by all three pools;
+- `/orchestrator` pool sections plus `/pool-models` and `/pool-status`; and
+- management-only status for globally disabled, missing, and unavailable routes without deleting membership.
 
-Exit gate: pool reorder, role mapping, profile switch scheduling, invalid references, and project override tests pass.
+Role, Boss-profile, and operational-profile data defined in M1 remain compatible; M3 adds no profile scheduling, task routing, or role execution.
+
+Exit gate: pool add/remove/reorder, cross-pool independence, global-disable/missing retention, same-model distinct-route, history/concurrency, Pi TUI/command, actual Pi with fake gateway, and M2 regression tests pass. Planner acceptance remains separate.
 
 ## M4 — Routing, health, and infrastructure fallback
 

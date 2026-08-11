@@ -105,6 +105,7 @@ function cacheEntry(model: FakeModel): RemoteCatalogEntry {
 async function seedConfig(root: string, baseUrl: string, models: readonly FakeModel[]): Promise<void> {
 	const config = createDefaultConfig();
 	const gatewayId = configGatewayId;
+	const routeIds: StableId[] = [];
 	config.gateways[gatewayId] = {
 		id: gatewayId,
 		kind: "9router",
@@ -115,6 +116,7 @@ async function seedConfig(root: string, baseUrl: string, models: readonly FakeMo
 	};
 	for (const model of models) {
 		const routeId = await stableRouteId(model.id);
+		routeIds.push(routeId);
 		config.routes[routeId] = {
 			id: routeId,
 			displayName: model.name ?? model.id,
@@ -127,6 +129,9 @@ async function seedConfig(root: string, baseUrl: string, models: readonly FakeMo
 			metadata: { sourceLabel: "fake-9router" },
 		};
 	}
+	config.pools.investigation.entries = routeIds.slice(0, 2).map((routeId) => ({ routeId, enabled: true }));
+	config.pools.implementation.entries = routeIds.slice(0, 4).map((routeId) => ({ routeId, enabled: true }));
+	config.pools.verification.entries = routeIds.slice(1, 3).map((routeId) => ({ routeId, enabled: true }));
 	await new ConfigStore({ root }).initialize(config);
 	const now = new Date().toISOString();
 	const cache: CatalogCacheV1 = {
@@ -356,7 +361,7 @@ test("[P][fixture-v1] Pi commands register and fake completion returns determini
 	});
 });
 
-test("[P][fixture-v1] Pi RPC exposes all M2 commands without live configuration", { skip: integrationSkip }, async () => {
+test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configuration", { skip: integrationSkip }, async () => {
 	await withFixture(async (server, orchestratorRoot) => {
 		const root = await mkdtemp(join(tmpdir(), "pi-m2-rpc-"));
 		try {
@@ -433,9 +438,134 @@ test("[P][fixture-v1] Pi RPC exposes all M2 commands without live configuration"
 			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
 			const commandResponse = lines.find((event) => event.command === "get_commands");
 			const commands = ((commandResponse?.data as { commands?: { name?: string }[] } | undefined)?.commands ?? []).map((command) => command.name);
-			for (const name of ["orchestrator", "9router-models", "9router-refresh", "9router-status"]) assert.ok(commands.includes(name), `${name}: ${safePiDiagnostic(result, server.token)}`);
+			for (const name of ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status"]) assert.ok(commands.includes(name), `${name}: ${safePiDiagnostic(result, server.token)}`);
 			assert.equal(result.stdout.includes(server.token), false);
 			assert.equal(result.stderr.includes(server.token), false);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
+test("[P][fixture-v1] Pi RPC pool editor persists order and leaves the M2 provider unchanged", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m3-rpc-"));
+		try {
+			const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+			const child = spawn(
+				piCommand,
+				["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--mode", "rpc"],
+				{ cwd: repoRoot, env, stdio: ["pipe", "pipe", "pipe"] },
+			);
+			let stdout = "";
+			let stderr = "";
+			let buffer = "";
+			let phase = "commands";
+			let statusSeen = false;
+			const send = (value: Record<string, unknown>): void => {
+				child.stdin.write(`${JSON.stringify(value)}\n`);
+			};
+			const result = await new Promise<PiRunResult>((resolvePromise, reject) => {
+				let settled = false;
+				const deadline = setTimeout(() => {
+					child.kill("SIGTERM");
+					setTimeout(() => child.kill("SIGKILL"), 500).unref();
+				}, 15_000);
+				child.stdout.on("data", (chunk: Buffer) => {
+					const text = chunk.toString();
+					stdout += text;
+					buffer += text;
+					let newline = buffer.indexOf("\n");
+					while (newline >= 0) {
+						const line = buffer.slice(0, newline).replace(/\r$/u, "");
+						buffer = buffer.slice(newline + 1);
+						newline = buffer.indexOf("\n");
+						let event: Record<string, unknown>;
+						try {
+							event = JSON.parse(line) as Record<string, unknown>;
+						} catch {
+							continue;
+						}
+						if (phase === "commands" && event.type === "response" && event.command === "get_commands") {
+							phase = "open-editor";
+							send({ type: "prompt", message: "/pool-models implementation", id: "pool-edit" });
+							continue;
+						}
+						if (event.type !== "extension_ui_request") continue;
+						const id = typeof event.id === "string" ? event.id : undefined;
+						const method = event.method;
+						const title = typeof event.title === "string" ? event.title : "";
+						const options = Array.isArray(event.options) ? event.options.filter((value): value is string => typeof value === "string") : [];
+						if (method === "select" && id && title === "Implementation Pool" && phase === "open-editor") {
+							phase = "add-candidate";
+							send({ type: "extension_ui_response", id, value: "Add Route" });
+						} else if (method === "select" && id && title === "Add route to Implementation Pool" && phase === "add-candidate") {
+							const value = options.find((option) => option.includes("fake/model-05"));
+							assert.ok(value, options.join("\n"));
+							phase = "select-added";
+							send({ type: "extension_ui_response", id, value });
+						} else if (method === "select" && id && title === "Implementation Pool" && phase === "select-added") {
+							const value = options.find((option) => option.includes("fake/model-05"));
+							assert.ok(value, options.join("\n"));
+							phase = "move-action";
+							send({ type: "extension_ui_response", id, value });
+						} else if (method === "select" && id && title.startsWith("Route ") && phase === "move-action") {
+							phase = "move-position";
+							send({ type: "extension_ui_response", id, value: "Move to position" });
+						} else if (method === "input" && id && title === "Target position (1-based)" && phase === "move-position") {
+							phase = "close-editor";
+							send({ type: "extension_ui_response", id, value: "2" });
+						} else if (method === "select" && id && title === "Implementation Pool" && phase === "close-editor") {
+							phase = "status";
+							send({ type: "extension_ui_response", id, value: "Back" });
+							setTimeout(() => send({ type: "prompt", message: "/pool-status implementation", id: "pool-status" }), 25);
+						} else if (method === "notify" && phase === "status" && typeof event.message === "string" && event.message.includes("Implementation Pool")) {
+							statusSeen = true;
+							child.stdin.end();
+						}
+					}
+				});
+				child.stderr.on("data", (chunk: Buffer) => {
+					stderr += chunk.toString();
+				});
+				child.once("error", (error) => {
+					clearTimeout(deadline);
+					if (!settled) {
+						settled = true;
+						reject(error);
+					}
+				});
+				child.once("close", (code, signal) => {
+					clearTimeout(deadline);
+					if (settled) return;
+					settled = true;
+					resolvePromise({ code, signal, stdout, stderr });
+				});
+				send({ type: "get_commands", id: "commands" });
+			});
+
+			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
+			assert.equal(statusSeen, true, safePiDiagnostic(result, server.token));
+			const routeIds = await Promise.all(sourceModels.slice(0, 5).map((model) => stableRouteId(model.id)));
+			const store = new ConfigStore({ root: orchestratorRoot });
+			const loaded = await store.load();
+			assert.deepEqual(
+				loaded.snapshot?.config.pools.implementation.entries.map((entry) => entry.routeId),
+				[routeIds[0], routeIds[4], routeIds[1], routeIds[2], routeIds[3]],
+			);
+			assert.ok((await store.listHistory()).entries.length >= 2);
+
+			const listResult = await runPi(
+				["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--list-models"],
+				env,
+			);
+			assert.equal(listResult.code, 0, safePiDiagnostic(listResult, server.token));
+			const providerIds = stripAnsi(listResult.stdout)
+				.split(/\r?\n/)
+				.filter((line) => /^\s*9router\s+\S+/.test(line))
+				.map((line) => line.trim().split(/\s+/)[1]);
+			assert.deepEqual(providerIds.sort(), [...selectedRemoteIds].sort());
+			assert.equal(result.stdout.includes(server.token) || result.stderr.includes(server.token), false);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

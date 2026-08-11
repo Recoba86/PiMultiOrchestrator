@@ -7,7 +7,17 @@ import type {
 	ProviderConfig,
 	ProviderModelConfig,
 } from "@earendil-works/pi-coding-agent";
-import type { SecretRefV1 } from "../core/config/types.js";
+import type { SecretRefV1, StableId } from "../core/config/types.js";
+import { ConfigStore } from "../core/config/store.js";
+import {
+	createPoolManager,
+	PoolManagerError,
+	POOL_IDS,
+	type PoolEntryView as CorePoolEntryView,
+	type PoolId,
+	type PoolRouteCandidate,
+	type PoolView as CorePoolView,
+} from "../core/pools/index.js";
 
 import {
 	createNineRouterManager,
@@ -22,6 +32,27 @@ import {
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
 type MaybePromise<T> = T | Promise<T>;
+
+interface PoolEntryView extends CorePoolEntryView {
+	readonly projectedPiAvailable?: boolean;
+	readonly actualPiAvailable?: boolean;
+}
+
+interface PoolView extends Omit<CorePoolView, "entries"> {
+	readonly entries: readonly PoolEntryView[];
+}
+
+export interface PoolManagerContract {
+	listPools(): MaybePromise<readonly CorePoolView[]>;
+	getPool(poolId: PoolId): MaybePromise<CorePoolView>;
+	getAvailableCandidatesToAdd(poolId: PoolId, filter?: string): MaybePromise<readonly PoolRouteCandidate[]>;
+	addRoute(poolId: PoolId, routeId: StableId): MaybePromise<unknown>;
+	removeRoute(poolId: PoolId, routeId: StableId): MaybePromise<unknown>;
+	moveRouteUp(poolId: PoolId, routeId: StableId): MaybePromise<unknown>;
+	moveRouteDown(poolId: PoolId, routeId: StableId): MaybePromise<unknown>;
+	moveRoute(poolId: PoolId, routeId: StableId, targetIndex: number): MaybePromise<unknown>;
+	setPoolEntryEnabled(poolId: PoolId, routeId: StableId, enabled: boolean): MaybePromise<unknown>;
+}
 
 export interface ModelManagerEntry {
 	readonly remoteModelId: string;
@@ -54,6 +85,7 @@ export interface PiManagerContract {
 
 export interface PiHostOptions {
 	readonly manager: PiManagerContract;
+	readonly poolManager?: PoolManagerContract;
 	readonly providerId?: string;
 }
 
@@ -66,6 +98,7 @@ export interface ReconcileResult {
 
 export interface PiHost {
 	readonly manager: PiManagerContract;
+	readonly poolManager: PoolManagerContract;
 	reconcile(): Promise<ReconcileResult>;
 	registerCommands(): void;
 	dispose(): void;
@@ -74,9 +107,9 @@ export interface PiHost {
 const errorMessage = (error: unknown): string =>
 	error instanceof NineRouterError
 		? error.toJSON().message
-		: error instanceof NineRouterManagerError || error instanceof SecretResolutionError
+		: error instanceof NineRouterManagerError || error instanceof SecretResolutionError || error instanceof PoolManagerError
 			? error.message
-		: "operation unavailable";
+			: "operation unavailable";
 
 const safeStatusLine = (status: unknown): string => {
 	if (status === undefined || status === null) return "status: unknown";
@@ -122,6 +155,49 @@ const modelLabel = (entry: ModelManagerEntry): string => {
 	const route = entry.routeId ? ` (${entry.routeId})` : "";
 	return `${enabled} ${entry.remoteModelId}${display}${route}${state}${ambiguity}`;
 };
+
+const poolLabels: Record<PoolId, string> = {
+	investigation: "Investigation",
+	implementation: "Implementation",
+	verification: "Verification",
+};
+
+const isPoolId = (value: string): value is PoolId => (POOL_IDS as readonly string[]).includes(value);
+
+const poolEntryState = (entry: PoolEntryView): string =>
+	!entry.globalEnabled
+		? "global-disabled"
+		: !entry.poolEnabled
+			? "pool-disabled"
+			: entry.projectedPiAvailable === false || entry.actualPiAvailable === false
+				? "provider-unavailable"
+				: entry.state;
+
+const poolEntryLabel = (entry: PoolEntryView): string => {
+	return `${entry.index + 1}. ${entry.displayName} — ${entry.remoteModelId} [${poolEntryState(entry).toUpperCase()}] (${entry.routeId})`;
+};
+
+const poolCandidateLabel = (entry: PoolRouteCandidate): string =>
+	`${entry.displayName} — ${entry.remoteModelId} [${entry.state.toUpperCase()}] (${entry.routeId})`;
+
+const emptyPoolView = (poolId: PoolId): CorePoolView => ({
+	id: poolId,
+	poolId,
+	label: poolLabels[poolId],
+	entries: [],
+});
+
+const emptyPoolManager = (): PoolManagerContract => ({
+	listPools: async () => POOL_IDS.map(emptyPoolView),
+	getPool: async (poolId) => emptyPoolView(poolId),
+	getAvailableCandidatesToAdd: async () => [],
+	addRoute: async () => { throw new Error("pool manager unavailable"); },
+	removeRoute: async () => { throw new Error("pool manager unavailable"); },
+	moveRouteUp: async () => { throw new Error("pool manager unavailable"); },
+	moveRouteDown: async () => { throw new Error("pool manager unavailable"); },
+	moveRoute: async () => { throw new Error("pool manager unavailable"); },
+	setPoolEntryEnabled: async () => { throw new Error("pool manager unavailable"); },
+});
 
 /** Normalize the domain CatalogRow shape while allowing focused host fakes to use the compact shape. */
 const normalizeModelEntry = (value: unknown): ModelManagerEntry | undefined => {
@@ -197,6 +273,7 @@ const asProviderConfig = (projection: ProviderProjection): ProviderConfig | unde
 export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const providerId = options.providerId ?? NINEROUTER_PROVIDER_ID;
 	const manager = options.manager;
+	const poolManager = options.poolManager ?? emptyPoolManager();
 	let registeredFingerprint: string | undefined;
 	let reconciled = false;
 	const lifetime = new AbortController();
@@ -205,9 +282,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		ctx.ui.notify(`${prefix}: ${errorMessage(error)}`, "error");
 	};
 
-	const requireIdle = (ctx: ExtensionContext | ExtensionCommandContext): boolean => {
+	const requireIdle = (ctx: ExtensionContext | ExtensionCommandContext, subject = "9Router state"): boolean => {
 		if (ctx.isIdle()) return true;
-		ctx.ui.notify("Wait for the current Pi turn to finish before changing 9Router state", "warning");
+		ctx.ui.notify(`Wait for the current Pi turn to finish before changing ${subject}`, "warning");
 		return false;
 	};
 
@@ -413,21 +490,256 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
+	const getPoolView = async (ctx: ExtensionContext | ExtensionCommandContext, poolId: PoolId): Promise<PoolView> => {
+		const view = await poolManager.getPool(poolId);
+		const projection = await Promise.resolve(manager.providerProjection()).catch(() => undefined);
+		const projected = projection ? new Set(projection.models.map((model) => model.routeId)) : undefined;
+		const available = ctx.modelRegistry?.getAvailable() ?? [];
+		return {
+			...view,
+			entries: view.entries.map((entry) => ({
+				...entry,
+				...(projected ? { projectedPiAvailable: projected.has(entry.routeId) } : {}),
+				...(ctx.modelRegistry ? {
+					actualPiAvailable: available.some((model) => model.provider === NINEROUTER_PROVIDER_ID && model.id === entry.remoteModelId),
+				} : {}),
+			})),
+		};
+	};
+
+	const listPoolViews = async (ctx: ExtensionContext | ExtensionCommandContext, poolId?: PoolId): Promise<readonly PoolView[]> => {
+		if (poolId) return [await getPoolView(ctx, poolId)];
+		return Promise.all((await poolManager.listPools()).map((pool) => getPoolView(ctx, pool.poolId)));
+	};
+
+	const poolStatusText = (view: PoolView): string => {
+		let active = 0;
+		let globalDisabled = 0;
+		let poolDisabled = 0;
+		let missing = 0;
+		let providerUnavailable = 0;
+		let unknown = 0;
+		for (const entry of view.entries) {
+			const state = poolEntryState(entry);
+			if (state === "global-disabled") globalDisabled += 1;
+			else if (state === "pool-disabled") poolDisabled += 1;
+			else if (state === "missing") missing += 1;
+			else if (state === "provider-unavailable" || entry.projectedPiAvailable === false || entry.actualPiAvailable === false) providerUnavailable += 1;
+			else if (state === "unknown" || entry.projectedPiAvailable === undefined || entry.actualPiAvailable === undefined) unknown += 1;
+			else active += 1;
+		}
+		const stale = view.entries.filter((entry) => entry.catalogState === "stale").length;
+		const details = [`${view.label} Pool`, `  ${view.entries.length} route${view.entries.length === 1 ? "" : "s"}`, `  ${active} active`];
+		if (globalDisabled > 0) details.push(`  ${globalDisabled} globally disabled`);
+		if (poolDisabled > 0) details.push(`  ${poolDisabled} pool-disabled`);
+		if (missing > 0) details.push(`  ${missing} missing`);
+		if (providerUnavailable > 0) details.push(`  ${providerUnavailable} provider unavailable`);
+		if (unknown > 0) details.push(`  ${unknown} availability unknown`);
+		if (stale > 0) details.push(`  ${stale} stale`);
+		if (view.entries.length === 0) details.push("  No routes assigned.");
+		return details.join("\n");
+	};
+
+	const showPoolStatus = async (ctx: ExtensionContext | ExtensionCommandContext, requested?: string): Promise<void> => {
+		const trimmed = requested?.trim();
+		if (trimmed && !isPoolId(trimmed)) {
+			ctx.ui.notify(`Unknown pool '${trimmed}'. Use investigation, implementation, or verification.`, "error");
+			return;
+		}
+		try {
+			const views = await listPoolViews(ctx, trimmed ? trimmed as PoolId : undefined);
+			ctx.ui.notify(views.map(poolStatusText).join("\n\n"), "info");
+		} catch (error) {
+			notifyError(ctx, "Pool status failed", error);
+		}
+	};
+
+	const inspectPoolEntry = (ctx: ExtensionCommandContext, view: PoolView, entry: PoolEntryView): void => {
+		ctx.ui.notify([
+			`pool: ${view.label}`,
+			`position: ${entry.index + 1}`,
+			`route: ${entry.routeId}`,
+			`display: ${entry.displayName}`,
+			`remote: ${entry.remoteModelId}`,
+			`global enabled: ${entry.globalEnabled}`,
+			`pool enabled: ${entry.poolEnabled}`,
+			`state: ${poolEntryState(entry)}`,
+			`gateway: ${entry.gatewayId ?? "unknown"}`,
+			`source: ${entry.sourceLabel ?? "unknown"}`,
+			`resource: ${entry.resourceClass}${entry.resourceId ? `/${entry.resourceId}` : ""}`,
+			`catalog: ${entry.catalogState}`,
+			`projected in Pi: ${entry.projectedPiAvailable ?? "unknown"}`,
+			`available in Pi: ${entry.actualPiAvailable ?? "unknown"}`,
+			`metadata provenance: ${entry.provenance ? [...new Set(Object.values(entry.provenance))].join(", ") : "unknown"}`,
+		].join("\n"), "info");
+	};
+
+	const poolMutation = async (
+		ctx: ExtensionCommandContext,
+		label: string,
+		mutate: () => MaybePromise<unknown>,
+	): Promise<boolean> => {
+		if (!requireIdle(ctx, "pool configuration")) return false;
+		try {
+			await mutate();
+			ctx.ui.notify(`${label} saved`, "info");
+			return true;
+		} catch (error) {
+			notifyError(ctx, `${label} failed`, error);
+			return false;
+		}
+	};
+
+	const addPoolRoute = async (ctx: ExtensionCommandContext, view: PoolView): Promise<void> => {
+		try {
+			const candidates = await poolManager.getAvailableCandidatesToAdd(view.poolId);
+			if (candidates.length === 0) {
+				ctx.ui.notify("No configured routes available to add.", "warning");
+				return;
+			}
+			const selected = await ctx.ui.select(`Add route to ${view.label} Pool`, candidates.map(poolCandidateLabel));
+			if (!selected) return;
+			const entry = candidates[candidates.map(poolCandidateLabel).indexOf(selected)];
+			if (!entry) return;
+			await poolMutation(ctx, `Add ${entry.routeId}`, () => poolManager.addRoute(view.poolId, entry.routeId));
+		} catch (error) {
+			notifyError(ctx, "Pool candidate list failed", error);
+		}
+	};
+
+	const openPoolEditor = async (ctx: ExtensionCommandContext, poolId: PoolId): Promise<void> => {
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("/pool-models requires TUI or RPC UI mode", "error");
+			return;
+		}
+		while (true) {
+			let view: PoolView;
+			try {
+				view = await getPoolView(ctx, poolId);
+			} catch (error) {
+				notifyError(ctx, `${poolLabels[poolId]} pool load failed`, error);
+				return;
+			}
+			const entryOptions = view.entries.map(poolEntryLabel);
+			const options = [
+				...(entryOptions.length > 0 ? entryOptions : ["No routes assigned."]),
+				"Add Route",
+				"Refresh",
+				"Back",
+			];
+			const selected = await ctx.ui.select(`${view.label} Pool`, options);
+			if (!selected || selected === "Back") return;
+			if (selected === "Refresh") continue;
+			if (selected === "Add Route") {
+				await addPoolRoute(ctx, view);
+				continue;
+			}
+			if (selected === "No routes assigned.") continue;
+			const entryIndex = entryOptions.indexOf(selected);
+			const entry = entryIndex >= 0 ? view.entries[entryIndex] : undefined;
+			if (!entry) continue;
+			const toggleLabel = entry.poolEnabled ? "Disable" : "Enable";
+			const action = await ctx.ui.select(`Route ${entry.routeId}`, ["Move Up", "Move Down", "Move to position", toggleLabel, "Inspect", "Remove", "Back"]);
+			switch (action) {
+				case "Move Up":
+					if (entry.index === 0) ctx.ui.notify("Already first; priority unchanged.", "info");
+					else await poolMutation(ctx, `Move ${entry.routeId} up`, () => poolManager.moveRouteUp(poolId, entry.routeId));
+					break;
+				case "Move Down":
+					if (entry.index === view.entries.length - 1) ctx.ui.notify("Already last; priority unchanged.", "info");
+					else await poolMutation(ctx, `Move ${entry.routeId} down`, () => poolManager.moveRouteDown(poolId, entry.routeId));
+					break;
+				case "Move to position": {
+					const raw = await ctx.ui.input("Target position (1-based)", String(entry.index + 1));
+					if (!raw?.trim()) break;
+					const target = Number.parseInt(raw.trim(), 10);
+					if (!Number.isInteger(target) || target < 1 || target > view.entries.length) {
+						ctx.ui.notify(`Position must be between 1 and ${view.entries.length}.`, "error");
+						break;
+					}
+					await poolMutation(ctx, `Move ${entry.routeId}`, () => poolManager.moveRoute(poolId, entry.routeId, target - 1));
+					break;
+				}
+				case "Enable":
+				case "Disable":
+					await poolMutation(ctx, `${action} ${entry.routeId}`, () => poolManager.setPoolEntryEnabled(poolId, entry.routeId, action === "Enable"));
+					break;
+				case "Inspect":
+					inspectPoolEntry(ctx, view, entry);
+					break;
+				case "Remove": {
+					const confirmed = await ctx.ui.confirm("Remove route from pool?", `${entry.routeId} (${entry.displayName})`);
+					if (confirmed) await poolMutation(ctx, `Remove ${entry.routeId}`, () => poolManager.removeRoute(poolId, entry.routeId));
+					break;
+				}
+				default:
+					return;
+			}
+		}
+	};
+
+	const openPoolSelector = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("/pool-models requires TUI or RPC UI mode", "error");
+			return;
+		}
+		const options = [...POOL_IDS.map((poolId) => `${poolLabels[poolId]} Pool`), "Back"];
+		const selected = await ctx.ui.select("Pool Models", options);
+		const index = options.indexOf(selected ?? "");
+		if (index >= 0 && index < POOL_IDS.length) await openPoolEditor(ctx, POOL_IDS[index]!);
+	};
+
+	const openPoolModels = async (ctx: ExtensionCommandContext, args?: string): Promise<void> => {
+		const requested = args?.trim();
+		if (requested) {
+			const poolId = requested.split(/\s+/u)[0];
+			if (!poolId || !isPoolId(poolId)) {
+				ctx.ui.notify(`Unknown pool '${poolId ?? requested}'. Use investigation, implementation, or verification.`, "error");
+				return;
+			}
+			await openPoolEditor(ctx, poolId);
+			return;
+		}
+		await openPoolSelector(ctx);
+	};
+
 	const openControlCenter = async (ctx: ExtensionCommandContext): Promise<void> => {
 		if (ctx.mode !== "tui") {
 			ctx.ui.notify("/orchestrator requires TUI mode", "error");
 			return;
 		}
-		const choice = await ctx.ui.select("Pi Multi-Orchestrator (M2)", ["Models & 9Router", "Refresh 9Router catalog", "9Router status", "Connection setup", "Close"]);
+		const choice = await ctx.ui.select("Pi Multi-Orchestrator", [
+			"Models & 9Router",
+			"Investigation Pool",
+			"Implementation Pool",
+			"Verification Pool",
+			"Refresh 9Router catalog",
+			"9Router status",
+			"Pool status",
+			"Connection setup",
+			"Close",
+		]);
 		switch (choice) {
 			case "Models & 9Router":
 				await openModels(ctx);
+			return;
+			case "Investigation Pool":
+				await openPoolEditor(ctx, "investigation");
+				return;
+			case "Implementation Pool":
+				await openPoolEditor(ctx, "implementation");
+				return;
+			case "Verification Pool":
+				await openPoolEditor(ctx, "verification");
 				return;
 			case "Refresh 9Router catalog":
 				await refreshAndReconcile(ctx);
 				return;
 			case "9Router status":
 				await showStatus(ctx);
+				return;
+			case "Pool status":
+				await showPoolStatus(ctx);
 				return;
 			case "Connection setup":
 				await configureConnection(ctx);
@@ -454,6 +766,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			description: "Show 9Router catalog/provider status",
 			handler: async (_args, ctx) => showStatus(ctx),
 		});
+		pi.registerCommand("pool-models", {
+			description: "Manage routes in an execution pool (optional pool id)",
+			handler: async (args, ctx) => openPoolModels(ctx, args),
+		});
+		pi.registerCommand("pool-status", {
+			description: "Show execution pool membership and readiness status",
+			handler: async (args, ctx) => showPoolStatus(ctx, args),
+		});
 	};
 
 	const dispose = (): void => {
@@ -463,14 +783,16 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		reconciled = true;
 	};
 
-	return { manager, reconcile, registerCommands, dispose };
+	return { manager, poolManager, reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
 	const runtime = await import("@earendil-works/pi-coding-agent");
 	const root = process.env.PI_MULTI_ORCH_CONFIG_ROOT ?? join(runtime.getAgentDir(), "pi-multi-orchestrator");
-	const manager = createNineRouterManager(root) as PiManagerContract;
-	const host = createPiHost(pi, { manager });
+	const configStore = new ConfigStore({ root });
+	const manager = createNineRouterManager(root, configStore) as PiManagerContract;
+	const poolManager = createPoolManager(root, configStore);
+	const host = createPiHost(pi, { manager, poolManager });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

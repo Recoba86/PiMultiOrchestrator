@@ -1,7 +1,7 @@
 {
   "name": "pi-multi-orchestrator",
   "version": "0.0.0-development",
-  "description": "Selective 9Router model manager and configuration foundation for Pi",
+  "description": "Selective 9Router model and execution-pool configuration manager for Pi",
   "type": "module",
   "private": true,
   "files": [
@@ -17,6 +17,10 @@
     "./ninerouter": {
       "types": "./dist/core/ninerouter/index.d.ts",
       "import": "./dist/core/ninerouter/index.js"
+    },
+    "./pools": {
+      "types": "./dist/core/pools/index.d.ts",
+      "import": "./dist/core/pools/index.js"
     },
     "./pi": {
       "types": "./dist/host/pi-extension.d.ts",

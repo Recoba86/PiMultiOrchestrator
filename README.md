@@ -4,9 +4,9 @@ Pi Multi-Orchestrator is a planned Pi extension for coordinating a Boss model an
 
 ## Status
 
-M0, M1, and M2 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface.
+M0, M1, and M2 are accepted. M3 is implemented but awaits Planner acceptance. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface. M3 adds configuration-only management for the ordered Investigation, Implementation, and Verification pools.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. It has no pool editor, priority router, workers, Boss execution, health engine, SQLite runtime state, analytics collection, or full M9 control center.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. Pool order is management state only: there is no priority router, workers, Boss execution, health engine, SQLite runtime state, analytics collection, or full M9 control center.
 
 The implementation contract is split across:
 
@@ -49,7 +49,7 @@ npm test
 npm run check
 ```
 
-Tests use Node's built-in runner, temporary directories, and a random loopback fake 9Router. They load the built extension into the installed Pi `0.84.1`, list only selected fake routes, and complete one deterministic fake streamed turn. They use no live credentials, paid models, external network, or live agent directory.
+Tests use Node's built-in runner, temporary directories, and a random loopback fake 9Router. They load the built extension into the installed Pi `0.84.1`, list only selected fake routes, complete one deterministic fake streamed turn, and exercise a pool edit/save/reload through Pi's RPC UI protocol. They use no live credentials, paid models, external network, or live agent directory.
 
 Development loading is explicit; the extension is not installed into the live Pi directory:
 
@@ -58,7 +58,7 @@ PI_MULTI_ORCH_CONFIG_ROOT=/path/to/isolated/root \
   pi --no-extensions -e ./dist/host/pi-extension.js
 ```
 
-The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key. Other URL paths are rejected.
+The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. M3 adds `/pool-models [investigation|implementation|verification]` and `/pool-status`; the same three pool editors are available from `/orchestrator`. Pool edits change validated configuration only and never select a route or launch a subagent. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key. Other URL paths are rejected.
 
 ## Scope boundary
 
@@ -71,4 +71,4 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 and M2 did not modify any live environment. M3 is next planned but is not started or authorized until the Planner accepts the DOCS-2 handoff. See [Roadmap](docs/ROADMAP.md).
+M1 through M3 did not modify any live environment. M2 remains the last Planner-accepted milestone; M3 is implemented and awaiting Planner acceptance. M4 has not started. See [Roadmap](docs/ROADMAP.md).

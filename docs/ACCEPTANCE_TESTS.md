@@ -221,6 +221,41 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** validate configs with the three required pools, a missing pool, and a fourth main pool.
 - **Pass:** only the exact three-pool config validates; arbitrary roles remain allowed through role mapping.
 
+### POOL-02 — Membership mutations preserve pool boundaries
+
+- **Level:** U/I
+- **Setup:** seven configured routes; one route already belongs to Investigation and Verification.
+- **Action:** add a configured route to Implementation, reject a duplicate and an unknown route, then remove the shared route from Investigation.
+- **Pass:** only the requested memberships change; Verification and route configuration are unchanged; empty pools remain valid.
+
+### POOL-03 — Array order is the only priority
+
+- **Level:** U/I
+- **Setup:** Implementation order `[a,b,c,d,e]`.
+- **Action:** move `e` to index 1, exercise first-up and last-down boundaries, save, reload, and inspect history.
+- **Pass:** order is exactly `[a,e,b,c,d]`; safe boundary moves are no-ops; no numeric priority exists; a complete prior generation is retained.
+
+### POOL-04 — Availability never silently deletes membership
+
+- **Level:** U/I
+- **Setup:** one pool entry disabled only in that pool, one globally disabled route, and one configured route absent from the latest successful catalog.
+- **Action:** load pool status and reorder all three entries.
+- **Pass:** all memberships and positions remain configurable; states are explicit; no provider reconciliation or automatic deletion occurs.
+
+### POOL-05 — Cross-pool, identity, and concurrency semantics
+
+- **Level:** U/I
+- **Setup:** two distinct route IDs for the same underlying family/resource choices and concurrent same-process edits to different pools.
+- **Action:** add both routes, reorder independently, and await all mutations.
+- **Pass:** both identities survive, each pool has its declared order, and `ConfigStore` serializes valid generations without a lost update.
+
+### POOL-06 — Empty pools and candidate boundaries
+
+- **Level:** U/I
+- **Setup:** an empty pool, configured routes, and unconfigured remote catalog rows.
+- **Action:** list the pool and its add candidates.
+- **Pass:** the empty state is explicit; candidates include only configured routes not already assigned; M2 enablement never auto-assigns a pool.
+
 ### ROLE-01 — Boss chooses roles dynamically
 
 - **Level:** I
@@ -517,6 +552,12 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** render.
 - **Pass:** each state has text/icon semantics independent of color; stale timestamp/estimate label appears; unknown is not rendered as zero/healthy.
 
+### TUI-03 — M3 pool editors use one Pi-native management flow
+
+- **Level:** U/P
+- **Action:** open the three pool sections from `/orchestrator`, then use `/pool-models` and `/pool-status`.
+- **Pass:** one reusable editor supports add, confirmed membership removal, per-pool enable/disable, move up/down, inspect, refresh, and safe cancel; empty and unavailable states are textual; no manual JSON edit is required.
+
 ### OBS-01 — Active mission visibility
 
 - **Level:** I/P
@@ -531,6 +572,13 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Level:** P
 - **Action:** load a built M milestone extension from an isolated temporary/project path, open/close command, reload, resume/fork as applicable, unload.
 - **Pass:** no live global settings are changed; command/provider/components bind once, dispose once, and recover from canonical state; Pi remains usable.
+
+### PI-02 — Actual Pi preserves M3 pool state without provider churn
+
+- **Level:** P
+- **Setup:** isolated Pi `0.84.1`, temporary agent/config roots, and the fake 9Router with at least seven configured routes.
+- **Action:** load the extension, inspect registered pool commands, mutate an ordered pool through the extension UI/RPC host path, restart Pi, and inspect status/provider models.
+- **Pass:** the mutation persists with exact order, all three pool sections and direct commands work, and the M2 `9router` provider projection remains unchanged.
 
 ### LIVE-01 — Controlled 9Router catalog smoke
 

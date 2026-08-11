@@ -141,7 +141,17 @@ full catalog generation
 
 The full catalog never becomes the Pi provider's model list. A TUI save that changes enabled routes publishes a new config generation and re-registers the provider model projection immediately when safe. Pi `0.84.1` replaces the supplied provider model list in place, so a failed validation leaves the prior registry intact. If activation fails, configuration remains saved and the UI reports the runtime error for a later reconciliation.
 
-### 5.5 `policy`
+### 5.5 `pools` and `policy`
+
+M3 implements `core/pools` as the only pool-mutation service. It reads configured routes and the optional endpoint-bound catalog snapshot, then exposes the three ordered pool views and applies add/remove/per-pool-enable/reorder operations through `ConfigStore.update()`. Array position is the sole priority representation. Globally disabled or remotely missing routes retain membership and position, and pool-only edits never reconcile the Pi provider.
+
+```text
+Model Manager -> configured routes
+Pool Manager  -> ordered memberships
+M4 Router     -> future route selection
+```
+
+The Pool Manager reports management state but does not decide eligibility or select a route.
 
 Holds pure operations for:
 

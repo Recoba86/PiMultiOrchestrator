@@ -12,10 +12,12 @@ import {
 	createPiHost,
 	type ModelManagerEntry,
 	type PiManagerContract,
+	type PoolManagerContract,
 	NINEROUTER_PROVIDER_ID,
 } from "../src/host/pi-extension.js";
 import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/ninerouter/index.js";
 import type { StableId } from "../src/core/config/types.js";
+import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -26,7 +28,7 @@ function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]
 		authHeader: true,
 		api: "openai-completions",
 		models: models.map((value) => ({
-			routeId: `route-${value.id}` as StableId,
+			routeId: value.id.replace(/^remote-/u, "route-") as StableId,
 			id: value.id,
 			name: value.name,
 			reasoning: value.reasoning,
@@ -84,19 +86,63 @@ function managerFixture(initial: ProviderProjection): PiManagerContract & {
 	return fixture;
 }
 
+function poolManagerFixture(): PoolManagerContract & {
+	entries: Array<{ routeId: StableId; displayName: string; remoteModelId: string; globalEnabled: boolean; poolEnabled: boolean; state: "active"; catalogState: "fresh"; resourceClass: "subscription"; gatewayId?: StableId; resourceId?: StableId; sourceLabel?: string; provenance?: NonNullable<PoolEntryView["provenance"]> }>;
+	moveDownCalls: number;
+} {
+	type Entry = { routeId: StableId; displayName: string; remoteModelId: string; globalEnabled: boolean; poolEnabled: boolean; state: "active"; catalogState: "fresh"; resourceClass: "subscription"; gatewayId?: StableId; resourceId?: StableId; sourceLabel?: string; provenance?: NonNullable<PoolEntryView["provenance"]> };
+	type View = { poolId: PoolId; id: PoolId; label: string; entries: Array<Entry & { index: number }> };
+	const entries: Entry[] = [
+		{ routeId: "route-a" as StableId, displayName: "Route A", remoteModelId: "remote-a", globalEnabled: true, poolEnabled: true, state: "active", catalogState: "fresh", resourceClass: "subscription", gatewayId: NINEROUTER_GATEWAY_ID, resourceId: "resource-a" as StableId, sourceLabel: "fixture-source", provenance: { remoteId: "remote", displayName: "remote", resourceClass: "remote", capabilities: "remote", input: "remote", capability: "remote" } },
+		{ routeId: "route-b" as StableId, displayName: "Route B", remoteModelId: "remote-b", globalEnabled: true, poolEnabled: true, state: "active", catalogState: "fresh", resourceClass: "subscription" },
+	];
+	let moveDownCalls = 0;
+	const listPools = (): readonly View[] => POOL_IDS.map((poolId) => ({
+		poolId,
+		id: poolId,
+		label: poolId[0]!.toUpperCase() + poolId.slice(1),
+		entries: poolId === "implementation" ? entries.map((entry, index) => ({ ...entry, index })) : [],
+	}));
+	const fixture: PoolManagerContract & { entries: Entry[]; moveDownCalls: number } = {
+		entries,
+		moveDownCalls: 0,
+		getAvailableCandidatesToAdd: async () => [],
+		addRoute: async () => {},
+		removeRoute: async () => {},
+		moveRouteUp: async () => {},
+		moveRouteDown: async (_poolId: string, routeId: string) => {
+			moveDownCalls += 1;
+			const index = entries.findIndex((entry) => entry.routeId === routeId);
+			if (index >= 0 && index + 1 < entries.length) {
+				const [entry] = entries.splice(index, 1);
+				if (entry) entries.splice(index + 1, 0, entry);
+			}
+		},
+		moveRoute: async () => {},
+		setPoolEntryEnabled: async () => {},
+		listPools: async () => listPools(),
+		getPool: async (poolId: PoolId) => listPools().find((pool) => pool.poolId === poolId)!,
+	};
+	Object.defineProperty(fixture, "moveDownCalls", { get: () => moveDownCalls, enumerable: true });
+	return fixture;
+}
+
 interface PiFixture {
 	readonly pi: ExtensionAPI;
 	readonly providers: Map<string, ProviderConfig>;
 	readonly commands: Map<string, { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> }>;
 	readonly unregisters: string[];
+	readonly registerCalls: string[];
 }
 
 function piFixture(): PiFixture {
 	const providers = new Map<string, ProviderConfig>();
 	const commands = new Map<string, { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> }>();
 	const unregisters: string[] = [];
+	const registerCalls: string[] = [];
 	const pi = {
 		registerProvider(name: string, config: ProviderConfig): void {
+			registerCalls.push(name);
 			providers.set(name, config);
 		},
 		unregisterProvider(name: string): void {
@@ -107,7 +153,7 @@ function piFixture(): PiFixture {
 			commands.set(name, options);
 		},
 	} as unknown as ExtensionAPI;
-	return { pi, providers, commands, unregisters };
+	return { pi, providers, commands, unregisters, registerCalls };
 }
 
 describe("Pi 9Router host adapter", () => {
@@ -164,7 +210,7 @@ describe("Pi 9Router host adapter", () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: fixture });
 		host.registerCommands();
-		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status"]);
+		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status"]);
 
 		const notifications: string[] = [];
 		let prompts = 0;
@@ -195,16 +241,140 @@ describe("Pi 9Router host adapter", () => {
 		assert.ok(notifications.some((message) => /active 9Router model/.test(message)));
 	});
 
+	it("[U][fixture-pi-0.84.1] opens all three pool sections from orchestrator", async () => {
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), poolManager: poolManagerFixture() });
+		host.registerCommands();
+		const titles: string[] = [];
+		const selections = [
+			"Investigation Pool", "Back",
+			"Implementation Pool", "Back",
+			"Verification Pool", "Back",
+		];
+		const ctx = {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (title: string) => {
+					titles.push(title);
+					return selections.shift();
+				},
+				notify: () => {},
+			},
+		} as unknown as ExtensionCommandContext;
+		for (let index = 0; index < 3; index += 1) await pi.commands.get("orchestrator")!.handler("", ctx);
+		assert.ok(titles.includes("Investigation Pool"));
+		assert.ok(titles.includes("Implementation Pool"));
+		assert.ok(titles.includes("Verification Pool"));
+	});
+
 	it("[U][fixture-pi-0.84.1] refuses provider mutations while Pi is busy", async () => {
 		const fixture = managerFixture(projection());
+		const pools = poolManagerFixture();
 		const pi = piFixture();
-		const host = createPiHost(pi.pi, { manager: fixture });
+		const host = createPiHost(pi.pi, { manager: fixture, poolManager: pools });
 		host.registerCommands();
 		const notifications: string[] = [];
 		await pi.commands.get("9router-refresh")!.handler("", {
 			isIdle: () => false,
 			ui: { notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
+		const selections = ["1. Route A — remote-a [ACTIVE] (route-a)", "Move Down", "Back"];
+		await pi.commands.get("pool-models")!.handler("implementation", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => false,
+			ui: {
+				select: async () => selections.shift(),
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /current Pi turn/);
+		assert.equal(pools.moveDownCalls, 0);
+	});
+
+	it("[U][fixture-pi-0.84.1] edits one pool through the generic editor without provider reconciliation", async () => {
+		const fixture = managerFixture(projection());
+		const pools = poolManagerFixture();
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: fixture, poolManager: pools });
+		await host.reconcile();
+		host.registerCommands();
+		const notifications: string[] = [];
+		const selections: Array<string | undefined> = [
+			"1. Route A — remote-a [ACTIVE] (route-a)",
+			"Move Down",
+			"Back",
+		];
+		const ctx = {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async () => selections.shift(),
+				confirm: async () => true,
+				input: async () => undefined,
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext;
+		await pi.commands.get("pool-models")!.handler("implementation", ctx);
+		assert.equal(pools.moveDownCalls, 1);
+		assert.deepEqual(pools.entries.map((entry) => entry.routeId), ["route-b", "route-a"]);
+		assert.equal(pi.registerCalls.length, 1);
+		assert.ok(notifications.some((message) => /Move route-a down saved/.test(message)));
+	});
+
+	it("[U][fixture-pi-0.84.1] inspects safe pool, catalog, and Pi availability metadata", async () => {
+		const baseProjection = projection();
+		const projected: ProviderProjection = {
+			...baseProjection,
+			models: baseProjection.models.map((entry) => ({ ...entry, routeId: "route-a" as StableId })),
+		};
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projected), poolManager: poolManagerFixture() });
+		host.registerCommands();
+		const notifications: string[] = [];
+		const selections: Array<string | undefined> = [
+			"1. Route A — remote-a [ACTIVE] (route-a)",
+			"Inspect",
+			"Back",
+		];
+		await pi.commands.get("pool-models")!.handler("implementation", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			modelRegistry: { getAvailable: () => [{ provider: NINEROUTER_PROVIDER_ID, id: "remote-a" }] },
+			ui: {
+				select: async () => selections.shift(),
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[0] ?? "", /gateway: ninerouter/);
+		assert.match(notifications[0] ?? "", /source: fixture-source/);
+		assert.match(notifications[0] ?? "", /resource: subscription\/resource-a/);
+		assert.match(notifications[0] ?? "", /catalog: fresh/);
+		assert.match(notifications[0] ?? "", /projected in Pi: true/);
+		assert.match(notifications[0] ?? "", /available in Pi: true/);
+		assert.match(notifications[0] ?? "", /metadata provenance: remote/);
+	});
+
+	it("[U][fixture-pi-0.84.1] exposes pool status without TUI prompts", async () => {
+		const pools = poolManagerFixture();
+		pools.entries[0]!.poolEnabled = false;
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), poolManager: pools });
+		host.registerCommands();
+		const notifications: string[] = [];
+		await pi.commands.get("pool-status")!.handler("", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[0] ?? "", /Investigation Pool/);
+		assert.match(notifications[0] ?? "", /Implementation Pool/);
+		assert.match(notifications[0] ?? "", /2 routes/);
+		assert.match(notifications[0] ?? "", /pool-disabled/);
+		assert.match(notifications[0] ?? "", /No routes assigned\./);
 	});
 });

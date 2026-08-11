@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | Accepted M2; DOCS-2 integration awaiting Planner review |
+| Development phase | M3 implemented; awaiting Planner acceptance |
 | Last accepted milestone | M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC |
 | Accepted M2 commit | `43f810cc9c6fbda50abd69b94d5f8aad1597756a` |
 | Configuration schema | Version 1 |
@@ -24,7 +24,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M0 — Specification Freeze | ACCEPTED / PASS |
 | M1 — Configuration Foundation | ACCEPTED / PASS |
 | M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC | ACCEPTED / PASS |
-| M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor | NOT STARTED — NOT YET AUTHORIZED until the Planner accepts the DOCS-2 handoff |
+| M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor | IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE |
 
 ## Stable / accepted capabilities
 
@@ -43,6 +43,27 @@ M2 adds these accepted capabilities to the M1 configuration foundation:
 - passing actual Pi model-list, completion, and RPC command integration tests.
 
 These capabilities do not yet implement full multi-agent orchestration.
+
+## M3 implementation awaiting acceptance
+
+The attached M3 mission authorized implementation of configuration-only pool management. The current implementation adds:
+
+- one `ConfigStore`-backed manager for exactly the Investigation, Implementation, and Verification pools;
+- list-order priority, membership add/remove, per-pool enable/disable, and safe reorder operations;
+- preserved memberships for globally disabled and remotely missing configured routes;
+- one Pi-native editor reused by all three `/orchestrator` pool sections;
+- `/pool-models` and `/pool-status`; and
+- actual Pi/fake-gateway regression coverage without provider reconciliation for pool-only edits.
+
+This section is implementation evidence, not acceptance. M2 remains the last Planner-accepted milestone, and the pool order is not a runtime router.
+
+| M3 implementation evidence | Result |
+|---|---|
+| Deterministic, fake integration, and actual Pi suite | `70/70 PASS` |
+| Typecheck and build | PASS |
+| Actual Pi pool editor over RPC | PASS — add, reorder, status, save, reload |
+| M2 provider regression after pool edit | PASS — expected fake routes: `5`; Pi exposed: `5` |
+| Paid calls / live environment changes | `0` / NONE |
 
 ## M2 acceptance evidence
 
@@ -74,11 +95,10 @@ Fake-gateway metadata behavior is not proof of live 9Router metadata.
 
 ### Human TUI smoke
 
-Automated Pi-native TUI callback and RPC tests passed. A real human keyboard-driven TUI smoke has not yet been performed. This is open validation, not an M2 acceptance blocker.
+Automated Pi-native dialog callback and RPC tests passed for the M2 model manager and M3 pool editor. A real human keyboard-driven TUI smoke has not yet been performed. This remains explicit open validation.
 
 ### Deferred capabilities
 
-- pool manager and priority editing;
 - execution router and health/circuit-breaker runtime;
 - workers/subagents and Boss runtime;
 - Context Broker and Canonical Mission State runtime;
@@ -89,7 +109,7 @@ Automated Pi-native TUI callback and RPC tests passed. A real human keyboard-dri
 
 ## Next milestone rule
 
-M3 is not started and is not yet authorized. The Planner must accept the DOCS-2 handoff before authorizing M3.
+M3 was authorized by the attached implementation mission and now awaits Planner review. Do not start M4 until M3 is accepted and a new mission authorizes it.
 
 ## Accepted evidence history
 
@@ -101,6 +121,6 @@ M3 is not started and is not yet authorized. The Planner must accept the DOCS-2 
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
-- Do not treat configured pools as runtime-operational.
-- Do not assume M3 is authorized or implemented.
+- Do not treat configured pools as runtime routing or worker execution.
+- Do not assume M3 is accepted merely because its implementation exists.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

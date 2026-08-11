@@ -423,8 +423,7 @@ function toProviderModel(route: RouteConfigV1, entry: RemoteCatalogEntry, warnin
   };
 }
 
-export function createNineRouterManager(root: string): NineRouterManager {
-  const configStore = new ConfigStore({ root });
+export function createNineRouterManager(root: string, configStore = new ConfigStore({ root })): NineRouterManager {
   const cacheStore = new CatalogCacheStore(root);
   const client = new NineRouterClient();
   return new NineRouterManager(configStore, cacheStore, client);
