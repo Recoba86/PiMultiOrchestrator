@@ -24,6 +24,7 @@ import {
 } from "../src/core/workers/index.js";
 import type { RoutingCandidate, RoutingPolicy } from "../src/core/routing/index.js";
 import type { StableId } from "../src/core/config/types.js";
+import { createVerificationResultProtocol } from "../src/core/quality/index.js";
 
 const id = (value: string): StableId => value as StableId;
 const policy: RoutingPolicy = {
@@ -87,6 +88,25 @@ describe("M5 worker core", () => {
 			assert.equal(result.attempts[0]?.toolNamesUsed.includes("read"), true);
 			assert.equal(result.attempts[0]?.potentialMutationObserved, false);
 			assert.equal(result.structuredResult?.summary, "child complete");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("accepts a caller-supplied bounded result protocol without changing M4 routing", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-worker-protocol-"));
+		try {
+			const adapter = adapterFor([candidate("route-a", 0)]);
+			const executor = new SubagentExecutor({
+				routeAdapter: adapter,
+				resultProtocolFactory: () => createVerificationResultProtocol(),
+				sessionFactory: { create: async (options) => fakeSessionHandle(options.submitTool, "verification") },
+			});
+			const result = await executor.run(request(root, "verification"));
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal((result.protocolResult as { verdict?: string } | undefined)?.verdict, "pass");
+			assert.equal(result.structuredResult, undefined);
+			assert.equal(result.attempts[0]?.toolNamesUsed.includes("submit_verification_result"), true);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -254,7 +274,7 @@ function fakeFactory(mode: "complete" | "hang"): ChildSessionFactory {
 	};
 }
 
-function fakeSessionHandle(submitTool: Parameters<ChildSessionFactory["create"]>[0]["submitTool"], mode: "complete" | "rate" | "provider-error" | "mutate-timeout" | "hang",): { session: AgentSession; toolNames: readonly string[]; dispose: () => void } {
+function fakeSessionHandle(submitTool: Parameters<ChildSessionFactory["create"]>[0]["submitTool"], mode: "complete" | "verification" | "rate" | "provider-error" | "mutate-timeout" | "hang",): { session: AgentSession; toolNames: readonly string[]; dispose: () => void } {
 	let listener: ((event: unknown) => void) | undefined;
 	let aborted = false;
 	const session = {
@@ -279,10 +299,12 @@ function fakeSessionHandle(submitTool: Parameters<ChildSessionFactory["create"]>
 			}
 			listener?.({ type: "tool_execution_start", toolCallId: "read-1", toolName: "read" });
 			listener?.({ type: "tool_execution_end", toolCallId: "read-1", toolName: "read", isError: false });
-			await submitTool.execute("result-1", { status: "completed", summary: "child complete" }, undefined, undefined, undefined as never);
+			listener?.({ type: "tool_execution_start", toolCallId: "submit-1", toolName: submitTool.name });
+			await submitTool.execute("result-1", mode === "verification" ? { verdict: "pass", criterionResults: [{ criterion: "tests", status: "satisfied", evidenceSummary: "observed" }], mechanicalChecks: [], findings: [], requiredFixes: [], risks: [], summary: "verified" } : { status: "completed", summary: "child complete" }, undefined, undefined, undefined as never);
+			listener?.({ type: "tool_execution_end", toolCallId: "submit-1", toolName: submitTool.name, isError: false });
 		},
 		abort: async () => { aborted = true; },
 		dispose: () => { aborted = true; },
 	};
-	return { session: session as unknown as AgentSession, toolNames: ["read", "submit_agent_result"], dispose: () => { aborted = true; } };
+	return { session: session as unknown as AgentSession, toolNames: ["read", submitTool.name], dispose: () => { aborted = true; } };
 }

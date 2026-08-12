@@ -106,6 +106,19 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network were used.
 - **Next authorized milestone:** M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation. Next planned; not started. Do not start M7.
 
+## M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Starting HEAD:** `e4014730caf709b2ae2ceae4823583c14c810c1e`
+- **Implementation/final HEAD:** Pending final implementation commit; this entry is the implementation handoff, not STATE-7 acceptance.
+- **Purpose:** Add a durable, bounded quality-control boundary above M5 execution and M6 mission state without conflating quality judgment with M4 infrastructure health or canonical evidence.
+- **Major outcomes:** Mission DB schema 1→2 migration; durable verification runs, quality decisions/status, mechanical provenance, escalations, interrupted-verification recovery, reviewer diversity, deterministic QualityGate semantics, caller-supplied `submit_verification_result` through M5, explicit quality host commands/history, and bounded verification→repair→re-review orchestration.
+- **Tests/evidence:** `121/121` tests PASS; typecheck/build/check PASS; real Pi `0.84.1` + fake gateway `[P][fixture-v1]` reviewer reject→routed repair→re-review pass and MissionStore reopen lineage PASS; paid calls `0`.
+- **Important decisions:** Config schema remains version 1; MissionStore quality schema is version 2; quality rejection never updates M4 health or triggers infrastructure fallback; reviewer/repair claims remain non-canonical until explicit M6 evidence admission; quality PASS is not Planner acceptance or mission completion.
+- **Deferred work:** Boss/planner runtime, analytics, parallel/worktree orchestration, live-provider validation, and release work remain deferred. Do not start M8.
+- **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network were used.
+- **Acceptance boundary:** STATE-7 Planner acceptance is required before this milestone is marked accepted.
+
 ## Future milestone entry template
 
 - **Milestone:**

@@ -39,6 +39,15 @@ export interface SubagentExecutionRequest extends WorkerTimeoutPolicy {
 	readonly excludedRouteIds?: readonly StableId[];
 }
 
+/** Caller-supplied child result protocol. M5 owns execution; M7 may replace
+ * only the bounded terminal tool/result shape. */
+export interface ChildResultProtocol {
+	readonly toolName: string;
+	readonly tool: ToolDefinition;
+	getResult(): unknown;
+	hasProtocolViolation(): boolean;
+}
+
 export type StructuredChildStatus = "completed" | "blocked";
 
 export interface ChildTestResult {
@@ -90,6 +99,8 @@ export interface SubagentAttempt {
 	readonly toolObservations: readonly ToolObservation[];
 	readonly potentialMutationObserved: boolean;
 	readonly structuredResult?: StructuredChildResult;
+	/** Result emitted by a caller-supplied protocol (kept separate for M7). */
+	readonly protocolResult?: unknown;
 	readonly sessionTerminalState: "idle" | "aborted" | "disposed" | "error";
 	readonly errorMessage?: string;
 }
@@ -114,6 +125,7 @@ export interface SubagentRunResult {
 	readonly finalRemoteModelId?: string;
 	readonly attempts: readonly SubagentAttempt[];
 	readonly structuredResult?: StructuredChildResult;
+	readonly protocolResult?: unknown;
 	readonly potentialMutationObserved: boolean;
 	readonly fallbackCount: number;
 	readonly summary: string;
@@ -148,6 +160,7 @@ export interface ChildSessionOptions {
 	readonly request: SubagentExecutionRequest;
 	readonly toolNames: readonly WorkerToolName[];
 	readonly submitTool: ToolDefinition;
+	readonly resultToolName?: string;
 	readonly signal?: AbortSignal;
 }
 
@@ -177,6 +190,7 @@ export interface SubagentExecutorOptions {
 	readonly sessionFactory?: ChildSessionFactory;
 	readonly clock?: () => Date;
 	readonly onProgress?: (event: WorkerProgressEvent) => void;
+	readonly resultProtocolFactory?: (request: SubagentExecutionRequest) => ChildResultProtocol;
 }
 
 export interface ResultToolState {

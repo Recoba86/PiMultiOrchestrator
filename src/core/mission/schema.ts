@@ -8,7 +8,7 @@ export const MISSION_STORE_META_TABLE = "mission_store_meta" as const;
  * parameters; SQLite remains the transaction/foreign-key boundary rather
  * than a second domain validator.
  */
-export const MISSION_STORE_SCHEMA_SQL = `
+const MISSION_STORE_BASE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS mission_store_meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -155,6 +155,97 @@ CREATE INDEX IF NOT EXISTS tasks_mission_status_idx ON tasks(mission_id, status,
 CREATE INDEX IF NOT EXISTS attempts_mission_status_idx ON attempts(mission_id, status, started_at);
 CREATE INDEX IF NOT EXISTS evidence_mission_status_idx ON evidence(mission_id, status, admitted_at);
 CREATE INDEX IF NOT EXISTS checkpoints_mission_revision_idx ON mission_checkpoints(mission_id, revision);
+`;
+
+/** Durable M7 quality state.  JSON columns are bounded by the adapter before
+ * insertion; SQLite remains the transaction and foreign-key boundary. */
+export const MISSION_STORE_QUALITY_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS verification_runs (
+  verification_id TEXT PRIMARY KEY,
+  mission_id TEXT NOT NULL REFERENCES missions(mission_id) ON DELETE CASCADE,
+  task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+  target_run_id TEXT NOT NULL,
+  target_packet_id TEXT,
+  round INTEGER NOT NULL CHECK (round >= 0),
+  reviewer_run_id TEXT,
+  reviewer_route_id TEXT,
+  reviewer_remote_model_id TEXT,
+  implementation_route_id TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running','completed','interrupted','blocked')),
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  quality_decision_id TEXT,
+  potential_mutation_observed INTEGER NOT NULL CHECK (potential_mutation_observed IN (0,1)),
+  failure_summary TEXT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS quality_decisions (
+  decision_id TEXT PRIMARY KEY,
+  mission_id TEXT NOT NULL REFERENCES missions(mission_id) ON DELETE CASCADE,
+  task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+  verification_id TEXT NOT NULL REFERENCES verification_runs(verification_id) ON DELETE RESTRICT,
+  target_run_id TEXT NOT NULL,
+  target_packet_id TEXT,
+  round INTEGER NOT NULL CHECK (round >= 0),
+  verdict TEXT NOT NULL CHECK (verdict IN ('pass','reject','blocked')),
+  criterion_results_json TEXT NOT NULL,
+  mechanical_checks_json TEXT NOT NULL,
+  reviewer_summary TEXT NOT NULL,
+  findings_json TEXT NOT NULL,
+  required_fixes_json TEXT NOT NULL,
+  risks_json TEXT NOT NULL,
+  gate_reasons_json TEXT NOT NULL,
+  reviewer_route_id TEXT,
+  created_at TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS quality_escalations (
+  escalation_id TEXT PRIMARY KEY,
+  mission_id TEXT NOT NULL REFERENCES missions(mission_id) ON DELETE CASCADE,
+  task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+  rejected_run_id TEXT NOT NULL,
+  verification_id TEXT NOT NULL REFERENCES verification_runs(verification_id) ON DELETE RESTRICT,
+  quality_round INTEGER NOT NULL CHECK (quality_round >= 0),
+  failed_criteria_json TEXT NOT NULL,
+  required_fixes_json TEXT NOT NULL,
+  reviewer_findings_json TEXT NOT NULL,
+  prior_implementation_route_ids_json TEXT NOT NULL,
+  reviewer_route_id TEXT,
+  preferred_pool TEXT NOT NULL CHECK (preferred_pool = 'implementation'),
+  route_exclusions_json TEXT NOT NULL,
+  diversity TEXT NOT NULL CHECK (diversity IN ('none','prefer','require')),
+  status TEXT NOT NULL CHECK (status IN ('ready','exhausted','blocked')),
+  created_at TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS task_quality_status (
+  task_id TEXT PRIMARY KEY REFERENCES tasks(task_id) ON DELETE CASCADE,
+  mission_id TEXT NOT NULL REFERENCES missions(mission_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('unverified','verification_running','passed','rejected','blocked','review_required')),
+  quality_round INTEGER NOT NULL CHECK (quality_round >= 0),
+  latest_verification_id TEXT,
+  latest_decision_id TEXT,
+  updated_at TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS verification_runs_mission_task_idx ON verification_runs(mission_id, task_id, round, started_at);
+CREATE INDEX IF NOT EXISTS quality_decisions_mission_task_idx ON quality_decisions(mission_id, task_id, round, created_at);
+CREATE INDEX IF NOT EXISTS quality_escalations_mission_task_idx ON quality_escalations(mission_id, task_id, quality_round, created_at);
+CREATE INDEX IF NOT EXISTS task_quality_status_mission_idx ON task_quality_status(mission_id, status, updated_at);
+`;
+
+/** The exact M6 schema used by migration fixtures and v1 databases. */
+export const MISSION_STORE_SCHEMA_V1_SQL = MISSION_STORE_BASE_SCHEMA_SQL;
+
+/** Current schema for a brand-new MissionStore. */
+export const MISSION_STORE_SCHEMA_SQL = `${MISSION_STORE_BASE_SCHEMA_SQL}\n${MISSION_STORE_QUALITY_SCHEMA_SQL}`;
+
+/** Sequential, transactional v1 -> v2 migration. */
+export const MISSION_STORE_MIGRATION_1_TO_2_SQL = `
+${MISSION_STORE_QUALITY_SCHEMA_SQL}
+INSERT OR IGNORE INTO task_quality_status(task_id, mission_id, status, quality_round, latest_verification_id, latest_decision_id, updated_at)
+SELECT task_id, mission_id, 'unverified', 0, NULL, NULL, updated_at FROM tasks;
+UPDATE mission_store_meta SET value = '2' WHERE key = 'schema_version';
 `;
 
 export const CURRENT_MISSION_STORE_SCHEMA_VERSION = MISSION_STORE_SCHEMA_VERSION;

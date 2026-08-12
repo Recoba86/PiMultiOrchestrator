@@ -187,7 +187,7 @@ export function renderTaskPacketPrompt(packet: TaskPacketV1): string {
 }
 
 /** Adapt a packet to the M5 worker request without giving the worker extra context. */
-export function packetToSubagentRequest(packet: TaskPacketV1, options: { readonly cwd?: string; readonly timeoutMs?: number } = {}): SubagentExecutionRequest {
+export function packetToSubagentRequest(packet: TaskPacketV1, options: { readonly cwd?: string; readonly timeoutMs?: number; readonly excludedRouteIds?: readonly import("../config/types.js").StableId[] } = {}): SubagentExecutionRequest {
 	assertPacketDigest(packet);
 	const cwd = options.cwd ?? packet.repositoryCwd;
 	if (typeof cwd !== "string" || cwd.trim().length === 0) throw new TaskPacketError("invalid-packet", "A repository cwd is required for a child request");
@@ -198,6 +198,7 @@ export function packetToSubagentRequest(packet: TaskPacketV1, options: { readonl
 		cwd,
 		acceptanceCriteria: packet.acceptanceCriteria,
 		...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+		...(options.excludedRouteIds === undefined ? {} : { excludedRouteIds: options.excludedRouteIds }),
 	};
 }
 

@@ -29,13 +29,14 @@ Milestone acceptance does not itself create a product release.
 | Evidence | Current result |
 |---|---|
 | Configuration schema | Version 1 |
-| Deterministic and fake integration suite | `111/111 PASS` |
+| M6 accepted deterministic/fake baseline | `111/111 PASS` |
+| M7 development verification suite | `121/121 PASS`; typecheck/build/check PASS; Pi/fake quality-loop proof PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
 | Tested Node.js version | `22.23.0`; package requires `>=22.19.0` |
 | Fake gateway integration | PASS |
-| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, parent→child execution, and mission→packet→proposed→accepted→reopen flow |
+| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, parent→child execution, mission→packet→proposed→accepted→reopen flow, and M7 reviewer reject→repair→re-review lineage |
 | Real live 9Router catalog | NOT VERIFIED — credential-gated probe was skipped |
 | Real paid inference | NOT PERFORMED |
 
@@ -45,7 +46,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, quality escalation, analytics, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M6 MissionStore/ContextBroker and mission-flow evidence are accepted for development; no stable release is implied.
+- Boss runtime, M7 planner acceptance, analytics, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M6 MissionStore/ContextBroker and M7 implementation evidence are development milestones only; no stable release is implied.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

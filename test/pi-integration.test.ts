@@ -220,7 +220,7 @@ function parseJsonLines(value: string): Record<string, unknown>[] {
 		});
 }
 
-async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean } = {}): Promise<T> {
+async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly qualityLoopFlow?: boolean } = {}): Promise<T> {
 	const server = new FakeNineRouter({ models: sourceModels, ...options });
 	const root = await mkdtemp(join(tmpdir(), "pi-m2-integration-"));
 	const agentRoot = join(root, "agent");
@@ -487,6 +487,95 @@ test("[P][fixture-v1] Pi M6 mission task persists packet, proposed evidence, acc
 			await rm(root, { recursive: true, force: true });
 		}
 	}, { toolCallFlow: true });
+});
+
+test("[P][fixture-v1] Pi M7 quality loop persists reject, repair, and re-verification lineage", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const seeded = createMissionStore({ root: orchestratorRoot });
+		const implementationRoute = await stableRouteId(sourceModels[0]!.id);
+		seeded.createMission({ missionId: "mission-m7", goal: "Run one bounded quality loop", repository: { cwd: repoRoot } });
+		seeded.createTask({ missionId: "mission-m7", taskId: "task-m7", roleId: "implementer", executionClass: "implementation", poolId: "implementation", objective: "Repair the bounded fixture task", acceptanceCriteria: ["reviewer approves"], status: "ready" });
+		const attempt = seeded.createAttempt({ taskId: "task-m7", attemptId: "attempt-m7", routeId: implementationRoute, remoteModelId: sourceModels[0]!.id });
+		seeded.finishAttempt(attempt.attemptId, "succeeded", { result: { status: "completed", summary: "seed implementation", evidence: [], filesChanged: [], tests: [], risks: [], questions: [] } });
+		seeded.close();
+
+		const root = await mkdtemp(join(tmpdir(), "pi-m7-quality-run-"));
+		try {
+			const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+			const child = spawn(
+				piCommand,
+				["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--mode", "rpc"],
+				{ cwd: repoRoot, env, stdio: ["pipe", "pipe", "pipe"] },
+			);
+			let stdout = "";
+			let stderr = "";
+			let buffer = "";
+			let loopFinished = false;
+			const result = await new Promise<PiRunResult>((resolvePromise, reject) => {
+				let settled = false;
+				const deadline = setTimeout(() => {
+					child.kill("SIGTERM");
+					setTimeout(() => child.kill("SIGKILL"), 500).unref();
+				}, 45_000);
+				const send = (value: Record<string, unknown>): void => { child.stdin.write(`${JSON.stringify(value)}\n`); };
+				child.stdout.on("data", (chunk: Buffer) => {
+					buffer += chunk.toString();
+					stdout += chunk.toString();
+					let newline = buffer.indexOf("\n");
+					while (newline >= 0) {
+						const line = buffer.slice(0, newline).replace(/\r$/u, "");
+						buffer = buffer.slice(newline + 1);
+						newline = buffer.indexOf("\n");
+						let event: Record<string, unknown>;
+						try { event = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+						if (event.type === "response" && event.command === "get_commands") {
+							send({ type: "prompt", message: "/missions mission-m7", id: "mission-m7" });
+							continue;
+						}
+						if (event.type !== "extension_ui_request") continue;
+						const id = typeof event.id === "string" ? event.id : undefined;
+						const method = event.method;
+						const title = typeof event.title === "string" ? event.title : "";
+						const options = Array.isArray(event.options) ? event.options.filter((value): value is string => typeof value === "string") : [];
+						if (!id) continue;
+						if (method === "select" && title.startsWith("mission: mission-m7")) send({ type: "extension_ui_response", id, value: "Tasks" });
+						else if (method === "select" && title.startsWith("Tasks for mission-m7")) send({ type: "extension_ui_response", id, value: options.find((value) => value.startsWith("task-m7 ")) ?? "Back" });
+						else if (method === "select" && title.startsWith("task: task-m7")) send({ type: "extension_ui_response", id, value: "Run quality loop" });
+						else if (method === "confirm" && title === "Run bounded quality loop?") send({ type: "extension_ui_response", id, confirmed: true });
+						else if (method === "notify" && typeof event.message === "string" && event.message.includes("Quality loop passed")) {
+							loopFinished = true;
+							child.stdin.end();
+						}
+					}
+				});
+				child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+				child.once("error", (error) => { clearTimeout(deadline); if (!settled) { settled = true; reject(error); } });
+				child.once("close", (code, signal) => { clearTimeout(deadline); if (settled) return; settled = true; resolvePromise({ code, signal, stdout, stderr }); });
+				send({ type: "get_commands", id: "commands" });
+			});
+			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
+			assert.equal(loopFinished, true, result.stdout);
+			assert.equal(result.stdout.includes(server.token), false);
+			assert.equal(result.stderr.includes(server.token), false);
+			const reviewerRequests = server.chatRequests.filter((request) => request.toolNames?.includes("submit_verification_result"));
+			const repairRequests = server.chatRequests.filter((request) => request.toolNames?.includes("submit_agent_result"));
+			assert.equal(reviewerRequests.length, 4, result.stdout);
+			assert.equal(repairRequests.length, 2, result.stdout);
+			assert.equal(reviewerRequests.every((request) => request.toolNames?.includes("delegate_agent") !== true), true);
+
+			const reopened = createMissionStore({ root: orchestratorRoot });
+			const status = reopened.getTaskQualityStatus("task-m7");
+			assert.equal(status?.status, "passed");
+			assert.equal(status?.qualityRound, 1);
+			assert.equal(reopened.listVerificationRuns("mission-m7", "task-m7").length, 2);
+			assert.equal(reopened.listQualityDecisions("mission-m7", "task-m7").map((decision) => decision.verdict).join(","), "reject,pass");
+			assert.equal(reopened.listQualityEscalations("mission-m7", "task-m7").length, 1);
+			assert.equal(reopened.getTask("task-m7")?.status, "execution_completed");
+			reopened.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	}, { toolCallFlow: true, qualityLoopFlow: true });
 });
 
 test("[P][fixture-v1] Pi RPC exposes M2-M6 commands without live configuration", { skip: integrationSkip }, async () => {

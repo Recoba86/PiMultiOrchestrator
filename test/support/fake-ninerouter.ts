@@ -31,6 +31,8 @@ export interface FakeNineRouterOptions {
 	readonly completionText?: string;
 	/** When enabled, exercise parent delegate -> child read -> structured result. */
 	readonly toolCallFlow?: boolean;
+	/** When enabled, exercise reviewer reject -> repair -> reviewer pass. */
+	readonly qualityLoopFlow?: boolean;
 }
 
 export interface FakeRequestObservation {
@@ -139,6 +141,8 @@ export class FakeNineRouter {
 	private readonly delayMs: number;
 	private readonly completionText: string;
 	private readonly toolCallFlow: boolean;
+	private readonly qualityLoopFlow: boolean;
+	private qualityReviewCount = 0;
 	private portNumber: number | undefined;
 
 	constructor(options: FakeNineRouterOptions = {}) {
@@ -148,6 +152,7 @@ export class FakeNineRouter {
 		this.delayMs = options.delayMs ?? 250;
 		this.completionText = options.completionText ?? DEFAULT_COMPLETION;
 		this.toolCallFlow = options.toolCallFlow ?? false;
+		this.qualityLoopFlow = options.qualityLoopFlow ?? false;
 		this.server = createServer((req, res) => {
 			void this.handle(req, res);
 		});
@@ -304,6 +309,28 @@ export class FakeNineRouter {
 			}) : [];
 			const hasToolResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { role?: unknown }).role === "tool") === true;
 			const hasDelegateResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-delegate") === true;
+			if (this.qualityLoopFlow && tools.includes("submit_verification_result")) {
+				const hasReadResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-quality-read") === true;
+				const hasQualityResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-quality-result") === true;
+				if (!hasReadResult) {
+					await this.sendToolCall(res, model, "call-quality-read", "read", JSON.stringify({ path: "package.json", limit: 40 }));
+					return;
+				}
+				if (!hasQualityResult) {
+					this.qualityReviewCount += 1;
+					const rejected = this.qualityReviewCount === 1;
+					await this.sendToolCall(res, model, "call-quality-result", "submit_verification_result", JSON.stringify({
+						verdict: rejected ? "reject" : "pass",
+						criterionResults: [{ criterion: "reviewer approves", status: rejected ? "failed" : "satisfied", mandatory: true, evidenceSummary: rejected ? "Fixture requires one repair" : "Fixture repair was observed" }],
+						mechanicalChecks: [{ command: "npm test", exitStatus: 0, outcome: "passed", summary: "fixture check passed", provenance: "reviewer" }],
+						findings: rejected ? ["Repair the bounded fixture task"] : [],
+						requiredFixes: rejected ? ["Run one implementation repair"] : [],
+						risks: [],
+						summary: rejected ? "Fixture reviewer rejects once" : "Fixture reviewer passes after repair",
+					}));
+					return;
+				}
+			}
 			if (tools.includes("delegate_agent") && !hasToolResult) {
 				await this.sendToolCall(res, model, "call-delegate", "delegate_agent", JSON.stringify({ role: "debugger", pool: "investigation", task: "Read package.json and report the package name." }));
 				return;

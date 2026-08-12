@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M6 accepted; M7 next planned and not started |
+| Development phase | M7 implemented; planner acceptance pending |
 | Last accepted milestone | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation |
 | Accepted M6 implementation commit | `62282c1618f395b032e359005d018721e2b36868` |
 | Accepted M6 evidence HEAD | `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298` |
@@ -29,7 +29,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M4 — Routing + Health + Infrastructure Fallback Engine | ACCEPTED / PASS |
 | M5 — Routed Subagent Execution | ACCEPTED / PASS |
 | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation | ACCEPTED / PASS |
-| M7 — Quality Gates, Review, and Escalation | NEXT PLANNED / NOT STARTED |
+| M7 — Quality Gates, Review, and Escalation | IMPLEMENTED BUT NOT ACCEPTED |
+| M8 — Analytics and Recommendations | NEXT PLANNED / NOT STARTED |
 
 ## Stable / accepted capabilities
 
@@ -84,7 +85,20 @@ M5 adds direct Pi `0.84.1` SDK child-session execution with exact M4-selected ro
 
 M6 adds durable Canonical Mission State in a separate versioned SQLite MissionStore behind an adapter; its Mission DB schema is independent from ConfigStore. It stores missions, tasks/runs, evidence, canonical items, checkpoints, events, revisions, and conflict protection independently from ConfigStore, HealthStore, and Pi session history. Worker output enters as proposed evidence; explicit accept/reject controls canonical promotion and provenance, while ingestion preserves route/run/packet provenance. The deterministic ContextBroker admits accepted state only by default and emits immutable, bounded TaskPacketV1 values with SHA-256 digests, mission-revision lineage, and omitted-item counts. M5 consumes packet-derived context; mutation-risk recovery does not auto-rerun, and operational completion remains distinct from quality acceptance. Mission Control exposes `/missions`, Context & Mission Settings, packet/task inspection, evidence/checkpoint actions, restart/resume, and interrupted-task recovery while Pi session entries remain pointers only.
 
-M6 does not implement Boss/planner runtime, automatic decomposition or scheduling, Reviewer quality loops or gates, quality escalation, parallel workers, worktree isolation, analytics, or auto-tuning.
+M6 does not implement Boss/planner runtime, automatic decomposition or scheduling, parallel workers, worktree isolation, analytics, or auto-tuning. M7 quality state and reviewer/repair boundary are recorded below.
+
+## M7 implementation pending planner acceptance
+
+M7 adds a separate MissionStore schema v2 quality layer with transactional v1→v2 migration, durable verification runs, immutable quality decisions/history, task quality status separate from execution and M4 health, bounded `submit_verification_result`, conservative mechanical checks, deterministic QualityGate evaluation, reviewer route diversity, escalation records, interrupted-verification recovery, and explicit bounded repair/re-review through the existing M4→M5 executor boundary. Mission Control exposes quality status/history and confirmation-gated Verify/Re-verify/quality-loop actions; quality rejection never records an infrastructure failure or silently promotes canonical evidence.
+
+| M7 implementation evidence | Result |
+|---|---|
+| QualityGate, structured-result, service, migration, worker-protocol, host, and Pi quality-loop suites | `121/121 PASS` |
+| Typecheck and build | PASS |
+| Mission DB v1→v2 fixture migration and reopen | PASS |
+| Actual Pi/fake quality reviewer loop | `[P][fixture-v1] PASS` — reviewer reject → routed repair → re-review pass; durable lineage reopened |
+| Planner acceptance / STATE-7 | PENDING |
+| Paid calls / live environment changes | `0` / NONE |
 
 | M6 accepted evidence | Result |
 |---|---|
@@ -150,7 +164,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ### Deferred capabilities
 
-- Boss/planner runtime, automatic role generation, and quality escalation;
+- Boss/planner runtime and automatic role generation;
 - automatic task decomposition and scheduling;
 - Reviewer quality loops and automated quality gates;
 - parallel subagents and worktree isolation;
@@ -160,7 +174,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6. M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation — is next planned and not started. Do not start M7.
+M6 is accepted by STATE-6. M7 is implemented but planner acceptance is pending. Do not start M8.
 
 ## Accepted evidence history
 
@@ -173,11 +187,13 @@ M6 is accepted by STATE-6. M7 — Verification + Quality Gates + Reviewer Loop +
 
 - M6: `62282c1618f395b032e359005d018721e2b36868` — `feat(missions): add canonical mission state and context broker` — ACCEPTED / PASS by STATE-6; evidence HEAD `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298`, `111/111` tests, typecheck/build/check, and isolated Pi `0.84.1` mission flow passed.
 
+- M7 implementation: current worktree — IMPLEMENTED BUT NOT ACCEPTED; Mission DB v1→v2 migration, durable quality records/status, structured reviewer protocol, deterministic gate, bounded escalation/repair/re-review, host quality commands, focused tests, and actual Pi/fake reviewer reject→repair→re-review evidence are present. STATE-7 planner acceptance remains pending.
+
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M7 has started or that Boss, Reviewer, quality, analytics, or parallel-work orchestration is implemented.
+- Do not assume M7 is planner-accepted or that Boss, analytics, or parallel-work orchestration is implemented.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

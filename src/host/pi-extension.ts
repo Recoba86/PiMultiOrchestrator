@@ -42,6 +42,7 @@ import {
 import {
 	createSubagentExecutor,
 	WorkerError,
+	type ChildResultProtocol,
 	type SubagentExecutionRequest,
 	type SubagentExecutor,
 	type SubagentRunResult,
@@ -59,6 +60,7 @@ import type {
 import { createMissionStore } from "../core/mission/index.js";
 import { executeMissionTask } from "../core/mission/index.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
+import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -122,6 +124,10 @@ export interface PiHostOptions {
 	/** Optional canonical mission store. The host never mirrors canonical state in Pi history. */
 	readonly missionStore?: MissionStoreAdapter;
 	readonly contextBroker?: ContextBroker;
+	/** Optional quality persistence/service. Defaults to the mission store when present. */
+	readonly qualityStore?: QualityPersistence;
+	readonly qualityService?: QualityService;
+	readonly qualityExecutor?: SubagentExecutor;
 	readonly providerId?: string;
 	readonly subagentExecutor?: SubagentExecutor;
 }
@@ -139,6 +145,9 @@ export interface PiHost {
 	readonly healthStore?: HealthStore;
 	readonly missionStore?: MissionStoreAdapter;
 	readonly contextBroker?: ContextBroker;
+	readonly qualityStore?: QualityPersistence;
+	readonly qualityService?: QualityService;
+	readonly qualityExecutor?: SubagentExecutor;
 	reconcile(): Promise<ReconcileResult>;
 	registerCommands(): void;
 	dispose(): void;
@@ -161,7 +170,9 @@ const errorMessage = (error: unknown): string =>
 	error instanceof NineRouterError
 		? error.toJSON().message
 		: error instanceof NineRouterManagerError || error instanceof SecretResolutionError || error instanceof PoolManagerError || error instanceof WorkerError
-			? error.message
+				? error.message
+			: error instanceof QualityError
+				? error.message
 			: "operation unavailable";
 
 const safeStatusLine = (status: unknown): string => {
@@ -332,6 +343,7 @@ async function createHostSubagentExecutor(
 	poolManager: PoolManagerContract,
 	configStore: ConfigStore,
 	healthStore: HealthStore | undefined,
+	resultProtocolFactory?: (request: SubagentExecutionRequest) => ChildResultProtocol,
 ): Promise<SubagentExecutor> {
 	const loaded = await configStore.load();
 	const initialPolicy = loaded.snapshot?.config.routing ?? createDefaultConfig().routing;
@@ -406,7 +418,7 @@ async function createHostSubagentExecutor(
 			recordFailure: (routeId: StableId, failure: FailureClassification, at: Date) => healthStore.recordFailure(routeId, failure, { now: at }),
 		} : {}),
 	};
-	return createSubagentExecutor({ routeAdapter });
+	return createSubagentExecutor({ routeAdapter, ...(resultProtocolFactory === undefined ? {} : { resultProtocolFactory }) });
 }
 
 /**
@@ -421,6 +433,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const configStore = options.configStore;
 	const healthStore = options.healthStore;
 	const subagentExecutor = options.subagentExecutor;
+	const qualityExecutor = options.qualityExecutor;
+	const qualityStore = options.qualityStore ?? options.missionStore;
+	const qualityService = options.qualityService ?? (qualityStore ? new QualityService(qualityStore) : undefined);
 	let registeredFingerprint: string | undefined;
 	let reconciled = false;
 	const lifetime = new AbortController();
@@ -1217,6 +1232,231 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		} catch (error) { notifyError(ctx, "Mission packet failed", error); }
 	};
 
+	const qualityGetter = <T>(name: string): ((...args: readonly string[]) => T) | undefined => {
+		const candidate = qualityStore as unknown as Record<string, unknown> | undefined;
+		const method = candidate?.[name];
+		return typeof method === "function" ? method as (...args: readonly string[]) => T : undefined;
+	};
+
+	const taskQualityStatus = (taskId: string): TaskQualityStatus | undefined => {
+		const get = qualityGetter<TaskQualityStatus | undefined>("getTaskQualityStatus");
+		return get ? get.call(qualityStore, taskId) : undefined;
+	};
+
+	const qualityList = <T>(name: string, missionId: string, taskId?: string): readonly T[] => {
+		const list = qualityGetter<readonly T[]>(name);
+		if (!list) return [];
+		return list.call(qualityStore, missionId, ...(taskId === undefined ? [] : [taskId])) ?? [];
+	};
+
+	const qualityStatusLabel = (status: TaskQualityStatus | undefined): string =>
+		status ? `${status.status} (round ${status.qualityRound})` : "unverified (round 0)";
+
+	const qualityTaskDetails = (missionId: string, taskId: string, status: TaskQualityStatus | undefined): string[] => {
+		const verifications = qualityList<VerificationRunRecord>("listVerificationRuns", missionId, taskId);
+		const decisions = qualityList<{ readonly verdict: string; readonly reviewerSummary?: string; readonly reviewerRouteId?: string; readonly findings?: readonly string[]; readonly requiredFixes?: readonly string[] }>("listQualityDecisions", missionId, taskId);
+		const escalations = qualityList("listQualityEscalations", missionId, taskId);
+		const latestDecision = decisions.length > 0 ? decisions[decisions.length - 1] : undefined;
+		return [
+			`quality status: ${qualityStatusLabel(status)}`,
+			`verification runs: ${verifications.length}`,
+			`quality decisions: ${decisions.length}${latestDecision?.verdict ? ` (latest ${latestDecision.verdict})` : ""}`,
+			`quality escalations: ${escalations.length}`,
+		];
+	};
+
+	const qualityHistoryText = (missionId: string, taskId: string): string => {
+		const verifications = qualityList<VerificationRunRecord>("listVerificationRuns", missionId, taskId);
+		const decisions = qualityList<{ readonly decisionId?: string; readonly verdict: string; readonly round: number; readonly reviewerSummary?: string; readonly reviewerRouteId?: string; readonly findings?: readonly string[]; readonly requiredFixes?: readonly string[] }>("listQualityDecisions", missionId, taskId);
+		const lines = [`mission: ${missionId}`, `task: ${taskId}`, `verification history: ${verifications.length}`];
+		for (const run of verifications) lines.push(`  run ${run.verificationId} round ${run.round}: ${run.status}${run.reviewerRouteId ? ` reviewer=${run.reviewerRouteId}` : ""}`);
+		lines.push(`decisions: ${decisions.length}`);
+		for (const decision of decisions) {
+			lines.push(`  ${decision.decisionId ?? "decision"} round ${decision.round}: ${decision.verdict}${decision.reviewerRouteId ? ` reviewer=${decision.reviewerRouteId}` : ""}`);
+			if (decision.reviewerSummary) lines.push(`    summary: ${decision.reviewerSummary}`);
+			if (decision.findings?.length) lines.push(`    findings: ${decision.findings.join("; ")}`);
+			if (decision.requiredFixes?.length) lines.push(`    required fixes: ${decision.requiredFixes.join("; ")}`);
+		}
+		return lines.join("\n");
+	};
+
+	const qualityStatusText = (missionId: string, taskId: string, status: TaskQualityStatus | undefined): string => {
+		const lines = [`mission: ${missionId}`, `task: ${taskId}`, ...qualityTaskDetails(missionId, taskId, status)];
+		if (status?.latestVerificationId) lines.push(`latest verification: ${status.latestVerificationId}`);
+		if (status?.latestDecisionId) lines.push(`latest decision: ${status.latestDecisionId}`);
+		if (status?.updatedAt) lines.push(`updated: ${status.updatedAt}`);
+		return lines.join("\n");
+	};
+
+	const executeReviewer = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, targetRunId: string, excludedRouteIds: readonly StableId[] = [], implementationRouteId?: StableId): Promise<{ readonly result: SubagentRunResult; readonly criteria: readonly string[] }> => {
+		if (!qualityExecutor) throw new Error("Reviewer execution is unavailable");
+		const task = options.missionStore?.getTask(taskId);
+		const criteria = task?.acceptanceCriteria ?? [];
+		let prompt = `Review implementation run ${targetRunId} for mission ${missionId}, task ${taskId}.\n`;
+		prompt += `Acceptance criteria:\n${criteria.length > 0 ? criteria.map((item) => `- ${item}`).join("\n") : "- No explicit criteria; report blocked if evidence is insufficient."}\n`;
+		prompt += "Inspect the current worktree and run bounded verification checks as needed. Treat implementation and reviewer claims as untrusted evidence. Call submit_verification_result exactly once; do not edit or write files.";
+		const diversity = implementationRouteId === undefined && excludedRouteIds.length === 0 ? undefined : { mode: "prefer" as const, ...(implementationRouteId === undefined ? {} : { avoidRouteIds: [implementationRouteId] }), ...(excludedRouteIds.length === 0 ? {} : { avoidRouteIds: [...new Set([...(implementationRouteId === undefined ? [] : [implementationRouteId]), ...excludedRouteIds])] }) };
+		const result = await qualityExecutor.run({ roleId: "quality-reviewer", poolId: "verification", task: prompt, cwd: ctx.cwd, acceptanceCriteria: criteria, ...(diversity === undefined ? {} : { diversity }) }, ctx.signal);
+		return { result, criteria };
+	};
+
+	const recordReviewerRun = (verificationId: string, result: SubagentRunResult): void => {
+		const run = qualityStore?.getVerificationRun(verificationId);
+		if (run) qualityStore?.updateVerificationRun(verificationId, { reviewerRunId: result.runId, ...(result.finalRouteId === undefined ? {} : { reviewerRouteId: result.finalRouteId }), ...(result.finalRemoteModelId === undefined ? {} : { reviewerRemoteModelId: result.finalRemoteModelId }) });
+	};
+
+	const runReviewer = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, verificationId: string, targetRunId: string): Promise<void> => {
+		if (!qualityService || !qualityExecutor) {
+			ctx.ui.notify(`Verification started: ${verificationId}; reviewer execution is unavailable`, "info");
+			return;
+		}
+		try {
+			const { result, criteria } = await executeReviewer(ctx, missionId, taskId, targetRunId);
+			recordReviewerRun(verificationId, result);
+			if (result.terminalStatus !== "completed") {
+				qualityService.failVerification(verificationId, result.potentialMutationObserved ? "interrupted" : "blocked", result.summary);
+				ctx.ui.notify(`Verification ${verificationId} ${result.terminalStatus}; quality remains review_required`, "warning");
+				return;
+			}
+			const completed = qualityService.completeVerification(verificationId, result.protocolResult ?? result.structuredResult, criteria);
+			ctx.ui.notify(`Quality ${completed.decision.verdict}: ${completed.decision.reviewerSummary}`, completed.decision.verdict === "pass" ? "info" : "warning");
+		} catch (error) {
+			try { qualityService.failVerification(verificationId, "blocked", "Reviewer protocol or infrastructure result was unavailable"); } catch { /* preserve original bounded diagnostic */ }
+			notifyError(ctx, "Task verification failed", error);
+		}
+	};
+
+	const showQualityStatus = async (ctx: ExtensionCommandContext, args?: string): Promise<void> => {
+		if (!qualityStore || !qualityGetter("getTaskQualityStatus")) {
+			ctx.ui.notify("Quality status is unavailable until quality persistence is configured", "error");
+			return;
+		}
+		const [missionId, taskId] = (args?.trim() ?? "").split(/\s+/u).filter(Boolean);
+		try {
+			if (missionId && taskId) {
+				const task = options.missionStore?.getTask(taskId);
+				if (task && String(task.missionId) !== missionId) {
+					ctx.ui.notify("Task does not belong to the requested mission", "error");
+					return;
+				}
+				ctx.ui.notify(qualityStatusText(missionId, taskId, taskQualityStatus(taskId)), "info");
+				return;
+			}
+			if (!missionId) {
+				const missions = options.missionStore ? await Promise.resolve(options.missionStore.listMissions()) : [];
+				const lines: string[] = [];
+				for (const mission of missions) {
+					const tasks = options.missionStore ? options.missionStore.listTasks(mission.missionId) : [];
+					if (tasks.length === 0) lines.push(`${mission.missionId}: no tasks`);
+					for (const task of tasks) lines.push(`${mission.missionId}/${task.taskId}: ${qualityStatusLabel(taskQualityStatus(String(task.taskId)))}`);
+				}
+				ctx.ui.notify(lines.length > 0 ? lines.join("\n") : "Usage: /quality-status <mission-id> [task-id]", lines.length > 0 ? "info" : "warning");
+				return;
+			}
+			const tasks = options.missionStore ? options.missionStore.listTasks(missionId) : [];
+			if (tasks.length > 0) {
+				ctx.ui.notify(tasks.map((task) => `${task.taskId}: ${qualityStatusLabel(taskQualityStatus(String(task.taskId)))}`).join("\n"), "info");
+				return;
+			}
+			const status = qualityList<TaskQualityStatus>("listVerificationRuns", missionId).length;
+			ctx.ui.notify(status > 0 ? `${missionId}: ${status} verification run${status === 1 ? "" : "s"}` : `No tasks recorded for mission ${missionId}`, status > 0 ? "info" : "warning");
+		} catch (error) { notifyError(ctx, "Quality status failed", error); }
+	};
+
+	const startTaskVerification = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, requestedRunId?: string): Promise<void> => {
+		if (!qualityService) {
+			ctx.ui.notify("Task verification is unavailable until the quality service is configured", "error");
+			return;
+		}
+		if (!requireIdle(ctx, "task verification")) return;
+		const task = options.missionStore?.getTask(taskId);
+		if (task && String(task.missionId) !== missionId) {
+			ctx.ui.notify("Task does not belong to the requested mission", "error");
+			return;
+		}
+		const targetRunId = requestedRunId?.trim() || task?.lastRunId;
+		if (!targetRunId) {
+			ctx.ui.notify("Task verification requires a completed task run; pass a target run id or run the task first", "warning");
+			return;
+		}
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("Task verification requires explicit TUI confirmation", "error");
+			return;
+		}
+		const confirmed = await ctx.ui.confirm("Start task verification?", `${missionId}/${taskId} target ${targetRunId}`);
+		if (!confirmed) return;
+		try {
+			const status = taskQualityStatus(taskId);
+			if (status?.status === "verification_running") {
+				ctx.ui.notify(`Verification is already running (${status.latestVerificationId ?? "unknown run"})`, "warning");
+				return;
+			}
+			const packet = task?.packet && typeof task.packet === "object" && typeof (task.packet as Record<string, unknown>).packetId === "string"
+				? String((task.packet as Record<string, unknown>).packetId)
+				: undefined;
+			const run = qualityService.startVerification({
+				missionId,
+				taskId,
+				targetRunId,
+				...(packet ? { targetPacketId: packet } : {}),
+				round: status?.qualityRound ?? 0,
+				...(task?.lastRunId ? {} : { potentialMutationObserved: false }),
+			});
+			if (qualityExecutor) await runReviewer(ctx, missionId, taskId, run.verificationId, targetRunId);
+			else ctx.ui.notify(`Verification started: ${run.verificationId}; reviewer result is still required`, "info");
+		} catch (error) { notifyError(ctx, "Task verification failed", error); }
+	};
+
+	const startQualityLoop = async (ctx: ExtensionCommandContext, missionId: string, taskId: string): Promise<void> => {
+		if (!qualityService || !qualityExecutor || !subagentExecutor || !options.missionStore || !options.contextBroker) {
+			ctx.ui.notify("Quality loop is unavailable until reviewer, repair, and mission services are configured", "error");
+			return;
+		}
+		if (!requireIdle(ctx, "quality loop")) return;
+		const task = options.missionStore.getTask(taskId);
+		if (!task || String(task.missionId) !== missionId || task.status !== "execution_completed") {
+			ctx.ui.notify("Quality loop requires an execution-completed task", "warning");
+			return;
+		}
+		const targetAttempt = task.lastRunId ? options.missionStore.getAttempt(task.lastRunId) : undefined;
+		let targetRunId = task.lastRunId;
+		let implementationRouteId = targetAttempt?.routeId as StableId | undefined;
+		if (!targetRunId) { ctx.ui.notify("Quality loop requires a completed task run", "warning"); return; }
+		const confirmed = await ctx.ui.confirm("Run bounded quality loop?", "Verification is read-only; repair rounds may modify the shared worktree (maximum 2 repairs). ");
+		if (!confirmed) return;
+		try {
+			const loop = await qualityService.runQualityLoop({
+				authorizedForMutation: true,
+				maxRounds: 2,
+				diversity: "prefer",
+				acceptanceCriteria: task.acceptanceCriteria,
+				verify: async (round, exclusions) => {
+					const verification = qualityService.startVerification({ missionId, taskId, targetRunId: targetRunId!, round, ...(implementationRouteId === undefined ? {} : { implementationRouteId }), });
+					try {
+						const executed = await executeReviewer(ctx, missionId, taskId, targetRunId!, exclusions as StableId[], implementationRouteId);
+						recordReviewerRun(verification.verificationId, executed.result);
+						if (executed.result.terminalStatus !== "completed") {
+							qualityService.failVerification(verification.verificationId, executed.result.potentialMutationObserved ? "interrupted" : "blocked", executed.result.summary);
+							throw new Error("Reviewer infrastructure did not complete");
+						}
+						return { verificationId: verification.verificationId, result: executed.result.protocolResult ?? executed.result.structuredResult, ...(implementationRouteId === undefined ? {} : { implementationRouteId }) };
+					} catch (error) {
+						try { qualityService.failVerification(verification.verificationId, "blocked", "Reviewer execution was unavailable"); } catch { /* preserve original failure */ }
+						throw error;
+					}
+				},
+				repair: async (_round, feedback, exclusions) => {
+					if (task.executionClass !== "implementation" && task.poolId !== "implementation") throw new Error("Quality repair requires the Implementation pool");
+					const repaired = await executeMissionTask({ store: options.missionStore!, contextBroker: options.contextBroker!, executor: subagentExecutor!, missionId, taskId, cwd: ctx.cwd, ...(ctx.signal === undefined ? {} : { signal: ctx.signal }), ...(exclusions.length === 0 ? {} : { excludedRouteIds: exclusions as StableId[] }), allowQualityRepair: true, repairFeedback: feedback });
+					targetRunId = repaired.attempt.attemptId;
+					implementationRouteId = repaired.attempt.routeId as StableId | undefined;
+					return { implementationRouteId: repaired.attempt.routeId ?? exclusions[0] ?? "repair-route" };
+				},
+			});
+			ctx.ui.notify(`Quality loop ${loop.status} after round ${loop.rounds}`, loop.status === "passed" ? "info" : "warning");
+		} catch (error) { notifyError(ctx, "Quality loop failed", error); }
+	};
+
 	const createMissionTask = async (ctx: ExtensionCommandContext, mission: MissionRecord): Promise<void> => {
 		const store = options.missionStore;
 		if (!store) { missionStoreUnavailable(ctx); return; }
@@ -1256,12 +1496,28 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			`objective: ${task.objective}`,
 			`acceptance criteria: ${task.acceptanceCriteria.length}`,
 			`packet revision: ${task.packetRevision}`,
+			...qualityTaskDetails(String(mission.missionId), String(task.taskId), taskQualityStatus(String(task.taskId))),
 		].join("\n");
 		if (ctx.mode !== "tui" && !ctx.hasUI) { ctx.ui.notify(details, "info"); return; }
-		const actions = ["Inspect", "Build packet", ...(subagentExecutor && options.contextBroker ? ["Run task"] : []), "Back"];
+		const qualityStatus = taskQualityStatus(String(task.taskId));
+		const verifyAction = qualityStatus?.latestVerificationId || qualityStatus?.status === "passed" || qualityStatus?.status === "rejected" || qualityStatus?.status === "blocked" ? "Re-verify" : "Verify";
+		const actions = [
+			"Inspect",
+			"Quality status",
+			...(qualityService ? [verifyAction] : []),
+			...(qualityService && qualityExecutor && subagentExecutor && options.contextBroker ? ["Run quality loop"] : []),
+			...(qualityStore ? ["Quality history"] : []),
+			"Build packet",
+			...(subagentExecutor && options.contextBroker ? ["Run task"] : []),
+			"Back",
+		];
 		const action = await ctx.ui.select(details, actions);
 		if (!action || action === "Back") return;
 		if (action === "Inspect") { ctx.ui.notify(details, "info"); return; }
+		if (action === "Quality status") { ctx.ui.notify(qualityStatusText(String(mission.missionId), String(task.taskId), taskQualityStatus(String(task.taskId))), "info"); return; }
+		if (action === "Verify" || action === "Re-verify") { await startTaskVerification(ctx, String(mission.missionId), String(task.taskId)); return; }
+		if (action === "Run quality loop") { await startQualityLoop(ctx, String(mission.missionId), String(task.taskId)); return; }
+		if (action === "Quality history") { ctx.ui.notify(qualityHistoryText(String(mission.missionId), String(task.taskId)), "info"); return; }
 		if (action === "Build packet") { await showMissionPacket(ctx, String(mission.missionId), String(task.taskId)); return; }
 		if (action !== "Run task" || !subagentExecutor || !options.contextBroker) return;
 		if (!requireIdle(ctx, "mission task")) return;
@@ -1625,6 +1881,21 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				await showMissionPacket(ctx, missionId, taskId);
 			},
 		});
+		pi.registerCommand("quality-status", {
+			description: "Show task quality status (optional mission and task ids)",
+			handler: async (args, ctx) => showQualityStatus(ctx, args),
+		});
+		pi.registerCommand("verify-task", {
+			description: "Start an explicit-confirmation quality verification (mission task [run])",
+			handler: async (args, ctx) => {
+				const [missionId, taskId, runId] = args.trim().split(/\s+/u, 3);
+				if (!missionId || !taskId) {
+					ctx.ui.notify("Usage: /verify-task <mission-id> <task-id> [target-run-id]", "error");
+					return;
+				}
+				await startTaskVerification(ctx, missionId, taskId, runId);
+			},
+		});
 	};
 
 	const dispose = (): void => {
@@ -1636,7 +1907,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		reconciled = true;
 	};
 
-		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), reconcile, registerCommands, dispose };
+		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
@@ -1664,7 +1935,13 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 		// Keep the M2/M3/M4 host available when no configured route can yet be resolved.
 		subagentExecutor = undefined;
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(missionStore ? { missionStore } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}) });
+	let qualityExecutor: SubagentExecutor | undefined;
+	try {
+		qualityExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, () => createVerificationResultProtocol());
+	} catch {
+		qualityExecutor = undefined;
+	}
+	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

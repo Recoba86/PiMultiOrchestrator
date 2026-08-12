@@ -106,16 +106,18 @@ Exit gate: PASS — MissionStore/ContextBroker deterministic suites, restart/reo
 
 ## M7 — Quality gates, review, and escalation
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
 
 Deliverables:
 
-- configurable gates for diff, tests, reviews, acceptance criteria, regressions, and critical findings;
-- reviewer independence/diversity policy;
-- quality rejection returning to the Boss rather than route fallback;
-- bounded retry/escalation decisions and terminal mission states.
+- MissionStore schema v1→v2 migration preserving all M6 rows and defaulting quality to unverified;
+- durable verification runs, quality decisions/status, reviewer findings, mechanical-check provenance, and escalation history;
+- bounded `submit_verification_result` through the existing M4→M5 child boundary with read-only Verification tools;
+- deterministic QualityGate PASS/REJECT/BLOCKED semantics and reviewer route diversity;
+- explicit Verify/Re-verify and confirmation-gated bounded quality-loop host actions; and
+- quality rejection kept separate from M4 health/fallback and canonical evidence admission.
 
-Exit gate: reviewer rejection, failed tests, missing evidence, retry, alternate investigator/reviewer, and Boss-only completion tests pass.
+Exit gate: PASS for implementation evidence — `121/121` tests, typecheck/build/check, and actual Pi `0.84.1` + fake-gateway reviewer reject→routed repair→re-review pass with durable lineage. Planner STATE-7 acceptance remains pending; M8 must not start.
 
 ## M8 — Analytics and recommendations
 

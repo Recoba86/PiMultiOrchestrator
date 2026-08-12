@@ -42,6 +42,10 @@
       "types": "./dist/core/context/index.d.ts",
       "import": "./dist/core/context/index.js"
     },
+		"./quality": {
+			"types": "./dist/core/quality/index.d.ts",
+			"import": "./dist/core/quality/index.js"
+		},
     "./pi": {
       "types": "./dist/host/pi-extension.d.ts",
       "import": "./dist/host/pi-extension.js"

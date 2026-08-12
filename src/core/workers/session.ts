@@ -55,6 +55,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 	if (options.signal?.aborted) throw new WorkerError("session-create", "Child session creation was cancelled");
 
 	let created: Awaited<ReturnType<typeof createAgentSession>>;
+	const resultToolName = options.resultToolName ?? options.submitTool.name ?? "submit_agent_result";
 	try {
 		created = await createAgentSession({
 			cwd: options.cwd,
@@ -64,7 +65,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 			// An empty scope prevents Ctrl+P/model cycling to another route.
 			scopedModels: [],
 			modelRuntime: options.route.modelRuntime,
-			tools: [...options.toolNames, "submit_agent_result"],
+			tools: [...options.toolNames, resultToolName],
 			customTools: [options.submitTool],
 			resourceLoader,
 			sessionManager: SessionManager.inMemory(options.cwd),
@@ -75,7 +76,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 	}
 	const session = created.session;
 	const toolNames = session.getActiveToolNames();
-	const expected = new Set([...options.toolNames, "submit_agent_result"]);
+	const expected = new Set([...options.toolNames, resultToolName]);
 	if (toolNames.length !== expected.size || toolNames.some((name) => !expected.has(name)) || [...expected].some((name) => !toolNames.includes(name)) || toolNames.includes("delegate_agent")) {
 		session.dispose();
 		throw new WorkerError("session-create", "Child session exposed an unexpected tool");
@@ -102,7 +103,7 @@ function childSystemPrompt(options: ChildSessionOptions): string {
 	`Assigned task:\n${options.request.task}`,
 	criteria,
 	"Use only the tools provided to this session. Do not delegate or call another orchestrator.",
-	"Do only the assigned scope. Report evidence and use submit_agent_result exactly once when done.",
+		`Do only the assigned scope. Report evidence and use ${options.resultToolName ?? options.submitTool.name ?? "submit_agent_result"} exactly once when done.`,
 	"Do not claim overall mission completion; the parent/Boss owns acceptance.",
 	].filter((line) => line.length > 0).join("\n");
 }

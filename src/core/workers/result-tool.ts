@@ -2,6 +2,7 @@ import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-
 
 import {
 	WORKER_PROTOCOL_VERSION,
+	type ChildResultProtocol,
 	type ChildTestResult,
 	type ResultToolState,
 	type StructuredChildResult,
@@ -78,6 +79,17 @@ export function createSubmitAgentResultTool(state: ResultToolState = createResul
 				return failure(error instanceof Error ? error.message : "Structured result is invalid");
 			}
 		},
+	};
+}
+
+/** Adapt the legacy worker handoff to the caller-supplied M5 protocol seam. */
+export function createAgentResultProtocol(): ChildResultProtocol {
+	const state = createResultToolState();
+	return {
+		toolName: "submit_agent_result",
+		tool: createSubmitAgentResultTool(state),
+		getResult: () => state.submitted,
+		hasProtocolViolation: () => state.protocolViolation,
 	};
 }
 

@@ -13,6 +13,5 @@ export function toolProfileForPool(poolId: PoolId): readonly WorkerToolName[] {
 }
 
 export function isPotentiallyMutatingTool(toolName: string): boolean {
-	return toolName !== "read" && toolName !== "grep" && toolName !== "find" && toolName !== "ls" && toolName !== "submit_agent_result";
+	return toolName !== "read" && toolName !== "grep" && toolName !== "find" && toolName !== "ls" && !toolName.startsWith("submit_");
 }
-

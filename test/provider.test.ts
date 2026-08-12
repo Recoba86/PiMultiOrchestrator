@@ -26,6 +26,7 @@ import type { StableId } from "../src/core/config/types.js";
 import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
 import type { SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
 import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/types.js";
+import type { QualityPersistence, TaskQualityStatus, VerificationRunRecord } from "../src/core/quality/types.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -209,6 +210,38 @@ function missionFixture(): { store: MissionStoreAdapter; mission: MissionRecord;
 	return { store, mission, transitions };
 }
 
+function qualityFixture(): {
+	readonly store: QualityPersistence;
+	readonly status: TaskQualityStatus;
+	readonly runs: VerificationRunRecord[];
+	readonly confirmations: number[];
+} {
+	const status: TaskQualityStatus = { missionId: "mission-1" as never, taskId: "task-1" as never, status: "unverified", qualityRound: 0, updatedAt: "2026-01-01T00:00:00.000Z" };
+	const runs: VerificationRunRecord[] = [];
+	const confirmations: number[] = [];
+	const store = {
+		getTaskQualityStatus: (taskId: string) => taskId === "task-1" ? status : undefined,
+		setTaskQualityStatus: (input: TaskQualityStatus) => { Object.assign(status, input); return status; },
+		createVerificationRun: (input: Parameters<QualityPersistence["createVerificationRun"]>[0]) => {
+			const run = { verificationId: `verification-${runs.length + 1}`, missionId: input.missionId as never, taskId: input.taskId as never, targetRunId: input.targetRunId, ...(input.targetPacketId ? { targetPacketId: input.targetPacketId } : {}), round: input.round ?? 0, status: "running" as const, startedAt: "2026-01-01T00:00:01.000Z", potentialMutationObserved: input.potentialMutationObserved === true };
+			runs.push(run);
+			return run;
+		},
+		getVerificationRun: (id: string) => runs.find((run) => run.verificationId === id),
+		updateVerificationRun: (id: string, patch: Partial<VerificationRunRecord>) => {
+			const run = runs.find((item) => item.verificationId === id)!;
+			Object.assign(run, patch);
+			return run;
+		},
+		recordQualityDecision: () => { throw new Error("not used by host fixture"); },
+		createQualityEscalation: () => { throw new Error("not used by host fixture"); },
+		listVerificationRuns: () => runs,
+		listQualityDecisions: () => [],
+		listQualityEscalations: () => [],
+	} as unknown as QualityPersistence;
+	return { store, status, runs, confirmations };
+}
+
 describe("Pi 9Router host adapter", () => {
 	it("[U][fixture-pi-0.84.1] registers only enabled projection models and skips identical reconciliation", async () => {
 		const fixture = managerFixture(projection());
@@ -263,7 +296,7 @@ describe("Pi 9Router host adapter", () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: fixture });
 		host.registerCommands();
-		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "subagent-run", "missions", "mission-packet"]);
+		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "subagent-run", "missions", "mission-packet", "quality-status", "verify-task"]);
 
 		const notifications: string[] = [];
 		let prompts = 0;
@@ -292,6 +325,46 @@ describe("Pi 9Router host adapter", () => {
 		assert.deepEqual(fixture.setEnabledCalls, []);
 		assert.match(notifications[0] ?? "", /remote: remote-a/);
 		assert.ok(notifications.some((message) => /active 9Router model/.test(message)));
+	});
+
+	it("[U][fixture-pi-0.84.1] exposes quality status and confirmation-gated task verification", async () => {
+		const quality = qualityFixture();
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), qualityStore: quality.store });
+		host.registerCommands();
+		assert.ok(pi.commands.has("quality-status"));
+		assert.ok(pi.commands.has("verify-task"));
+		const notifications: string[] = [];
+		await pi.commands.get("quality-status")!.handler("mission-1 task-1", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[0] ?? "", /quality status: unverified \(round 0\)/);
+		let confirmed = false;
+		await pi.commands.get("verify-task")!.handler("mission-1 task-1 run-1", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				confirm: async () => confirmed,
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.equal(quality.runs.length, 0);
+		confirmed = true;
+		await pi.commands.get("verify-task")!.handler("mission-1 task-1 run-1", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				confirm: async () => confirmed,
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.equal(quality.runs.length, 1);
+		assert.equal(quality.status.status, "verification_running");
+		assert.ok(notifications.some((message) => /Verification started/.test(message)));
 	});
 
 	it("[U][fixture-pi-0.84.1] registers parent-only delegate tool and returns bounded child result", async () => {

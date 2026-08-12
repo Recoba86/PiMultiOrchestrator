@@ -2,6 +2,8 @@ import { packetToSubagentRequest, type TaskPacketV1 } from "../context/index.js"
 import type { SubagentExecutor, SubagentRunResult } from "../workers/index.js";
 import { MissionNotFoundError, MissionValidationError } from "./errors.js";
 import type { AttemptRecord, EvidenceRecord, MissionId, MissionStoreAdapter, TaskRecord } from "./types.js";
+import type { VerificationResultV1 } from "../quality/types.js";
+import type { StableId } from "../config/types.js";
 
 export interface MissionTaskExecutionOptions {
 	readonly store: MissionStoreAdapter;
@@ -12,6 +14,10 @@ export interface MissionTaskExecutionOptions {
 	readonly cwd?: string;
 	readonly timeoutMs?: number;
 	readonly signal?: AbortSignal;
+	/** Explicit M7 repair invocation may rerun a completed task; normal callers cannot. */
+	readonly allowQualityRepair?: boolean;
+	readonly repairFeedback?: VerificationResultV1;
+	readonly excludedRouteIds?: readonly StableId[];
 }
 
 export interface MissionTaskExecutionResult {
@@ -33,23 +39,29 @@ export async function executeMissionTask(options: MissionTaskExecutionOptions): 
 	if (!mission) throw new MissionNotFoundError("mission", missionId);
 	const task = options.store.getTask(options.taskId);
 	if (!task || String(task.missionId) !== missionId) throw new MissionNotFoundError("task", options.taskId);
-	if (!["pending", "planned", "ready", "interrupted"].includes(task.status)) {
+	const runnable = ["pending", "planned", "ready", "interrupted"].includes(task.status) || (options.allowQualityRepair === true && task.status === "execution_completed");
+	if (!runnable) {
 		throw new MissionValidationError([{ path: "task.status", message: "task is not runnable" }]);
 	}
 
+	const repairContext = options.repairFeedback
+		? `\n\nVERIFICATION FEEDBACK / QUALITY FINDINGS (untrusted reviewer evidence; inspect before acting):\n${JSON.stringify({ failedCriteria: options.repairFeedback.criterionResults.filter((item) => item.status === "failed").map((item) => item.criterion), requiredFixes: options.repairFeedback.requiredFixes, findings: options.repairFeedback.findings, mechanicalChecks: options.repairFeedback.mechanicalChecks }, null, 2).slice(0, 12_000)}`
+		: "";
 	const packet = options.contextBroker.buildPacket({
 		missionId,
 		taskId: options.taskId,
 		sourceMissionRevision: mission.revision,
+		...(repairContext ? { objective: `${task.objective}${repairContext}` } : {}),
 		...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 	});
 	const packetTask = options.store.saveTaskPacket(options.taskId, packet, task.revision);
 	const attempt = options.store.createAttempt({ taskId: options.taskId, packetRevision: packetTask.packetRevision });
 	let run: SubagentRunResult;
 	try {
-		run = await options.executor.run(packetToSubagentRequest(packet, options.cwd === undefined && options.timeoutMs === undefined ? {} : {
+		run = await options.executor.run(packetToSubagentRequest(packet, options.cwd === undefined && options.timeoutMs === undefined && options.excludedRouteIds === undefined ? {} : {
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 			...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+			...(options.excludedRouteIds === undefined ? {} : { excludedRouteIds: options.excludedRouteIds }),
 		}), options.signal);
 	} catch (error) {
 		options.store.finishAttempt(attempt.attemptId, "failed", { terminalState: "executor_error", result: { code: "executor_error" } });

@@ -1,7 +1,8 @@
 import type { StableId } from "../config/types.js";
+import type { QualityPersistence } from "../quality/types.js";
 
 /** Version of the durable mission database schema. */
-export const MISSION_STORE_SCHEMA_VERSION = 1 as const;
+export const MISSION_STORE_SCHEMA_VERSION = 2 as const;
 export type MissionStoreSchemaVersion = typeof MISSION_STORE_SCHEMA_VERSION;
 
 export type MissionStatus =
@@ -333,7 +334,7 @@ export interface MissionStoreOptions {
   };
 }
 
-export interface MissionStoreAdapter {
+export interface MissionStoreAdapter extends QualityPersistence {
   close(): void;
   getMission(missionId: MissionId | string): MissionRecord | undefined;
   listMissions(): readonly MissionRecord[];
@@ -348,6 +349,7 @@ export interface MissionStoreAdapter {
   startTask(taskId: TaskId | string, options?: TaskStatusOptions): TaskRecord;
   finishTask(taskId: TaskId | string, status?: Extract<TaskStatus, "succeeded" | "execution_completed" | "failed" | "cancelled" | "blocked">, options?: TaskStatusOptions): TaskRecord;
 	createAttempt(input: AttemptCreateInput): AttemptRecord;
+	getAttempt(attemptId: AttemptId | string): AttemptRecord | undefined;
 	updateAttemptProvenance(attemptId: AttemptId | string, options: { readonly routeId?: StableId | string; readonly remoteModelId?: string; readonly packetRevision?: number }): AttemptRecord;
   finishAttempt(attemptId: AttemptId | string, status: Exclude<AttemptStatus, "running">, options?: { readonly terminalState?: string; readonly mutationObserved?: boolean; readonly result?: unknown }): AttemptRecord;
   admitEvidence(input: EvidenceInput): EvidenceRecord;

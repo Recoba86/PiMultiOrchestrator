@@ -671,7 +671,45 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** open `/missions`, `/mission-packet`, and Context & Mission Settings through the native command/RPC surface; inspect evidence and record a checkpoint from Mission Control where the store supports those operations.
 - **Pass:** mission create/list/open/status, task/packet inspection, evidence review actions, checkpointing, and settings are available; session history contains only safe mission pointers/status; no JSON/SQLite editing is exposed to the operator.
 
-## 14. Real integration gates
+## 14. M7 verification, quality, and escalation
+
+### QUALITY-01 — Mission schema migration and recovery
+
+- **Level:** U/I, fixture-v1, Node `22.23.0`
+- **Action:** open a real v1 MissionStore fixture, migrate, reopen, and recover an in-flight verification.
+- **Pass:** all M6 rows and packet lineage survive; quality defaults to `unverified`; running verification becomes interrupted/review-required; no automatic rerun or history rewrite occurs.
+
+### QUALITY-02 — Bounded verification protocol and deterministic gate
+
+- **Level:** U/I, fixture-v1
+- **Action:** submit valid, malformed, duplicate, oversized, contradictory, and incomplete `submit_verification_result` payloads with mechanical checks.
+- **Pass:** exactly one bounded result is accepted; PASS/REJECT/BLOCKED is deterministic; mandatory failures and observed mechanical failures cannot be overridden by reviewer prose.
+
+### QUALITY-03 — Quality state is separate from execution and M4 health
+
+- **Level:** U/I
+- **Action:** complete an implementation run, record reviewer PASS/REJECT/BLOCKED, and inspect task quality, route health, decisions, and events.
+- **Pass:** quality status/history is durable and distinct from execution status; valid quality REJECT does not create cooldown/fallback or penalize the implementation route; semantic evidence remains proposed until explicit admission.
+
+### QUALITY-04 — Reviewer routing and repair lineage
+
+- **Level:** U/I
+- **Action:** select Verification routes with `prefer`/`require` diversity, reject once, repair through Implementation with explicit exclusions, then re-verify.
+- **Pass:** authoritative route/resource IDs drive selection; each round records target run, packet, reviewer route, exclusions, failed criteria, findings, and required fixes; max rounds are bounded and terminal.
+
+### QUALITY-05 — Explicit host controls
+
+- **Level:** U/P, fixture-v1, Pi `0.84.1`
+- **Action:** use Mission Control task actions and `/quality-status`/`/verify-task`; confirm a bounded quality loop before repair.
+- **Pass:** status/history, Verify/Re-verify, and Run quality loop are visible through Pi-native UI/RPC; no background loop or implicit mutation authorization starts.
+
+### QUALITY-06 — Pi/fake quality-loop proof
+
+- **Level:** P, fixture-v1, Pi `0.84.1`
+- **Action:** run the scripted fake reviewer reject → routed repair → reviewer pass flow with isolated Pi/config/session roots.
+- **Pass:** fake chat observes read-only reviewer tools without `delegate_agent`, a separate Implementation child, exact route/model requests, durable reject/escalation/pass lineage after reopen, no secret/token output, and zero live/paid calls.
+
+## 15. Real integration gates
 
 ### PI-01 — Extension lifecycle smoke
 
@@ -698,6 +736,6 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** invoke one selected route with a minimal non-sensitive prompt through Pi provider bridge.
 - **Pass:** model/route selection, cancellation, usage/failure metadata, and gateway behavior are recorded; exact live evidence is labeled; cost/quota is bounded by the authorization.
 
-## 14. Release acceptance rule
+## 16. Release acceptance rule
 
 A milestone is complete only when every required case through that milestone passes at its required level, skipped P/L gates are explicitly named, migrations/rollback pass, and the milestone's Roadmap exit gate is satisfied. A passing fake-provider suite is never a substitute for a required Pi UI or authorized live smoke.
