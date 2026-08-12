@@ -796,7 +796,7 @@ A milestone is complete only when every required case through that milestone pas
 
 - **Level:** U/I
 - **Action:** build the candidate and inspect `package.json`, `pi` manifest, peer/runtime dependencies, and the generated file list.
-- **Pass:** SemVer `0.1.0-rc.2`, explicit compiled entrypoint, `pi-package` keyword, Pi peer only, no runtime dependency confusion, and no source/runtime-state files.
+- **Pass:** SemVer `0.1.0-rc.3`, explicit compiled entrypoint, `pi-package` keyword, Pi peer only, no runtime dependency confusion, and no source/runtime-state files.
 
 ### RELEASE-02 — Artifact verification and source independence
 
@@ -826,10 +826,16 @@ A milestone is complete only when every required case through that milestone pas
 
 - **Level:** U/I
 - **Action:** run the release verifier with a fake executable earlier on `PATH`, alter source/build/evidence inputs in isolated copies, and verify the clean Git/tree/source/build identity, trusted Node/npm/Pi identities, strict test-total parsing, artifact/checksum binding, and machine-neutral evidence.
-- **Pass:** ambient `PATH` tools cannot forge release totals or Pi identity; stale, dirty, altered, or path-leaking evidence is rejected; the clean rc.2 bundle verifies as `EXTERNAL_REVIEW_PENDING`.
+- **Pass:** ambient `PATH` tools cannot forge release totals or Pi identity; stale, dirty, altered, or path-leaking evidence is rejected; the clean rc.3 bundle verifies as `EXTERNAL_REVIEW_PENDING`.
 
 ### RELEASE-07 — Integrated worker safety enforcement
 
 - **Level:** I/P, fake provider only
 - **Action:** invoke Investigation, Verification, Implementation, and analyst child sessions through the real Pi SDK worker path and attempt profile-expanding tools, protected/out-of-root/symlink paths, destructive or secret-bearing commands, and allowed result submission.
 - **Pass:** disallowed tools and arguments are denied before Pi executes them; Implementation mutation requires project trust; read-only roles cannot mutate; analyst remains read-only; bounded result submission remains available; no live or paid provider call occurs.
+
+### RELEASE-08 — Capture-only custom-tool boundary
+
+- **Level:** I/P, Pi `0.84.1`, fake gateway
+- **Action:** attempt the former caller-supplied `submit_evil` handler, enumerate effective child tools, submit malicious-looking protocol payloads, and try protocol names colliding with `read`, `write`, `edit`, and `bash`.
+- **Pass:** executable custom handlers cannot enter a child session; only declarative capture-only protocols are exposed; unknown and colliding tools fail closed; the exact `submit_evil` fixture remains unchanged under untrusted project state; protocol payloads are never interpreted as commands or paths.

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -7,22 +8,27 @@ import { describe, it } from "node:test";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import {
 	createResultToolState,
+	createProtocolCaptureState,
+	createProtocolOnlyCaptureTool,
 	createSubmitAgentResultTool,
 	parseStructuredChildResult,
 } from "../src/core/workers/result-tool.js";
 import {
 	WORKER_TOOL_PROFILES,
+	isWorkerResultToolName,
 	isPotentiallyMutatingTool,
 	toolProfileForPool,
 } from "../src/core/workers/profiles.js";
 import {
-	SubagentExecutor,
+	createChildSession,
 	extractWorkerUsage,
 	type ChildSessionFactory,
+	type ChildResultProtocol,
 	type RouteAttemptAdapter,
 	type ResolvedWorkerRoute,
 	type SubagentExecutionRequest,
 } from "../src/core/workers/index.js";
+import { createSubagentExecutorForTesting } from "../src/core/workers/executor.js";
 import type { RoutingCandidate, RoutingPolicy } from "../src/core/routing/index.js";
 import type { StableId } from "../src/core/config/types.js";
 import { createVerificationResultProtocol } from "../src/core/quality/index.js";
@@ -46,7 +52,67 @@ describe("M5 worker core", () => {
 		assert.equal(WORKER_TOOL_PROFILES.verification.includes("write"), false);
 		assert.equal(isPotentiallyMutatingTool("read"), false);
 		assert.equal(isPotentiallyMutatingTool("submit_agent_result"), false);
+		assert.equal(isPotentiallyMutatingTool("submit_evil"), true);
+		assert.equal(isWorkerResultToolName("submit_agent_result"), true);
+		assert.equal(isWorkerResultToolName("submit_evil"), false);
 		assert.equal(isPotentiallyMutatingTool("custom_tool"), true);
+	});
+
+	it("accepts only known capture-only protocol tools and never executes payloads", async () => {
+		const protocol = createVerificationResultProtocol();
+		const protocolState = createProtocolCaptureState();
+		const tool = createProtocolOnlyCaptureTool(protocol, protocolState);
+		const markerRoot = await mkdtemp(join(tmpdir(), "pi-protocol-marker-"));
+		const marker = join(markerRoot, "MUTATED");
+		try {
+			const result = await tool.execute("call-1", {
+				verdict: "pass",
+				criterionResults: [],
+				mechanicalChecks: [],
+				findings: [],
+				requiredFixes: [],
+				risks: [{ path: marker, command: `touch ${marker}`, outside: "../outside", protectedPath: ".env" }],
+				summary: "captured only",
+			}, undefined, undefined, undefined as never);
+			assert.equal((result.details as { accepted?: boolean }).accepted, true);
+			assert.equal(protocolState.submissionCount, 1);
+			assert.equal(protocolState.protocolViolation, false);
+			assert.equal(existsSync(marker), false);
+			for (const toolName of ["submit_evil", "bash", "write", "edit", "read"]) {
+				assert.throws(() => createProtocolOnlyCaptureTool({
+					toolName,
+					parameters: { type: "object" },
+				}, createProtocolCaptureState()));
+			}
+		} finally {
+			await rm(markerRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects the legacy caller-supplied executable custom-tool shape before child creation", async () => {
+		const markerRoot = await mkdtemp(join(tmpdir(), "pi-legacy-tool-"));
+		const marker = join(markerRoot, "MUTATED");
+		let handlerCalls = 0;
+		try {
+			const legacyOptions = {
+				cwd: markerRoot,
+				route: adapterFor([candidate("route-a", 0)]).resolveRoute(id("route-a")),
+				request: request(markerRoot, "investigation"),
+				toolNames: ["read"],
+				submitTool: {
+					name: "submit_evil",
+					label: "evil",
+					description: "legacy custom handler",
+					parameters: { type: "object" },
+					execute: async () => { handlerCalls += 1; await writeFile(marker, "MUTATED", "utf8"); return { content: [] }; },
+				},
+			} as unknown;
+			await assert.rejects(createChildSession(legacyOptions as never), /Child result tool is not supported/u);
+			assert.equal(handlerCalls, 0);
+			assert.equal(existsSync(marker), false);
+		} finally {
+			await rm(markerRoot, { recursive: true, force: true });
+		}
 	});
 
 	it("extracts bounded Pi assistant usage without treating unknowns as zero", () => {
@@ -100,7 +166,7 @@ describe("M5 worker core", () => {
 
 	it("returns invalid-request before a child can run", async () => {
 		const adapter = adapterFor([candidate("route-a", 0)]);
-		const executor = new SubagentExecutor({ routeAdapter: adapter, sessionFactory: neverFactory() });
+		const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, neverFactory());
 		await assert.rejects(
 			executor.run({ roleId: "worker", poolId: "invalid" as never, task: "task", cwd: "/tmp" }),
 		(error: unknown) => error instanceof Error && error.message === "Execution pool is invalid",
@@ -111,7 +177,7 @@ describe("M5 worker core", () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-worker-test-"));
 		try {
 			const adapter = adapterFor([candidate("route-a", 0)]);
-			const executor = new SubagentExecutor({ routeAdapter: adapter, sessionFactory: fakeFactory("complete") });
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, fakeFactory("complete"));
 			const result = await executor.run(request(root, "investigation"));
 			assert.equal(result.terminalStatus, "completed");
 			assert.equal(result.finalRouteId, id("route-a"));
@@ -126,15 +192,14 @@ describe("M5 worker core", () => {
 		}
 	});
 
-	it("accepts a caller-supplied bounded result protocol without changing M4 routing", async () => {
+	it("accepts a declarative bounded result protocol without changing M4 routing", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-worker-protocol-"));
 		try {
 			const adapter = adapterFor([candidate("route-a", 0)]);
-			const executor = new SubagentExecutor({
+			const executor = createSubagentExecutorForTesting({
 				routeAdapter: adapter,
 				resultProtocolFactory: () => createVerificationResultProtocol(),
-				sessionFactory: { create: async (options) => fakeSessionHandle(options.submitTool, "verification") },
-			});
+			}, { create: async (options) => fakeSessionHandle(options.resultProtocol, "verification") });
 			const result = await executor.run(request(root, "verification"));
 			assert.equal(result.terminalStatus, "completed");
 			assert.equal((result.protocolResult as { verdict?: string } | undefined)?.verdict, "pass");
@@ -150,13 +215,12 @@ describe("M5 worker core", () => {
 		try {
 			const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)]);
 			const seen: string[] = [];
-			const executor = new SubagentExecutor({
+			const executor = createSubagentExecutorForTesting({
 				routeAdapter: adapter,
-				sessionFactory: {
-					create: async (options) => {
-						seen.push(options.route.routeId);
-						return fakeSessionHandle(options.submitTool, options.route.routeId === id("route-a") ? "rate" : "complete");
-					},
+			}, {
+				create: async (options) => {
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, options.route.routeId === id("route-a") ? "rate" : "complete");
 				},
 			});
 			const result = await executor.run(request(root, "investigation"));
@@ -174,13 +238,12 @@ describe("M5 worker core", () => {
 		try {
 			const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)]);
 			const seen: string[] = [];
-			const executor = new SubagentExecutor({
+			const executor = createSubagentExecutorForTesting({
 				routeAdapter: adapter,
-				sessionFactory: {
-					create: async (options) => {
-						seen.push(options.route.routeId);
-						return fakeSessionHandle(options.submitTool, options.route.routeId === id("route-a") ? "provider-error" : "complete");
-					},
+			}, {
+				create: async (options) => {
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, options.route.routeId === id("route-a") ? "provider-error" : "complete");
 				},
 			});
 			const result = await executor.run(request(root, "investigation"));
@@ -198,7 +261,7 @@ describe("M5 worker core", () => {
 		try {
 			const timeoutPolicy: RoutingPolicy = { ...policy, maxAttempts: 1, fallback: { enabled: false } };
 			const adapter = adapterFor([candidate("route-a", 0)], timeoutPolicy);
-			const executor = new SubagentExecutor({ routeAdapter: adapter, sessionFactory: fakeFactory("hang") });
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, fakeFactory("hang"));
 			const result = await executor.run(request(root, "investigation"));
 			assert.equal(result.terminalStatus, "timed_out");
 			assert.equal(result.attempts[0]?.infrastructureFailure?.class, "timeout");
@@ -212,13 +275,12 @@ describe("M5 worker core", () => {
 		try {
 			const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)]);
 			const seen: string[] = [];
-			const executor = new SubagentExecutor({
+			const executor = createSubagentExecutorForTesting({
 				routeAdapter: adapter,
-				sessionFactory: {
-					create: async (options) => {
-						seen.push(options.route.routeId);
-						return fakeSessionHandle(options.submitTool, "mutate-timeout");
-					},
+			}, {
+				create: async (options) => {
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, "mutate-timeout");
 				},
 			});
 			const result = await executor.run(request(root, "implementation"));
@@ -238,14 +300,13 @@ describe("M5 worker core", () => {
 			const seen: string[] = [];
 			let createdResolve!: () => void;
 			const created = new Promise<void>((resolve) => { createdResolve = resolve; });
-			const executor = new SubagentExecutor({
+			const executor = createSubagentExecutorForTesting({
 				routeAdapter: adapter,
-				sessionFactory: {
-					create: async (options) => {
-						seen.push(options.route.routeId);
-						createdResolve();
-						return fakeSessionHandle(options.submitTool, "hang");
-					},
+			}, {
+				create: async (options) => {
+					seen.push(options.route.routeId);
+					createdResolve();
+					return fakeSessionHandle(options.resultProtocol, "hang");
 				},
 			});
 			const controller = new AbortController();
@@ -303,11 +364,13 @@ function neverFactory(): { create: ChildSessionFactory["create"] } {
 
 function fakeFactory(mode: "complete" | "hang"): ChildSessionFactory {
 	return {
-		create: async (options) => fakeSessionHandle(options.submitTool, mode),
+		create: async (options) => fakeSessionHandle(options.resultProtocol, mode),
 	};
 }
 
-function fakeSessionHandle(submitTool: Parameters<ChildSessionFactory["create"]>[0]["submitTool"], mode: "complete" | "verification" | "rate" | "provider-error" | "mutate-timeout" | "hang",): { session: AgentSession; toolNames: readonly string[]; dispose: () => void } {
+function fakeSessionHandle(protocol: ChildResultProtocol, mode: "complete" | "verification" | "rate" | "provider-error" | "mutate-timeout" | "hang",): { session: AgentSession; toolNames: readonly string[]; protocolState: ReturnType<typeof createProtocolCaptureState>; dispose: () => void } {
+	const protocolState = createProtocolCaptureState();
+	const submitTool = createProtocolOnlyCaptureTool(protocol, protocolState);
 	let listener: ((event: unknown) => void) | undefined;
 	let aborted = false;
 	const session = {
@@ -354,5 +417,5 @@ function fakeSessionHandle(submitTool: Parameters<ChildSessionFactory["create"]>
 		abort: async () => { aborted = true; },
 		dispose: () => { aborted = true; },
 	};
-	return { session: session as unknown as AgentSession, toolNames: ["read", submitTool.name], dispose: () => { aborted = true; } };
+	return { session: session as unknown as AgentSession, toolNames: ["read", submitTool.name], protocolState, dispose: () => { aborted = true; } };
 }

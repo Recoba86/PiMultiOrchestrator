@@ -44,6 +44,9 @@ test("worker profiles cannot expand into mutation or unsafe shell execution", as
 		assert.equal(analyst.authorize("edit", { path: "file.txt" }).code, "TOOL_NOT_ACTIVE");
 		assert.equal(analyst.authorize("bash", { command: "git status" }).code, "TOOL_NOT_ACTIVE");
 		assert.equal(analyst.authorize("submit_recommendation_analysis", {}).decision, "ALLOW");
+		const unknownProtocol = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["read"], resultToolName: "submit_evil" });
+		assert.equal(unknownProtocol.authorize("submit_evil", {}).decision, "BLOCK");
+		assert.equal(unknownProtocol.authorize("submit_evil", {}).code, "TOOL_NOT_ACTIVE");
 		const implementation = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["bash"] });
 		assert.equal(implementation.authorize("bash", { command: "git reset --hard HEAD" }).code, "DESTRUCTIVE_GIT");
 		assert.equal(implementation.authorize("bash", { command: "npm test" }).decision, "ALLOW");

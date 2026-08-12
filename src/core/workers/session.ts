@@ -4,12 +4,11 @@ import {
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
-	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
-import { createSubmitAgentResultTool } from "./result-tool.js";
+import { createProtocolCaptureState, createProtocolOnlyCaptureTool } from "./result-tool.js";
 import { createWorkerSafetyGuard, workerSafetyBlockMessage } from "./safety.js";
-import { toolProfileForWorker, workerProfileFor } from "./profiles.js";
+import { isWorkerResultToolName, toolProfileForWorker, workerProfileFor } from "./profiles.js";
 import { WorkerError, type ChildSessionFactory, type ChildSessionHandle, type ChildSessionOptions } from "./types.js";
 
 
@@ -28,6 +27,7 @@ export function createChildSessionFactory(): ChildSessionFactory {
 
 export async function createChildSession(options: ChildSessionOptions): Promise<ChildSessionHandle> {
 	if (options.signal?.aborted) throw new WorkerError("session-create", "Child session creation was cancelled");
+	if (!options.resultProtocol || !isWorkerResultToolName(options.resultProtocol.toolName)) throw new WorkerError("session-create", "Child result tool is not supported");
 	if (options.route.model.id !== options.route.remoteModelId) {
 		throw new WorkerError("route-model-mismatch", "Resolved route model does not match its exact remote model ID");
 	}
@@ -57,9 +57,12 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 	if (options.signal?.aborted) throw new WorkerError("session-create", "Child session creation was cancelled");
 
 	let created: Awaited<ReturnType<typeof createAgentSession>>;
-	const resultToolName = options.resultToolName ?? options.submitTool.name ?? "submit_agent_result";
+	const resultToolName = options.resultProtocol.toolName;
 	const profile = workerProfileFor(options.request.poolId, resultToolName);
 	const toolNames = toolProfileForWorker(profile).filter((toolName) => options.toolNames.includes(toolName));
+	if (toolNames.some((toolName) => (toolName as string) === resultToolName)) throw new WorkerError("session-create", "Child result tool collides with a built-in tool");
+	const protocolState = createProtocolCaptureState();
+	const resultTool = createProtocolOnlyCaptureTool(options.resultProtocol, protocolState);
 	try {
 		created = await createAgentSession({
 			cwd: options.cwd,
@@ -70,7 +73,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 			scopedModels: [],
 			modelRuntime: options.route.modelRuntime,
 			tools: [...toolNames, resultToolName],
-			customTools: [options.submitTool],
+			customTools: [resultTool],
 			resourceLoader,
 			sessionManager: SessionManager.inMemory(options.cwd),
 			settingsManager,
@@ -80,7 +83,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 	}
 	const session = created.session;
 	const activeToolNames = session.getActiveToolNames();
-	const expected = new Set([...toolNames, resultToolName]);
+	const expected = new Set<string>([...toolNames, resultToolName]);
 	if (activeToolNames.length !== expected.size || activeToolNames.some((name) => !expected.has(name)) || [...expected].some((name) => !activeToolNames.includes(name)) || activeToolNames.includes("delegate_agent")) {
 		session.dispose();
 		throw new WorkerError("session-create", "Child session exposed an unexpected tool");
@@ -104,6 +107,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 	return {
 		session,
 		toolNames: activeToolNames,
+		protocolState,
 		dispose: () => {
 			if (disposed) return;
 			disposed = true;
@@ -122,13 +126,9 @@ function childSystemPrompt(options: ChildSessionOptions): string {
 	`Assigned task:\n${options.request.task}`,
 	criteria,
 	"Use only the tools provided to this session. Do not delegate or call another orchestrator.",
-		`Do only the assigned scope. Report evidence and use ${options.resultToolName ?? options.submitTool.name ?? "submit_agent_result"} exactly once when done.`,
+		`Do only the assigned scope. Report evidence and use ${options.resultProtocol.toolName} exactly once when done.`,
 	"Do not claim overall mission completion; the parent/Boss owns acceptance.",
 	].filter((line) => line.length > 0).join("\n");
-}
-
-export function createChildResultTool(): ToolDefinition {
-	return createSubmitAgentResultTool();
 }
 
 export { ModelRuntime };

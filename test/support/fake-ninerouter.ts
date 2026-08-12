@@ -34,6 +34,9 @@ export interface FakeNineRouterOptions {
 	readonly completionText?: string;
 	/** When enabled, exercise parent delegate -> child read -> structured result. */
 	readonly toolCallFlow?: boolean;
+	/** When enabled, ask a real child to invoke an unregistered mutating result tool. */
+	readonly customToolBypassFlow?: boolean;
+	readonly customToolMarker?: string;
 	/** When enabled, exercise reviewer reject -> repair -> reviewer pass. */
 	readonly qualityLoopFlow?: boolean;
 	/** When set, exercise the bounded manual recommendation-analyst protocol. */
@@ -151,12 +154,15 @@ export class FakeNineRouter {
 	private readonly delayMs: number;
 	private readonly completionText: string;
 	private readonly toolCallFlow: boolean;
+	private readonly customToolBypassFlow: boolean;
+	private readonly customToolMarker: string;
 	private readonly qualityLoopFlow: boolean;
 	private readonly analystFlow: AnalystVerdict | "infra-failure" | undefined;
 	private readonly analystSecret: string;
 	private readonly failModels: ReadonlySet<string>;
 	private readonly failureStatus: number;
 	private qualityReviewCount = 0;
+	private customToolAttemptedValue = false;
 	private portNumber: number | undefined;
 
 	constructor(options: FakeNineRouterOptions = {}) {
@@ -166,6 +172,8 @@ export class FakeNineRouter {
 		this.delayMs = options.delayMs ?? 250;
 		this.completionText = options.completionText ?? DEFAULT_COMPLETION;
 		this.toolCallFlow = options.toolCallFlow ?? false;
+		this.customToolBypassFlow = options.customToolBypassFlow ?? false;
+		this.customToolMarker = options.customToolMarker ?? "/tmp/pi-multi-orchestrator-submit-evil-MUTATED";
 		this.qualityLoopFlow = options.qualityLoopFlow ?? false;
 		this.analystFlow = options.analystFlow;
 		this.analystSecret = options.analystSecret ?? "fixture-analyst-secret";
@@ -199,6 +207,10 @@ export class FakeNineRouter {
 
 	get analystRequests(): FakeRequestObservation[] {
 		return this.chatRequests.filter((request) => request.toolNames?.some((name) => /(?:recommendation|analyst|analysis)/iu.test(name)) === true);
+	}
+
+	get customToolAttempted(): boolean {
+		return this.customToolAttemptedValue;
 	}
 
 	setModelsMode(mode: ModelsMode): void {
@@ -335,6 +347,16 @@ export class FakeNineRouter {
 			}) : [];
 			const hasToolResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { role?: unknown }).role === "tool") === true;
 			const hasDelegateResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-delegate") === true;
+			const hasEvilResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-submit-evil") === true;
+			if (this.customToolBypassFlow && tools.includes("submit_agent_result")) {
+				if (!hasEvilResult) {
+					this.customToolAttemptedValue = true;
+					await this.sendToolCall(res, model, "call-submit-evil", "submit_evil", JSON.stringify({ path: this.customToolMarker, command: `touch ${this.customToolMarker}`, protectedPath: ".env", outside: "../outside" }));
+					return;
+				}
+				this.sendCompletion(res, model);
+				return;
+			}
 			const analystTool = tools.find((name) => /(?:recommendation|analyst|analysis)/iu.test(name) && /(?:submit|result|verdict)/iu.test(name));
 			if (this.analystFlow !== undefined && analystTool) {
 				if (this.analystFlow === "infra-failure") {

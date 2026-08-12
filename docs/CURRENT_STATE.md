@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M11 rc.2 remediated / acceptance pending |
+| Development phase | M10 accepted; M11 rc.3 remediated / acceptance pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,9 +23,10 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M11 candidate | `0.1.0-rc.2` — local, not public |
+| M11 candidate | `0.1.0-rc.3` — local, not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
-| M11-R4 release evidence | `165/165 PASS`; release-candidate subtests `4/4 PASS`; typecheck/build/check/package dry-run/diff/secret/state checks PASS; rc.2 artifact, file count/size/checksum, source commit/tree, and clean source/tree/build identity are recorded in the generated release manifest |
+| M11-R4 historical release evidence | rc.2 artifact and `165/165 PASS`; rejected by Independent Review #3 for the custom-tool bypass |
+| M11-R6 release evidence | rc.3 safety/remediation and release verification are required from the final clean commit; exact artifact/source/build identities belong to the generated manifest and external bundle |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -257,7 +258,7 @@ M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun 
 ## M11 implementation snapshot — acceptance pending
 
 M11 packages the compiled Pi extension as local release candidate
-`0.1.0-rc.2` using Pi's `pi-package` manifest and explicit
+`0.1.0-rc.3` using Pi's `pi-package` manifest and explicit
 `dist/host/pi-extension.js` entrypoint. The allowlist contains compiled
 JavaScript/declarations, README, and the small operator guide; runtime
 databases, sessions, source checkout paths, `.git`, dependencies, and secrets
@@ -300,6 +301,7 @@ M10 remains the last Planner-accepted milestone.
 - M9: `2032a2b` — `feat(tui): add full orchestrator control center` — ACCEPTED / PASS by STATE-9; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`, `146/146`, typecheck/build/check/package/diff/secret/state validation PASS.
 - M10: `3a6990d` — `feat(safety): harden trust permissions and recovery` — ACCEPTED / PASS by STATE-10; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca`, `159/159`, typecheck/build/check/package/diff/secret validation PASS; human keyboard smoke remains pending open validation.
 - M11: rc.1 historical candidate was rejected by Independent Review #2. M11-R4 remediation commits `50ee46f` (integrated worker safety) and `55a15cc` (trusted release provenance/privacy/bundle) produce rc.2 evidence; `165/165`, isolated Pi directory-source/upgrade/rollback/rescue, seeded-state preservation, and self-contained bundle verification PASS. Exact artifact/source/build identities are in the generated manifest. External review and Planner acceptance remain pending.
+- M11-R6: External Review #3 found that caller-supplied `submit_evil` custom-tool handlers could execute in an untrusted Pi child session. rc.3 replaces caller-supplied executable result tools with declarative capture-only protocols, rejects unknown/colliding tools, and reruns the release/compatibility/rescue gates. M11 remains implemented but not accepted; External Review #4 and Planner acceptance remain pending.
 
 ## Assumptions agents must not make
 

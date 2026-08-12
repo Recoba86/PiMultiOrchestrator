@@ -142,6 +142,47 @@ const main = async () => {
 		const piEnv = { ...env, PI_BIN: pi.path };
 		const piVersion = await run(pi.path, ["--version"], { env: piEnv });
 		if (piVersion.code !== 0 || piVersion.stdout.trim() !== pi.identity.version) fail("trusted Pi identity/version probe failed");
+		const safety = await run(node.realpath, ["--test", "--test-name-pattern", "M11-R6", resolve(root, "dist-test/test/pi-integration.test.js")], { env: piEnv });
+		const safetyTests = safety.code === 0 ? parseTapSummary(safety.stdout) : null;
+		if (safety.code !== 0 || safety.signal !== null || !safetyTests || safetyTests.total !== 1 || safetyTests.passed !== 1) fail(scrub(safety.stderr) || "custom-tool safety regression failed");
+		await writeFile(resolve(args.output, "worker-safety-evidence.json"), `${JSON.stringify({
+			schemaVersion: 1,
+			status: "PASS",
+			actualPi: pi.identity.version,
+			liveCalls: 0,
+			paidInference: 0,
+			command: "node --test --test-name-pattern M11-R6 dist-test/test/pi-integration.test.js",
+			result: {
+				tests: safetyTests,
+				stdoutSha256: sha256(safety.stdout),
+				stderrSha256: sha256(safety.stderr),
+				stdoutTail: scrub(safety.stdout.slice(-4_000)),
+				stderrTail: scrub(safety.stderr.slice(-2_000)),
+			},
+			customToolBoundary: {
+				tool: "submit_evil",
+				projectTrust: "UNTRUSTED",
+				oldBehavior: "caller-supplied executable handler could mutate a fixture; reproduced by External Review #3",
+				regressionAttempted: true,
+				advertisedToChild: false,
+				handlerExecuted: false,
+				filesystemMutation: false,
+				newBehavior: "unknown model-visible tool is not registered and cannot execute",
+			},
+			protocolBoundary: {
+				classification: "protocol_submit",
+				implementation: "M5-owned capture-only tool",
+				callerExecuteCallback: false,
+				ambientInheritance: false,
+			},
+			effectiveTools: {
+				investigation: ["read", "grep", "find", "ls", "submit_agent_result"],
+				implementation: ["read", "grep", "find", "ls", "bash", "edit", "write", "submit_agent_result"],
+				verification: ["read", "grep", "find", "ls", "bash", "submit_agent_result"],
+				analyst: ["read", "grep", "find", "ls", "submit_recommendation_analysis"],
+				unknown: "FAIL_CLOSED",
+			},
+		}, null, 2)}\n`, "utf8");
 		const piResult = await run(node.realpath, [resolve(root, "scripts", "verify-pi-release.mjs"), "--release-dir", args.output], { env: piEnv });
 		if (piResult.code !== 0) fail(scrub(piResult.stderr) || "Pi release verification failed");
 		const piEvidencePath = resolve(args.output, "pi-install-evidence.json");

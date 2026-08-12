@@ -6,6 +6,7 @@ import {
 } from "../security/index.js";
 import {
 	isPotentiallyMutatingTool,
+	isWorkerResultToolName,
 	toolProfileForWorker,
 	type WorkerProfileId,
 } from "./profiles.js";
@@ -56,17 +57,17 @@ export class WorkerSafetyGuard {
 		this.profileTools = new Set(toolProfileForWorker(options.profile));
 		this.activeTools = new Set([
 			...options.requestedTools.filter((toolName) => this.profileTools.has(toolName)),
-			...(options.resultToolName === undefined ? [] : [options.resultToolName]),
+			...(options.resultToolName !== undefined && isWorkerResultToolName(options.resultToolName) ? [options.resultToolName] : []),
 		]);
 		this.resultToolName = options.resultToolName;
 	}
 
 	authorize(toolName: string, args: unknown): SafetyResult {
 		if (!this.activeTools.has(toolName)) return blocked("tool is not active for this worker", "TOOL_NOT_ACTIVE");
-		if (!this.profileTools.has(toolName) && !(toolName === this.resultToolName && toolName.startsWith("submit_"))) {
+		if (!this.profileTools.has(toolName) && !(toolName === this.resultToolName && isWorkerResultToolName(toolName))) {
 			return blocked("tool is outside the worker profile", "PROFILE_TOOL_NOT_ALLOWED");
 		}
-		if (toolName === this.resultToolName && toolName.startsWith("submit_")) return allowed("bounded result submission is allowed");
+		if (toolName === this.resultToolName && isWorkerResultToolName(toolName)) return allowed("bounded result submission is allowed");
 		if (MUTATING_TOOLS.has(toolName) && this.profile !== "implementation") {
 			return blocked("mutating tools are not allowed for this worker profile", "PROFILE_MUTATION_DENIED");
 		}

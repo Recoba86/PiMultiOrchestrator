@@ -12,7 +12,8 @@ import {
 	type RoutingRequest,
 } from "../routing/index.js";
 import { POOL_IDS } from "../pools/index.js";
-import { createAgentResultProtocol } from "./result-tool.js";
+import { createAgentResultProtocol, parseStructuredChildResult, readProtocolCapture } from "./result-tool.js";
+import { parseVerificationResult } from "../quality/gate.js";
 import { defaultChildSessionFactory } from "./session.js";
 import { isPotentiallyMutatingTool, toolProfileForPool } from "./profiles.js";
 import {
@@ -31,12 +32,20 @@ import {
 	 type WorkerProgressEvent,
 	 type SubagentExecutorOptions,
 	 type ResolvedWorkerRoute,
-	 type ChildResultProtocol,
+	 type ResultProtocolSpec,
+	 type ProtocolCaptureState,
 } from "./types.js";
 import type { WorkerSafetyContext } from "./safety.js";
 import type { StableId } from "../config/types.js";
 
 let sequence = 0;
+const testSessionFactories = new WeakMap<object, ChildSessionFactory>();
+
+/** @internal Test-only seam; the public executor always uses the guarded Pi factory. */
+export function createSubagentExecutorForTesting(options: SubagentExecutorOptions, sessionFactory: ChildSessionFactory): SubagentExecutor {
+	testSessionFactories.set(options as object, sessionFactory);
+	return new SubagentExecutor(options);
+}
 
 /**
  * Foreground child executor. Route selection and health remain M4 adapter
@@ -47,12 +56,13 @@ export class SubagentExecutor {
 	private readonly sessionFactory: ChildSessionFactory;
 	private readonly clock: () => Date;
 	private readonly onProgress: ((event: WorkerProgressEvent) => void) | undefined;
-	private readonly resultProtocolFactory: ((request: SubagentExecutionRequest) => ChildResultProtocol) | undefined;
+	private readonly resultProtocolFactory: ((request: SubagentExecutionRequest) => ResultProtocolSpec) | undefined;
 	private readonly safety: WorkerSafetyContext | undefined;
 
 	constructor(options: SubagentExecutorOptions) {
 		this.routeAdapter = options.routeAdapter;
-		this.sessionFactory = options.sessionFactory ?? defaultChildSessionFactory;
+		this.sessionFactory = testSessionFactories.get(options as object) ?? defaultChildSessionFactory;
+		testSessionFactories.delete(options as object);
 		this.clock = options.clock ?? (() => new Date());
 		this.onProgress = options.onProgress;
 		this.resultProtocolFactory = options.resultProtocolFactory;
@@ -246,7 +256,6 @@ export class SubagentExecutor {
 	}): Promise<SingleAttempt> {
 		const startedAt = this.clock().toISOString();
 		const resultProtocol = this.resultProtocolFactory?.(options.request) ?? createAgentResultProtocol();
-		const submitTool = resultProtocol.tool;
 		const observations: ToolObservation[] = [];
 		const observationByCall = new Map<string, ToolObservationMutable>();
 		let providerSucceeded = false;
@@ -264,8 +273,7 @@ export class SubagentExecutor {
 				route: options.route,
 				request: options.request,
 				toolNames: toolProfileForPool(options.request.poolId),
-				submitTool,
-				resultToolName: resultProtocol.toolName,
+				resultProtocol,
 				...(this.safety === undefined ? {} : { safety: this.safety }),
 				...(options.signal === undefined ? {} : { signal: options.signal }),
 			});
@@ -274,6 +282,7 @@ export class SubagentExecutor {
 					const usage = extractWorkerUsage(event.message);
 					if (usage) observedUsage = mergeWorkerUsage(observedUsage, usage);
 				} else if (event.type === "tool_execution_start") {
+					if (handle?.protocolState.submissionCount !== 0 && event.toolName !== resultProtocol.toolName) protocolViolation = true;
 					const observation: ToolObservationMutable = {
 						toolCallId: event.toolCallId,
 						toolName: event.toolName,
@@ -283,7 +292,6 @@ export class SubagentExecutor {
 					};
 					observationByCall.set(event.toolCallId, observation);
 					this.emit({ type: "tool_started", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId, toolName: event.toolName });
-					if (resultProtocol.getResult() !== undefined) protocolViolation = true;
 				} else if (event.type === "tool_execution_end") {
 					const endedAt = this.clock().toISOString();
 					const observation = observationByCall.get(event.toolCallId) ?? {
@@ -327,8 +335,8 @@ export class SubagentExecutor {
 					terminalState = "aborted";
 				} else {
 					providerSucceeded = true;
-					result = resultProtocol.getResult();
-					protocolViolation ||= resultProtocol.hasProtocolViolation();
+					result = readProtocolResult(resultProtocol, handle.protocolState);
+					protocolViolation ||= handle.protocolState.protocolViolation;
 					outcome = protocolViolation ? "protocol_violation" : result === undefined ? "invalid_child_result" : "completed";
 					terminalState = "idle";
 				}
@@ -648,6 +656,19 @@ function isStructuredChildResult(value: unknown): value is StructuredChildResult
 	if (!value || typeof value !== "object") return false;
 	const candidate = value as { protocolVersion?: unknown; status?: unknown };
 	return candidate.protocolVersion === WORKER_PROTOCOL_VERSION && (candidate.status === "completed" || candidate.status === "blocked");
+}
+
+function readProtocolResult(protocol: ResultProtocolSpec, state: ProtocolCaptureState): unknown {
+	switch (protocol.toolName) {
+		case "submit_agent_result":
+			return readProtocolCapture(state, parseStructuredChildResult);
+		case "submit_verification_result":
+			return readProtocolCapture(state, parseVerificationResult);
+		case "submit_recommendation_analysis":
+			return state.captured;
+		default:
+			return undefined;
+	}
 }
 
 function cancelledResult(runId: string, request: SubagentExecutionRequest, attempts: readonly SubagentAttempt[] = [], fallbackCount = 0): SubagentRunResult {

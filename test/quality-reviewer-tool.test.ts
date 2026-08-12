@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSubmitVerificationResultTool, createVerificationResultToolState } from "../src/core/quality/index.js";
+import { createProtocolCaptureState, createProtocolOnlyCaptureTool, readProtocolCapture } from "../src/core/workers/result-tool.js";
+import { createSubmitVerificationResultTool, createVerificationResultProtocol, createVerificationResultToolState } from "../src/core/quality/index.js";
+import { parseVerificationResult } from "../src/core/quality/index.js";
 
 test("verification result tool is bounded, one-shot, and terminating", async () => {
 	const state = createVerificationResultToolState();
@@ -16,4 +18,21 @@ test("verification result tool is bounded, one-shot, and terminating", async () 
 	} as never, undefined as never, undefined as never, undefined as never);
 	assert.equal(duplicate.terminate, undefined);
 	assert.equal(state.protocolViolation, true);
+});
+
+test("verification protocol captures payloads without executing path or shell-shaped data", async () => {
+	const protocol = createVerificationResultProtocol();
+	const state = createProtocolCaptureState();
+	const tool = createProtocolOnlyCaptureTool(protocol, state);
+	const accepted = await tool.execute("call-1", {
+		verdict: "pass", criterionResults: [], mechanicalChecks: [], findings: [], requiredFixes: [],
+		risks: [{ path: "/tmp/should-not-exist", command: "rm -rf ../outside", protectedPath: ".env" }],
+		summary: "capture only",
+	} as never, undefined as never, undefined as never, undefined as never);
+	assert.equal((accepted.details as { accepted?: boolean }).accepted, true);
+	assert.equal(state.submissionCount, 1);
+	assert.equal(readProtocolCapture(state, parseVerificationResult), undefined);
+	assert.equal(state.protocolViolation, true);
+	const duplicate = await tool.execute("call-2", { verdict: "pass" } as never, undefined as never, undefined as never, undefined as never);
+	assert.equal((duplicate.details as { accepted?: boolean }).accepted, false);
 });

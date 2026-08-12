@@ -223,6 +223,16 @@ M10 keeps project trust separate from portable configuration in a local, restric
 ConfigStore mutations reread under a short cross-process lock. MissionStore leases carry owner tokens and expiry checks, while active attempts are race-safe and non-owner release/renewal is rejected. MissionStore and AnalyticsStore remain separate SQLite databases with validated native backup/restore and integrity diagnostics. Analytics corruption degrades to a diagnostic state instead of inventing empty history. These are application-level policies, not OS/kernel sandboxing; no autonomous approval or automatic rerun is implied.
 M11-R4 verifies that this policy is installed on the Pi child-session `beforeToolCall` boundary and that unknown or role-expanding tools are denied before execution. This remains application-level enforcement, not an OS/kernel sandbox.
 
+M11-R6 closes the adjacent custom-tool boundary. Child callers pass only a
+declarative result-protocol specification; M5 constructs the model-visible
+submission tool internally. The protocol executor validates and captures a
+bounded in-memory payload and returns an acknowledgement; it has no caller
+execute, transform, or callback path. A worker-tool registry classifies every
+active entry as a guarded capability or a protocol submission, and rejects
+unknown names and collisions with guarded or reserved Pi tools. This prevents
+an untrusted caller from registering a `submit_evil` handler that can mutate
+the workspace through Pi's child-session API.
+
 ### 5.12 `tui`
 
 Renders the twelve Control Center sections using Pi TUI components and calls application operations. Components do not read files, query SQLite, resolve secrets, or call 9Router directly. Each screen receives view data plus explicit commands so non-TUI tests can exercise the same operations.

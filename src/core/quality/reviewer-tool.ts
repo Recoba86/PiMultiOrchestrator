@@ -1,5 +1,5 @@
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { ChildResultProtocol } from "../workers/types.js";
+import type { ResultProtocolSpec } from "../workers/types.js";
 import { parseVerificationResult } from "./gate.js";
 import type { VerificationResultV1 } from "./types.js";
 
@@ -20,6 +20,7 @@ const PARAMETERS = {
 
 export interface VerificationResultToolState {
 	readonly submitted?: VerificationResultV1;
+	readonly captured?: unknown;
 	readonly submissionCount: number;
 	readonly protocolViolation: boolean;
 }
@@ -29,13 +30,10 @@ export function createVerificationResultToolState(): VerificationResultToolState
 }
 
 /** M5 executor adapter used by the Verification Pool. */
-export function createVerificationResultProtocol(): ChildResultProtocol {
-	const state = createVerificationResultToolState();
+export function createVerificationResultProtocol(): ResultProtocolSpec {
 	return {
 		toolName: "submit_verification_result",
-		tool: createSubmitVerificationResultTool(state),
-		getResult: () => state.submitted,
-		hasProtocolViolation: () => state.protocolViolation,
+		parameters: PARAMETERS,
 	};
 }
 

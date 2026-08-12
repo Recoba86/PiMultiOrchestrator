@@ -7,6 +7,7 @@ import type {
 	ModelRuntime,
 	ProviderConfig,
 	ProviderModelConfig,
+	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { ModelRuntime as RuntimeModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createDefaultConfig } from "../core/config/defaults.js";
@@ -42,7 +43,7 @@ import {
 import {
 	createSubagentExecutor,
 	WorkerError,
-	type ChildResultProtocol,
+	 type ResultProtocolSpec,
 	type SubagentExecutionRequest,
 	type SubagentExecutor,
 	type SubagentRunResult,
@@ -237,24 +238,10 @@ const ANALYST_RESULT_PARAMETERS = {
 	required: ["verdict", "explanation"],
 } as unknown;
 
-const createAnalystResultProtocol = (request: SubagentExecutionRequest): ChildResultProtocol => {
-	let result: unknown;
-	let violation = false;
+const createAnalystResultProtocol = (_request: SubagentExecutionRequest): ResultProtocolSpec => {
 	return {
 		toolName: "submit_recommendation_analysis",
-		tool: {
-			name: "submit_recommendation_analysis",
-			label: "Submit recommendation analysis",
-			description: "Submit one bounded recommendation analyst verdict, then stop.",
-			parameters: ANALYST_RESULT_PARAMETERS as never,
-			execute: async (_id, params) => {
-				if (result !== undefined) { violation = true; return { content: [{ type: "text", text: "Only one analyst result is allowed." }], details: { accepted: false }, terminate: true }; }
-				result = params;
-				return { content: [{ type: "text", text: "Analyst result accepted. Stop now." }], details: { accepted: true }, terminate: true };
-			},
-		},
-		getResult: () => result,
-		hasProtocolViolation: () => violation,
+		parameters: ANALYST_RESULT_PARAMETERS as ToolDefinition["parameters"],
 	};
 };
 
@@ -516,7 +503,7 @@ async function createHostSubagentExecutor(
 	poolManager: PoolManagerContract,
 	configStore: ConfigStore,
 	healthStore: HealthStore | undefined,
-	resultProtocolFactory?: (request: SubagentExecutionRequest) => ChildResultProtocol,
+	resultProtocolFactory?: (request: SubagentExecutionRequest) => ResultProtocolSpec,
 	trustStore?: TrustStore,
 ): Promise<SubagentExecutor> {
 	const loaded = await configStore.load();

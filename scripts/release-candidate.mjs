@@ -11,7 +11,7 @@ const DEFAULT_OUTPUT = resolve(REPO_ROOT, "..", "pi-multi-orchestrator-release")
 const EXPECTED_FILES = ["dist/**/*.js", "dist/**/*.d.ts", "README.md"];
 const OPTIONAL_FILES = ["docs/OPERATOR_GUIDE.md"];
 const ENTRYPOINT = "dist/host/pi-extension.js";
-const EXPECTED_RELEASE_VERSION = "0.1.0-rc.2";
+const EXPECTED_RELEASE_VERSION = "0.1.0-rc.3";
 const PI_PACKAGE = "@earendil-works/pi-coding-agent";
 const PI_PACKAGE_ROOT = join(REPO_ROOT, "node_modules", "@earendil-works", "pi-coding-agent");
 const PI_CLI = join(PI_PACKAGE_ROOT, "dist", "cli.js");
@@ -410,11 +410,12 @@ const verifyEvidenceBinding = async (root, manifest, verification) => {
 		if (verification.evidence !== undefined) fail("verification contains evidence without a manifest binding");
 		return null;
 	}
-	if (manifest.evidence.schemaVersion !== 1 || !manifest.evidence.test || !manifest.evidence.pi) fail("release evidence binding is incomplete");
+	if (manifest.evidence.schemaVersion !== 1 || !manifest.evidence.test || !manifest.evidence.pi || !manifest.evidence.safety) fail("release evidence binding is incomplete");
 	validateEvidenceRecord(manifest.evidence.test, "test-evidence.json");
 	validateEvidenceRecord(manifest.evidence.pi, "pi-install-evidence.json");
+	validateEvidenceRecord(manifest.evidence.safety, "worker-safety-evidence.json");
 	if (JSON.stringify(verification.evidence) !== JSON.stringify(manifest.evidence)) fail("verification evidence binding differs from release manifest");
-	for (const record of [manifest.evidence.test, manifest.evidence.pi]) {
+	for (const record of [manifest.evidence.test, manifest.evidence.pi, manifest.evidence.safety]) {
 		const digest = await sha256(join(root, record.file));
 		if (digest !== record.sha256) fail(`release evidence checksum mismatch for ${record.file}`);
 	}
@@ -505,10 +506,10 @@ export async function bindReleaseEvidence(directory) {
 	const verification = JSON.parse(await readFile(verificationPath, "utf8"));
 	await verifyReleaseDirectory(root);
 	const records = {};
-	for (const name of ["test-evidence.json", "pi-install-evidence.json"]) {
+	for (const name of ["test-evidence.json", "pi-install-evidence.json", "worker-safety-evidence.json"]) {
 		const details = await lstat(join(root, name));
 		if (!details.isFile()) fail(`release evidence must be a regular file: ${name}`);
-		records[name === "test-evidence.json" ? "test" : "pi"] = { file: name, sha256: await sha256(join(root, name)) };
+		records[name === "test-evidence.json" ? "test" : name === "pi-install-evidence.json" ? "pi" : "safety"] = { file: name, sha256: await sha256(join(root, name)) };
 	}
 	const evidence = { schemaVersion: 1, test: records.test, pi: records.pi };
 	const nextManifest = { ...manifest, evidence };

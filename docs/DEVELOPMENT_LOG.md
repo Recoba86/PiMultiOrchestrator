@@ -209,6 +209,14 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Release provenance:** manifest records clean Git commit/tree, source digest, build digest, trusted Node/npm/Pi identities, artifact file records, checksum, and machine-neutral evidence. A fake `PATH` executable cannot supply release totals or Pi identity.
 - **Boundary:** no real-route smoke, publication, tag, push, live Pi configuration, credentials, or paid inference. Review bundle status remains `EXTERNAL_REVIEW_PENDING`; human keyboard smoke and Planner acceptance remain open.
 
+### M11-R6 — close custom worker-tool bypass and build rc.3
+
+- **Status:** IMPLEMENTED / REMEDIATED; M11 remains NOT ACCEPTED.
+- **Trigger:** Independent Review #3 reproduced a HIGH-severity Pi `0.84.1` bypass in which a caller-supplied `submit_evil` result-tool handler mutated a fixture while project trust was false.
+- **Remediation:** Replace caller-supplied executable child result tools with declarative, bounded capture-only protocol specifications. M5 owns protocol-tool construction; protocol execution validates and captures in memory only. Guarded capabilities and protocol submissions have explicit classifications; unknown tools and collisions fail closed. Existing agent, verification, repair, and recommendation protocols retain their bounded schemas and duplicate handling.
+- **Release:** Version `0.1.0-rc.3` is the new local candidate. The hardened release pipeline must regenerate provenance/privacy evidence, actual Pi/fake-gateway safety regressions, M10 compatibility upgrade/rollback, broken-candidate rescue, and a self-contained `EXTERNAL_REVIEW_PENDING` bundle outside the checkout.
+- **Boundary:** no live route, provider call, publication, tag, push, live Pi configuration, credentials, or paid inference. Stage 3 remains NOT AUTHORIZED / NOT PERFORMED; next required action is a clean-parent plus clean-reviewer External Review #4.
+
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED
 - **Starting HEAD:**

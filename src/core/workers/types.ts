@@ -40,14 +40,19 @@ export interface SubagentExecutionRequest extends WorkerTimeoutPolicy {
 	readonly excludedRouteIds?: readonly StableId[];
 }
 
-/** Caller-supplied child result protocol. M5 owns execution; M7 may replace
- * only the bounded terminal tool/result shape. */
-export interface ChildResultProtocol {
-	readonly toolName: string;
-	readonly tool: ToolDefinition;
-	getResult(): unknown;
-	hasProtocolViolation(): boolean;
+export interface ProtocolCaptureState {
+	readonly captured?: unknown;
+	readonly submissionCount: number;
+	readonly protocolViolation: boolean;
 }
+
+/** Data-only child result protocol. M5 owns state and tool construction. */
+export interface ResultProtocolSpec {
+	readonly toolName: string;
+	readonly parameters: ToolDefinition["parameters"];
+}
+
+export type ChildResultProtocol = ResultProtocolSpec;
 
 export type StructuredChildStatus = "completed" | "blocked";
 
@@ -127,7 +132,7 @@ export interface SubagentAttempt {
 	/** Wall-clock duration of this route attempt, when timestamps are valid. */
 	readonly latencyMs?: number;
 	readonly structuredResult?: StructuredChildResult;
-	/** Result emitted by a caller-supplied protocol (kept separate for M7). */
+	/** Result emitted by a non-default bounded protocol (kept separate for M7). */
 	readonly protocolResult?: unknown;
 	readonly sessionTerminalState: "idle" | "aborted" | "disposed" | "error";
 	readonly errorMessage?: string;
@@ -187,8 +192,7 @@ export interface ChildSessionOptions {
 	readonly route: ResolvedWorkerRoute;
 	readonly request: SubagentExecutionRequest;
 	readonly toolNames: readonly WorkerToolName[];
-	readonly submitTool: ToolDefinition;
-	readonly resultToolName?: string;
+	readonly resultProtocol: ResultProtocolSpec;
 	readonly safety?: WorkerSafetyContext;
 	readonly signal?: AbortSignal;
 }
@@ -196,6 +200,7 @@ export interface ChildSessionOptions {
 export interface ChildSessionHandle {
 	readonly session: AgentSession;
 	readonly toolNames: readonly string[];
+	readonly protocolState: ProtocolCaptureState;
 	readonly dispose: () => void;
 }
 
@@ -216,11 +221,10 @@ export interface WorkerProgressEvent {
 
 export interface SubagentExecutorOptions {
 	readonly routeAdapter: RouteAttemptAdapter;
-	readonly sessionFactory?: ChildSessionFactory;
 	readonly safety?: WorkerSafetyContext;
 	readonly clock?: () => Date;
 	readonly onProgress?: (event: WorkerProgressEvent) => void;
-	readonly resultProtocolFactory?: (request: SubagentExecutionRequest) => ChildResultProtocol;
+	readonly resultProtocolFactory?: (request: SubagentExecutionRequest) => ResultProtocolSpec;
 }
 
 export interface ResultToolState {

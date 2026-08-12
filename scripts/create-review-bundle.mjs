@@ -6,7 +6,7 @@ import { verifyReleaseDirectory, DIRECTORY_SOURCE } from "./release-candidate.mj
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const REVIEW_DOCS = ["COMPATIBILITY.md", "RELEASE_CHECKLIST.md", "DOGFOOD_LOG.md", "RELEASE_REVIEW.md"];
-const RELEASE_EVIDENCE_FILES = ["test-evidence.json", "pi-install-evidence.json"];
+const RELEASE_EVIDENCE_FILES = ["test-evidence.json", "pi-install-evidence.json", "worker-safety-evidence.json"];
 const M10_BASELINE_ENTRIES = ["m10-baseline", "m10-baseline.tgz", "m10-baseline.tgz.sha256"];
 const REQUIRED_ROOT_FILES = ["artifact-files.txt", "release-manifest.json", "verification.json", "package.json", "privacy-report.json", ...RELEASE_EVIDENCE_FILES, "REVIEW_PROMPT.md", "REVIEW_EVIDENCE.json"];
 const RELEASE_ROOT_FILES = ["artifact-files.txt", "release-manifest.json", "verification.json"];
@@ -82,6 +82,7 @@ Inspect ${artifact} for ${manifest.package?.name ?? "unknown"}@${manifest.packag
 	const verificationBytes = await readFile(join(target, "verification.json"));
 	const testEvidenceBytes = await readFile(join(target, "test-evidence.json"));
 	const piEvidenceBytes = await readFile(join(target, "pi-install-evidence.json"));
+	const safetyEvidenceBytes = await readFile(join(target, "worker-safety-evidence.json"));
 	await writeFile(join(target, "REVIEW_EVIDENCE.json"), `${JSON.stringify({
 		schemaVersion: 2,
 		status: "EXTERNAL_REVIEW_PENDING",
@@ -101,6 +102,7 @@ Inspect ${artifact} for ${manifest.package?.name ?? "unknown"}@${manifest.packag
 			verification: sha256(verificationBytes),
 			testEvidence: sha256(testEvidenceBytes),
 			piEvidence: sha256(piEvidenceBytes),
+			safetyEvidence: sha256(safetyEvidenceBytes),
 		},
 		verification,
 		reviewer: null,
@@ -126,6 +128,7 @@ export async function verifyReviewBundle(bundleDir) {
 	}
 	const testEvidence = JSON.parse(await readFile(join(bundle, "test-evidence.json"), "utf8"));
 	const piEvidence = JSON.parse(await readFile(join(bundle, "pi-install-evidence.json"), "utf8"));
+	const safetyEvidence = JSON.parse(await readFile(join(bundle, "worker-safety-evidence.json"), "utf8"));
 	const privacyReport = JSON.parse(await readFile(join(bundle, "privacy-report.json"), "utf8"));
 	if (privacyReport.schemaVersion !== 1 || privacyReport.artifact?.clean !== true || privacyReport.directorySource?.clean !== true || !Array.isArray(privacyReport.artifact?.rules) || !Array.isArray(privacyReport.directorySource?.rules)) fail("review bundle privacy report is incomplete");
 	const releaseBinding = {
@@ -151,18 +154,23 @@ export async function verifyReviewBundle(bundleDir) {
 	if (!baseline.directorySource || !piEvidence.upgradeRollback?.before || !piEvidence.upgradeRollback?.candidate || !piEvidence.upgradeRollback?.rollback) fail("compatibility state evidence is missing");
 	if (piEvidence.upgradeRollback.semanticStatePreserved !== true || piEvidence.seed?.config !== true || piEvidence.seed?.mission !== true || piEvidence.seed?.analytics !== true || piEvidence.seed?.trust !== true) fail("non-empty compatibility state evidence is incomplete");
 	if (piEvidence.rescue?.brokenCandidateSimulated !== true || piEvidence.rescue?.extensionIndependentRecovery !== true || piEvidence.rescue?.realM10Restore !== true || piEvidence.rescue?.seededStateRecovered !== true) fail("rescue evidence is incomplete");
+	if (safetyEvidence.schemaVersion !== 1 || safetyEvidence.status !== "PASS" || safetyEvidence.actualPi !== "0.84.1" || safetyEvidence.liveCalls !== 0 || safetyEvidence.paidInference !== 0) fail("worker safety evidence is incomplete");
+	if (safetyEvidence.customToolBoundary?.tool !== "submit_evil" || safetyEvidence.customToolBoundary?.projectTrust !== "UNTRUSTED" || safetyEvidence.customToolBoundary?.regressionAttempted !== true || safetyEvidence.customToolBoundary?.advertisedToChild !== false || safetyEvidence.customToolBoundary?.handlerExecuted !== false || safetyEvidence.customToolBoundary?.filesystemMutation !== false) fail("custom-tool bypass evidence is incomplete");
+	if (safetyEvidence.protocolBoundary?.callerExecuteCallback !== false || safetyEvidence.protocolBoundary?.ambientInheritance !== false || safetyEvidence.effectiveTools?.unknown !== "FAIL_CLOSED") fail("protocol boundary evidence is incomplete");
 	assertMachineNeutral(testEvidence, "test evidence");
 	assertMachineNeutral(piEvidence, "Pi evidence");
+	assertMachineNeutral(safetyEvidence, "worker safety evidence");
 	const evidence = JSON.parse(await readFile(join(bundle, "REVIEW_EVIDENCE.json"), "utf8"));
 	const verification = JSON.parse(await readFile(join(bundle, "verification.json"), "utf8"));
 	if (evidence.schemaVersion !== 2 || evidence.status !== "EXTERNAL_REVIEW_PENDING" || evidence.artifact !== artifact || evidence.sha256 !== manifest.artifact.sha256 || !equalJson(evidence.release, releaseBinding) || !equalJson(evidence.evidence, manifest.evidence) || !equalJson(evidence.verification, verification)) fail("review evidence is not pending for the copied artifact");
 	const digests = {
 		manifest: sha256(await readFile(join(bundle, "release-manifest.json"))),
 		verification: sha256(await readFile(join(bundle, "verification.json"))),
-		testEvidence: sha256(await readFile(join(bundle, "test-evidence.json"))),
+		 testEvidence: sha256(await readFile(join(bundle, "test-evidence.json"))),
 		piEvidence: sha256(await readFile(join(bundle, "pi-install-evidence.json"))),
+		safetyEvidence: sha256(await readFile(join(bundle, "worker-safety-evidence.json"))),
 	};
-	if (!equalJson(evidence.digests, digests) || !equalJson(manifest.evidence?.test, { file: "test-evidence.json", sha256: digests.testEvidence }) || !equalJson(manifest.evidence?.pi, { file: "pi-install-evidence.json", sha256: digests.piEvidence })) fail("review evidence digests do not match copied evidence");
+	if (!equalJson(evidence.digests, digests) || !equalJson(manifest.evidence?.test, { file: "test-evidence.json", sha256: digests.testEvidence }) || !equalJson(manifest.evidence?.pi, { file: "pi-install-evidence.json", sha256: digests.piEvidence }) || !equalJson(manifest.evidence?.safety, { file: "worker-safety-evidence.json", sha256: digests.safetyEvidence })) fail("review evidence digests do not match copied evidence");
 	return { verified: true, artifact, sha256: manifest.artifact.sha256, status: evidence.status };
 }
 

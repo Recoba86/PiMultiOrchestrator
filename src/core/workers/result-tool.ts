@@ -2,17 +2,65 @@ import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-
 
 import {
 	WORKER_PROTOCOL_VERSION,
-	type ChildResultProtocol,
+	type ResultProtocolSpec,
 	type ChildTestResult,
+	type ProtocolCaptureState,
 	type ResultToolState,
 	type StructuredChildResult,
 } from "./types.js";
+import { isWorkerResultToolName } from "./profiles.js";
 
 const MAX_SUMMARY = 4_000;
 const MAX_ITEM = 2_000;
 const MAX_ITEMS = 32;
 const MAX_TEST_COMMAND = 1_000;
 const MAX_TEST_OUTCOME = 1_000;
+const MAX_CAPTURE_BYTES = 512_000;
+
+export function createProtocolCaptureState(): ProtocolCaptureState {
+	return { submissionCount: 0, protocolViolation: false };
+}
+
+/** Build the sole custom tool allowed in a child session. */
+export function createProtocolOnlyCaptureTool(protocol: ResultProtocolSpec, state: ProtocolCaptureState): ToolDefinition {
+	if (!isWorkerResultToolName(protocol.toolName)) throw new TypeError("Unknown worker result tool");
+	return {
+		name: protocol.toolName,
+		label: "Submit bounded worker result",
+		description: "Submit one bounded worker result to the parent, then stop.",
+		promptSnippet: `${protocol.toolName}: submit one bounded worker result`,
+		parameters: protocol.parameters,
+		execute: async (_toolCallId, params): Promise<AgentToolResult<unknown>> => {
+			const mutable = state as MutableProtocolCaptureState;
+			mutable.submissionCount += 1;
+			if (mutable.submissionCount !== 1) {
+				mutable.protocolViolation = true;
+				return failure("Only one worker result submission is allowed");
+			}
+			try {
+				mutable.captured = boundedCapture(params);
+				return {
+					content: [{ type: "text", text: "Worker result accepted. Stop now." }],
+					details: { accepted: true },
+					terminate: true,
+				};
+			} catch {
+				mutable.protocolViolation = true;
+				return failure("Worker result is invalid or too large");
+			}
+		},
+	};
+}
+
+export function readProtocolCapture<T>(state: ProtocolCaptureState, parse: (value: unknown) => T): T | undefined {
+	if (state.captured === undefined) return undefined;
+	try {
+		return parse(state.captured);
+	} catch {
+		(state as MutableProtocolCaptureState).protocolViolation = true;
+		return undefined;
+	}
+}
 
 const SUBMIT_PARAMETERS = {
 	type: "object",
@@ -82,14 +130,11 @@ export function createSubmitAgentResultTool(state: ResultToolState = createResul
 	};
 }
 
-/** Adapt the legacy worker handoff to the caller-supplied M5 protocol seam. */
-export function createAgentResultProtocol(): ChildResultProtocol {
-	const state = createResultToolState();
+/** Create the default declarative worker handoff protocol. */
+export function createAgentResultProtocol(): ResultProtocolSpec {
 	return {
 		toolName: "submit_agent_result",
-		tool: createSubmitAgentResultTool(state),
-		getResult: () => state.submitted,
-		hasProtocolViolation: () => state.protocolViolation,
+		parameters: SUBMIT_PARAMETERS,
 	};
 }
 
@@ -121,6 +166,19 @@ interface MutableResultToolState {
 	submitted: StructuredChildResult | undefined;
 	submissionCount: number;
 	protocolViolation: boolean;
+}
+
+interface MutableProtocolCaptureState {
+	captured?: unknown;
+	submissionCount: number;
+	protocolViolation: boolean;
+}
+
+function boundedCapture(value: unknown): unknown {
+	if (!isRecord(value)) throw new TypeError("Worker result must be an object");
+	const serialized = JSON.stringify(value);
+	if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > MAX_CAPTURE_BYTES) throw new TypeError("Worker result is too large");
+	return JSON.parse(serialized) as unknown;
 }
 
 function boundedText(value: unknown, max: number, field: string): string {

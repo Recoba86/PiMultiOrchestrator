@@ -309,10 +309,10 @@ const main = async () => {
 	const candidateRpc = await rpcControlCenter(pi.path, env, cwd);
 	const candidateState = await captureSemanticState(sourceCopy, configRoot);
 	const candidateRemoval = await remove(source);
-	const broken = join(root, "broken-rc2");
+	const broken = join(root, "broken-rc3");
 	await cp(source, broken, { recursive: true });
 	const entrypoint = join(broken, "dist/host/pi-extension.js");
-	await writeFile(entrypoint, `throw new Error("intentional rc.2 rescue fixture failure");\n`, "utf8");
+	await writeFile(entrypoint, `throw new Error("intentional rc.3 rescue fixture failure");\n`, "utf8");
 	const brokenInstall = await install(broken);
 	const brokenStartup = await startup();
 	const disabledStartup = await startup(["--no-extensions"]);

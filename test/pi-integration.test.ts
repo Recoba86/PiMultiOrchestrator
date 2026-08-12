@@ -241,7 +241,7 @@ function parseJsonLines(value: string): Record<string, unknown>[] {
 		});
 }
 
-async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly qualityLoopFlow?: boolean; readonly analystFlow?: "support" | "oppose" | "insufficient_evidence" | "infra-failure"; readonly analystSecret?: string; readonly analyticsEnabled?: boolean; readonly fallbackEnabled?: boolean; readonly failModels?: readonly string[] } = {}): Promise<T> {
+async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly customToolBypassFlow?: boolean; readonly customToolMarker?: string; readonly qualityLoopFlow?: boolean; readonly analystFlow?: "support" | "oppose" | "insufficient_evidence" | "infra-failure"; readonly analystSecret?: string; readonly analyticsEnabled?: boolean; readonly fallbackEnabled?: boolean; readonly failModels?: readonly string[] } = {}): Promise<T> {
 	const server = new FakeNineRouter({ models: sourceModels, ...options });
 	const root = await mkdtemp(join(tmpdir(), "pi-m2-integration-"));
 	const agentRoot = join(root, "agent");
@@ -474,6 +474,7 @@ test("[P][fixture-v1] Pi parent delegates to an isolated child with exact model 
 			const child = server.chatRequests.find((request) => request.toolNames?.includes("submit_agent_result"));
 			assert.ok(child, result.stdout);
 			assert.equal(child.model, selectedRemoteIds[0]);
+			assert.deepEqual([...child.toolNames ?? []].sort(), ["find", "grep", "ls", "read", "submit_agent_result"]);
 			assert.equal(child.toolNames?.includes("delegate_agent"), false);
 			assert.equal(child.toolNames?.includes("read"), true);
 			assert.equal(child.toolNames?.includes("edit"), false);
@@ -485,6 +486,40 @@ test("[P][fixture-v1] Pi parent delegates to an isolated child with exact model 
 			await rm(root, { recursive: true, force: true });
 		}
 	}, { toolCallFlow: true });
+});
+
+test("[P][fixture-v1][M11-R6] Pi 0.84.1 does not execute an unclassified custom result tool", { skip: integrationSkip }, async () => {
+	const markerRoot = await mkdtemp(join(tmpdir(), "pi-m11-r6-submit-evil-"));
+	const marker = join(markerRoot, "MUTATED");
+	try {
+		await withFixture(async (server, orchestratorRoot) => {
+			const root = await mkdtemp(join(tmpdir(), "pi-m11-r6-run-"));
+			try {
+				const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+				const result = await runPi(
+					[
+						"--offline", "--no-extensions", "-e", builtEntry, "--no-context-files", "--no-session", "--mode", "json",
+						"--provider", "9router", "--model", selectedRemoteIds[0]!, "--print", "delegate once",
+					],
+					env,
+					30_000,
+				);
+				assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
+				assert.equal(server.customToolAttempted, true);
+				const child = server.chatRequests.find((request) => request.toolNames?.includes("submit_agent_result"));
+				assert.ok(child, result.stdout);
+				assert.equal(child.toolNames?.includes("submit_evil"), false);
+				assert.equal(server.chatRequests.some((request) => request.toolNames?.includes("submit_evil")), false);
+				assert.equal(existsSync(marker), false);
+				assert.equal(result.stdout.includes(server.token), false);
+				assert.equal(result.stderr.includes(server.token), false);
+			} finally {
+				await rm(root, { recursive: true, force: true });
+			}
+		}, { toolCallFlow: true, customToolBypassFlow: true, customToolMarker: marker });
+	} finally {
+		await rm(markerRoot, { recursive: true, force: true });
+	}
 });
 
 test("[P][fixture-v1] Pi M6 mission task persists packet, proposed evidence, acceptance, and reopen", { skip: integrationSkip }, async () => {

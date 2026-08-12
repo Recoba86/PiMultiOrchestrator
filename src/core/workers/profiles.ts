@@ -10,6 +10,18 @@ export const WORKER_TOOL_PROFILES: Readonly<Record<PoolId, readonly WorkerToolNa
 
 export type WorkerProfileId = PoolId | "recommendation-analyst";
 
+export const WORKER_RESULT_TOOL_NAMES = [
+	"submit_agent_result",
+	"submit_verification_result",
+	"submit_recommendation_analysis",
+] as const;
+
+export type WorkerResultToolName = (typeof WORKER_RESULT_TOOL_NAMES)[number];
+
+export function isWorkerResultToolName(toolName: string): toolName is WorkerResultToolName {
+	return (WORKER_RESULT_TOOL_NAMES as readonly string[]).includes(toolName);
+}
+
 const READ_ONLY_TOOLS: readonly WorkerToolName[] = ["read", "grep", "find", "ls"];
 
 export function workerProfileFor(poolId: PoolId, resultToolName?: string): WorkerProfileId {
@@ -25,5 +37,5 @@ export function toolProfileForPool(poolId: PoolId): readonly WorkerToolName[] {
 }
 
 export function isPotentiallyMutatingTool(toolName: string): boolean {
-	return toolName !== "read" && toolName !== "grep" && toolName !== "find" && toolName !== "ls" && !toolName.startsWith("submit_");
+	return toolName !== "read" && toolName !== "grep" && toolName !== "find" && toolName !== "ls" && !isWorkerResultToolName(toolName);
 }
