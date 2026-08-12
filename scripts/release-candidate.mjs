@@ -511,7 +511,7 @@ export async function bindReleaseEvidence(directory) {
 		if (!details.isFile()) fail(`release evidence must be a regular file: ${name}`);
 		records[name === "test-evidence.json" ? "test" : name === "pi-install-evidence.json" ? "pi" : "safety"] = { file: name, sha256: await sha256(join(root, name)) };
 	}
-	const evidence = { schemaVersion: 1, test: records.test, pi: records.pi };
+	const evidence = { schemaVersion: 1, test: records.test, pi: records.pi, safety: records.safety };
 	const nextManifest = { ...manifest, evidence };
 	const nextVerification = { ...verification, evidence };
 	await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");
