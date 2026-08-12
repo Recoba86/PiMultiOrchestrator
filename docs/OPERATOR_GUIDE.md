@@ -59,12 +59,14 @@ message where applicable.
 - **Statistics & Analytics** provides the accepted Overview, Missions, Pools,
   Routes, Tokens, Cost, Quality, Fallbacks, Recommendations, and Recommendation
   Analyst views for 24h, 7d, 30d, all-time, or custom windows.
-- **Diagnostics** displays sanitized provider and observed-health metadata only;
-  it never prints prompts, transcripts, tool output, credentials, or stack
-  traces.
+- **Diagnostics** displays sanitized provider and observed-health metadata,
+  Mission/Analytics integrity state, local Security & Trust, and the
+  permission matrix; it never prints prompts, transcripts, tool output,
+  credentials, or stack traces. Unknown projects are untrusted by default.
 - **Backup / Restore** exposes ConfigStore generation/history, safe export, and
-  confirmation-gated restore. MissionStore and AnalyticsStore backup is
-  explicitly marked `Not implemented yet` until a safe primitive exists.
+  confirmation-gated restore. MissionStore and AnalyticsStore offer validated,
+  confirmation-gated SQLite-native backup snapshots; invalid or corrupt
+  snapshots are rejected rather than replaced with empty state.
 
 ## Recommendations and analyst
 
@@ -91,5 +93,12 @@ The direct M2–M8.5 commands remain available, including `/9router-models`,
 
 Use isolated temporary roots for fake-gateway verification. Never paste a raw
 API key into configuration, prompts, diagnostics, exports, or issue reports.
-M9 does not add background workers, automatic Apply, autonomous Boss planning,
-parallel worktrees, live-provider access, or release tooling.
+M10 adds application-level PathSafetyPolicy and CommandSafetyPolicy. Workspace
+escapes, symlink escapes, protected databases, credentials, and private keys
+are blocked; destructive commands are blocked and ambiguous shell constructs
+require review. Implementation mutations require explicit local project trust;
+revoke trust immediately blocks future mutating runs. Config mutations use a
+cross-process lock, MissionStore leases require owner tokens, and analytics
+corruption degrades to diagnostics. These controls are not an OS/kernel
+sandbox. M10 does not add background workers, automatic Apply, autonomous Boss
+planning, parallel worktrees, live-provider access, or release tooling.

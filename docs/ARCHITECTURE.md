@@ -107,7 +107,7 @@ Configuration I/O is serialized. Each save obtains an exclusive mutation lock, c
 
 M1 implements this boundary under `src/core/config/`: `types` and `schema` own the strict data contract; `defaults`, `migrations`, `resolve`, and `serialize` are pure; `store`, `history`, and `transfer` own the injected-root filesystem boundary. Stored files wrap semantic `ConfigV1` in a storage envelope containing a monotonic generation and timestamp; exports contain only semantic configuration.
 
-The mutation lock is a FIFO process-local promise queue with expected-generation conflict checks. Cross-process coordination is deferred to M10. Active/history writes use mode `0600`, directories use `0700`, file contents are flushed before same-directory atomic rename, and parent-directory flush is best effort because supported filesystems differ. History retains the newest 20 prior valid generations. A successful rename may publish one optional no-content audit callback; M1 provides no event collection or durable sink. A normal load never mutates disk: if the active file is corrupt, it can expose the newest valid history snapshot in memory with `repairRequired`; explicit recovery copies the corrupt bytes to quarantine and activates a valid snapshot under a fresh generation.
+The mutation lock is a FIFO process-local promise queue with expected-generation conflict checks, extended by M10 with a short-lived cross-process O_EXCL lock and reread-under-lock before mutation. Active/history writes use mode `0600`, directories use `0700`, file contents are flushed before same-directory atomic rename, and parent-directory flush is best effort because supported filesystems differ. History retains the newest 20 prior valid generations. A successful rename may publish one optional no-content audit callback; M1 provides no event collection or durable sink. A normal load never mutates disk: if the active file is corrupt, it can expose the newest valid history snapshot in memory with `repairRequired`; explicit recovery copies the corrupt bytes to quarantine and activates a valid snapshot under a fresh generation.
 
 Stable configuration IDs are lowercase kebab identifiers, start with a letter, contain only ASCII lowercase letters/digits/hyphens, and are at most 64 characters.
 
@@ -215,7 +215,13 @@ Accepts privacy-filtered internal events, persists metadata, creates query proje
 
 M8.5 adds an optional manual Recommendation Analyst above the deterministic recommendation. It receives only a bounded analytics packet, uses an explicitly selected Verification Pool route through the existing M4/M5 boundary, persists bounded verdict metadata plus an input fingerprint, and never mutates metrics, pools, or configuration. Changed deterministic inputs make prior analyst records stale; analyst failure is advisory and does not invalidate the deterministic recommendation.
 
-### 5.11 `tui`
+### 5.11 `security` and recovery boundaries
+
+M10 keeps project trust separate from portable configuration in a local, restrictive TrustStore. Projects are untrusted by default; explicit trust/revoke is operator-controlled and is never imported from a backup. PathSafetyPolicy canonicalizes existing ancestors, confines workspace access, rejects protected/credential paths and symlink escapes, and is applied before mutating host flows. CommandSafetyPolicy is a pure conservative classifier: safe commands may run, destructive commands block, and ambiguous shell constructs require review. SecretSanitizer removes registered values and sensitive structures from diagnostics/errors; capability rows expose read-only Investigation/Verification versus trust-gated Implementation mutation.
+
+ConfigStore mutations reread under a short cross-process lock. MissionStore leases carry owner tokens and expiry checks, while active attempts are race-safe and non-owner release/renewal is rejected. MissionStore and AnalyticsStore remain separate SQLite databases with validated native backup/restore and integrity diagnostics. Analytics corruption degrades to a diagnostic state instead of inventing empty history. These are application-level policies, not OS/kernel sandboxing; no autonomous approval or automatic rerun is implied.
+
+### 5.12 `tui`
 
 Renders the twelve Control Center sections using Pi TUI components and calls application operations. Components do not read files, query SQLite, resolve secrets, or call 9Router directly. Each screen receives view data plus explicit commands so non-TUI tests can exercise the same operations.
 

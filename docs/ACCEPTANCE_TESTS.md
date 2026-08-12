@@ -758,6 +758,34 @@ M8 acceptance note: STATE-8 records `134/134 PASS` and the actual Pi/fake-gatewa
 - **Action:** invoke one selected route with a minimal non-sensitive prompt through Pi provider bridge.
 - **Pass:** model/route selection, cancellation, usage/failure metadata, and gateway behavior are recorded; exact live evidence is labeled; cost/quota is bounded by the authorization.
 
-## 16. Release acceptance rule
+## 16. M10 safety and hardening
+
+### SAFETY-01 — Local trust and capability boundary
+
+- **Level:** U/I/P, fixture-v1
+- **Action:** inspect an unknown project, explicitly trust/revoke it, inspect the capability matrix, and attempt an Implementation mutation while untrusted.
+- **Pass:** unknown projects remain untrusted; trust is local and nonportable; revoke persists; Investigation/Verification are read-only; Implementation is blocked until explicit trust; no secret or trust record enters ConfigStore export/history.
+
+### SAFETY-02 — Path, command, and privacy policy
+
+- **Level:** U/I
+- **Action:** evaluate workspace paths, traversal/symlink escapes, protected/credential paths, safe/destructive/ambiguous commands, and adversarial secret-shaped diagnostics/import values.
+- **Pass:** canonical in-workspace reads are allowed; escapes/protected credentials block; destructive commands block; ambiguous shell constructs require review; value and structural secret redaction leaves no secret in output or persisted metadata.
+
+### SAFETY-03 — Cross-process locks and lease ownership
+
+- **Level:** I, fixture-v1
+- **Action:** race two ConfigStore writers and two MissionStore owners; renew/release with stale and non-owner tokens; attempt duplicate active task attempts.
+- **Pass:** reread-under-lock preserves both updates; one lease owner wins; stale/non-owner operations are rejected; active task start is race-safe; recovery records the prior owner without auto-rerun.
+
+### SAFETY-04 — Integrity, backup, restore, and crash recovery
+
+- **Level:** I, fixture-v1, Node `22.23.0`
+- **Action:** back up and reopen MissionStore/AnalyticsStore, validate/restore snapshots, corrupt schemas/payloads, and inject config fault points.
+- **Pass:** snapshots are consistent and validated; invalid/empty backups are rejected atomically; MissionStore reports corruption rather than replacing user data; AnalyticsStore degrades to diagnostics; fault injection leaves the prior active config intact.
+
+M10 evidence: `test/m10-security.test.ts` `5/5 PASS`, `test/m10-recovery.test.ts` `7/7 PASS`, provider suite `18/18 PASS`, and full deterministic/fake/actual-Pi suite `159/159 PASS`; typecheck/build/check/package/diff/secret/state validation PASS. Human keyboard smoke remains pending; no live or paid calls were used.
+
+## 17. Release acceptance rule
 
 A milestone is complete only when every required case through that milestone passes at its required level, skipped P/L gates are explicitly named, migrations/rollback pass, and the milestone's Roadmap exit gate is satisfied. A passing fake-provider suite is never a substitute for a required Pi UI or authorized live smoke.

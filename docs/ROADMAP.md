@@ -163,7 +163,7 @@ Exit gate: PASS — STATE-9 records Planner acceptance of implementation commit 
 
 ## M10 — Safety and hardening
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED.
 
 Deliverables:
 
@@ -171,9 +171,15 @@ Deliverables:
 - project trust enforcement, secret filtering, permission review, database recovery, lock/lease hardening, and crash fault injection;
 - import/export adversarial tests and privacy review.
 
-Exit gate: threat-model scenarios and recovery drills pass with no secret or user-data loss.
+Evidence: full suite `159/159 PASS` with loopback-capable fake Pi execution; TrustStore/path/command/privacy, lease/CAS, SQLite backup/restore, corruption degradation, and fault-injection tests PASS; typecheck/build/check/package/diff/secret validation PASS. Human keyboard smoke remains open validation and Planner acceptance is pending. No live or paid calls were used.
+
+Implementation commit: `3a6990d` — `feat(safety): harden trust permissions and recovery`.
+
+Exit gate: threat-model scenarios and recovery drills pass with no secret or user-data loss; implementation is awaiting the STATE-10 Planner handoff. The safety boundary is application-level and does not claim an OS/kernel sandbox.
 
 ## M11 — Packaging, release, and dogfooding
+
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 

@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M9 accepted; M10 next planned / not started |
+| Development phase | M10 implemented; awaiting Planner acceptance |
 | Last accepted milestone | M9 — Full TUI control center |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -20,6 +20,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | Accepted M8.5 evidence HEAD | `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1` |
 | Accepted M9 implementation commit | `2032a2b` — `feat(tui): add full orchestrator control center` |
 | Accepted M9 evidence HEAD | `1200d3349506a1d414def0f3c1e044d712711d9d` |
+| M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
+| M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -39,7 +41,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | ACCEPTED / PASS |
 | M8.5 — Manual AI Recommendation Analyst | ACCEPTED / PASS |
 | M9 — Full TUI control center | ACCEPTED / PASS |
-| M10 — Safety and hardening | NEXT PLANNED / NOT STARTED |
+| M10 — Safety and hardening | IMPLEMENTED BUT NOT ACCEPTED |
+| M11 — Packaging, release, and dogfooding | NEXT PLANNED / NOT STARTED |
 
 ## Stable / accepted capabilities
 
@@ -180,12 +183,11 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 - autonomous/scheduled tuning and autonomous priority mutation;
 - automatic pool reordering and budget-aware routing;
 - public release tooling;
-- cross-process configuration locking; and
 - Keychain credential adapter.
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6, M7 is accepted by STATE-7, M8 is accepted by STATE-8, M8.5 is accepted by STATE-8.5, and M9 is accepted by STATE-9. M10 is next planned and not started; do not start M10.
+M6 is accepted by STATE-6, M7 is accepted by STATE-7, M8 is accepted by STATE-8, M8.5 is accepted by STATE-8.5, and M9 is accepted by STATE-9. M10 is implemented but awaits Planner acceptance. M11 is next planned and not started; do not start M11.
 
 ## M8 implementation snapshot
 
@@ -216,7 +218,7 @@ M8.5 is accepted by STATE-8.5. It adds an optional, manual-only Recommendation A
 
 ## M9 accepted capability snapshot
 
-M9 adds the unified `/orchestrator` Control Center with exactly twelve top-level sections: Models & 9Router; Investigation Pool; Implementation Pool; Verification Pool; Boss / Orchestrator Profiles; Routing & Fallback; Health & Quotas; Budget / Quality Profiles; Context & Mission Settings; Statistics & Analytics; Diagnostics; and Backup / Restore. It provides a dashboard-first home, consistent keyboard/native TUI and RPC navigation, textual loading/error/stale/empty states, model and pool management, routing/health controls, mission/quality workflows, analytics/recommendations/Recommendation Analyst views, diagnostics, and safe ConfigStore backup/restore controls. Live operational status is visible without normal log inspection, and the Operator Guide documents the surface. Boss runtime, autonomous mission decomposition/scheduling, parallel workers/worktree isolation, automatic recommendation Apply, and M10 safety/hardening remain deferred. Human keyboard-driven TUI smoke remains open validation, not an M9 acceptance blocker.
+M9 adds the unified `/orchestrator` Control Center with exactly twelve top-level sections: Models & 9Router; Investigation Pool; Implementation Pool; Verification Pool; Boss / Orchestrator Profiles; Routing & Fallback; Health & Quotas; Budget / Quality Profiles; Context & Mission Settings; Statistics & Analytics; Diagnostics; and Backup / Restore. It provides a dashboard-first home, consistent keyboard/native TUI and RPC navigation, textual loading/error/stale/empty states, model and pool management, routing/health controls, mission/quality workflows, analytics/recommendations/Recommendation Analyst views, diagnostics, and safe ConfigStore backup/restore controls. Live operational status is visible without normal log inspection, and the Operator Guide documents the surface. Boss runtime, autonomous mission decomposition/scheduling, parallel workers/worktree isolation, and automatic recommendation Apply remain deferred. M10 hardening is recorded in the implementation snapshot below. Human keyboard-driven TUI smoke remains open validation, not an M9 acceptance blocker.
 
 | M9 accepted evidence | Result |
 |---|---|
@@ -227,6 +229,26 @@ M9 adds the unified `/orchestrator` Control Center with exactly twelve top-level
 | Human keyboard-driven TUI smoke | PENDING — no authorized interactive keyboard session in this run; RPC/native selector coverage passed |
 | Planner acceptance / STATE-9 | ACCEPTED / PASS |
 | Paid calls / live environment changes | `0` / NONE |
+
+## M10 implementation snapshot
+
+M10 implements a conservative application-level safety and recovery boundary without claiming an OS sandbox. A separate local TrustStore defaults projects to untrusted and supports explicit trust/revoke; trust is not portable configuration. Central PathSafetyPolicy and CommandSafetyPolicy canonicalize workspace paths, protect credentials and runtime databases, detect symlink/traversal escapes, classify destructive or ambiguous commands, and require review or block before mutation. SecretSanitizer redacts values and sensitive structures, and the capability matrix makes Investigation/Verification read-only while Implementation mutation requires trust.
+
+Config mutations now use a cross-process lock and reread-under-lock CAS path. Mission leases have owner tokens, expiry/renewal/non-owner checks, and race-safe active-attempt guards. MissionStore and AnalyticsStore provide validated SQLite-native backup/restore and integrity diagnostics; corrupt AnalyticsStore state degrades to diagnostics rather than silently becoming empty data. Fault injection and adversarial policy tests cover crash/recovery, privacy, protected paths, and import/backup boundaries.
+
+| M10 implementation evidence | Result |
+|---|---|
+| Trust, path/command policy, sanitizer, and capability tests | `5/5 PASS` |
+| Lease, cross-process config, backup/restore, corruption, and fault tests | `7/7 PASS` |
+| Provider/host regression suite | `18/18 PASS` |
+| Full deterministic/fake/actual-Pi regression suite | `159/159 PASS` |
+| Typecheck, build, aggregate check, package dry-run, diff check, secret scan | PASS |
+| Human keyboard-driven TUI smoke | PENDING — no authorized interactive session; automated native/RPC coverage remains PASS |
+| Implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
+| Planner acceptance / STATE-10 | PENDING |
+| Paid calls / live environment changes | `0` / NONE |
+
+M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. M11 is next planned and not started.
 
 ## Accepted evidence history
 
@@ -250,6 +272,6 @@ M9 adds the unified `/orchestrator` Control Center with exactly twelve top-level
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M10 has started; M9 acceptance does not imply Boss/planner runtime, scheduled or autonomous tuning, automatic priority mutation, parallel/worktree orchestration, safety hardening, or release readiness.
+- Do not assume M10 is Planner-accepted; M10 implementation does not imply OS sandboxing, autonomous approval, Boss/planner runtime, scheduled tuning, automatic priority mutation, parallel/worktree orchestration, or release readiness.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

@@ -34,6 +34,7 @@ Milestone acceptance does not itself create a product release.
 | M8 accepted verification suite | `134/134 PASS`; typecheck/build/check PASS; Pi/fake analytics/fallback/quality/billing/recommendation proof PASS |
 | M8.5 accepted verification suite | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS |
 | M9 accepted verification suite | `146/146 PASS`; Control Center sections/navigation, typecheck/build/check, package dry-run, diff/secret/state validation PASS |
+| M10 implementation verification (pending acceptance) | `3a6990d`; `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -49,9 +50,10 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, scheduled/autonomous tuning, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M9 is the latest accepted development state; no stable release is implied.
-- Human keyboard-driven TUI smoke remains pending as open validation, but is not an M9 acceptance blocker. M10 safety/hardening is next planned and not started.
+- Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M9 remains the latest Planner-accepted development state; M10 hardening is implemented but pending Planner acceptance, and no stable release is implied.
+- Human keyboard-driven TUI smoke remains pending as open validation, but is not an M9 acceptance blocker. M10 automated safety/recovery evidence is `159/159 PASS`; its Planner acceptance remains pending.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
+- M10's application-level policy is not an OS/kernel sandbox; M11 packaging, release, and dogfooding are next planned and not started.
 
 ## Future release record
 

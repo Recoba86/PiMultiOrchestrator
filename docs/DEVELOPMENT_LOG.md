@@ -165,6 +165,19 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 **STATE-9 acceptance:** M9 is accepted / PASS. Accepted implementation commit is `2032a2b`; accepted evidence HEAD is `1200d3349506a1d414def0f3c1e044d712711d9d`. The human keyboard-driven TUI smoke remains pending as an explicitly open validation item; no live or paid environment was used.
 
+## M10 — Safety and hardening
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED.
+- **Starting HEAD:** `79ce6728ef068d2ce598dc1fce8e09d594d47323` (STATE-9 accepted baseline).
+- **Implementation commit:** `3a6990d` — `feat(safety): harden trust permissions and recovery`.
+- **Purpose:** Add the smallest application-level trust, path, command, privacy, locking, lease, integrity, backup/restore, and crash-recovery boundary without claiming an OS sandbox or autonomous approval.
+- **Major outcomes:** Separate local TrustStore with untrusted-by-default trust/revoke; canonical PathSafetyPolicy and CommandSafetyPolicy; bounded SecretSanitizer and capability matrix; cross-process ConfigStore lock/re-read CAS; owner-token mission leases and race-safe attempts; validated SQLite MissionStore/AnalyticsStore backup/restore and integrity diagnostics; degraded analytics corruption handling; host Diagnostics and Backup/Restore visibility; Implementation trust gating.
+- **Tests/evidence:** Trust/security suite `5/5 PASS`; recovery/lease/backup/fault suite `7/7 PASS`; provider suite `18/18 PASS`; full deterministic/fake/actual-Pi suite `159/159 PASS`; typecheck, build, `npm run check`, package dry-run, diff check, secret scan, and project-state consistency PASS. Human keyboard smoke remains pending because no authorized interactive session was available.
+- **Important decisions:** Trust state is local and never portable configuration; policies are application-level and must not be mistaken for kernel isolation; secrets are redacted structurally and by registered value; database restore requires validated SQLite snapshots and explicit operator action; analytics corruption degrades to diagnostics rather than inventing an empty history; M4/M5 routing and M6/M7 state remain authoritative.
+- **Deferred work:** Planner acceptance, OS sandboxing, Boss/planner runtime, autonomous scheduling/tuning, parallel/worktree orchestration, live-provider validation, packaging, and release work.
+- **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network were used.
+- **Next authorized milestone:** M11 — Packaging, release, and dogfooding. Planned/not started; do not start M11.
+
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED
 - **Starting HEAD:**
