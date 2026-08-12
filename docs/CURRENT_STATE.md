@@ -10,11 +10,13 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M8 implementation corrected; awaiting Planner acceptance |
-| Last accepted milestone | M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation |
+| Development phase | M8 accepted; M8.5 next planned / not started |
+| Last accepted milestone | M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
-| Configuration schema | Version 1 |
+| Accepted M8 implementation commit | `c5f741e65412dc4133e58962c314e2fae82f622e` |
+| Accepted M8 evidence HEAD | `809394fdbc53c40ca86dbcd6f4dcd37573d5523f` |
+| Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
 
@@ -30,7 +32,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M5 — Routed Subagent Execution | ACCEPTED / PASS |
 | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation | ACCEPTED / PASS |
 | M7 — Quality Gates, Review, and Escalation | ACCEPTED / PASS |
-| M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE |
+| M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | ACCEPTED / PASS |
+| M8.5 | NEXT PLANNED / NOT STARTED |
+| M9 — Full TUI control center | NOT STARTED |
 
 ## Stable / accepted capabilities
 
@@ -168,7 +172,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 - automatic broad mission decomposition and task scheduling;
 - general role generation;
 - parallel workers and worktree isolation/fan-out;
-- mission-linked analytics dashboards and automatic autonomous tuning;
+- AI-assisted recommendation analysis and automatic autonomous tuning;
 - automatic pool reordering and budget-aware routing;
 - public release tooling;
 - cross-process configuration locking; and
@@ -176,11 +180,21 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6 and M7 is accepted by STATE-7. M8 is implemented but not accepted; Planner review is pending. Do not start M9.
+M6 is accepted by STATE-6, M7 is accepted by STATE-7, and M8 is accepted by STATE-8. M8.5 is next planned and not started; M9 is not started.
 
 ## M8 implementation snapshot
 
-M8 adds a separate local `analytics.sqlite` schema v1 with bounded, idempotent, metadata-only events, persistent ConfigV2 reference billing profiles migrated from ConfigV1, and nine `/analytics` drill-down views. The host records bounded routed run/attempt/fallback observations and worker usage/latency fields without prompts, transcripts, tool arguments, source, headers, or secrets. `/recommendations` exposes deterministic sample-gated pool recommendations and explicit details/apply/ignore actions. Analytics remains disabled by default and unknown cost is never treated as zero. Corrective evidence: deterministic M8 suites `38/38`, typecheck/build PASS; the full sandbox run is `124/133` with 9 loopback `listen EPERM` failures, so updated actual Pi assertions require a loopback-capable rerun before Planner acceptance.
+M8 is accepted by STATE-8. It adds a separate local AnalyticsStore with idempotent telemetry and restart dedupe; route, pool, mission, fallback, and quality statistics; actual Pi token provenance with UNKNOWN preservation; ConfigV1→V2 billing/reference profiles; cost provenance, fixed-point reference estimates, and multi-currency safety; Quality/Value metrics with insufficient-data behavior; deterministic recommendations; explicit Details/Ignore/Apply; stale recommendation protection; no automatic priority mutation; and Apply through PoolManager with ConfigStore history. It does not claim AI-assisted recommendation analysis. Analytics remains disabled by default and prompts, transcripts, tool arguments, source, headers, and secrets are not persisted.
+
+| M8 accepted evidence | Result |
+|---|---|
+| Full deterministic, fake integration, and actual Pi suite | `134/134 PASS` |
+| Typecheck, build, and aggregate check | PASS |
+| Actual Pi 0.84.1 fake-gateway mission→analytics, token provenance, fallback, quality reject→repair→re-verification | PASS |
+| Restart dedupe and ConfigV1→V2 billing-profile migration/persistence | PASS |
+| Nine analytics detail views | PASS |
+| Recommendation Details/Ignore/Apply/stale protection; PoolManager + ConfigStore history; automatic Apply | PASS / NO |
+| Paid calls / live environment changes | `0` / NONE |
 
 ## Accepted evidence history
 
@@ -195,13 +209,13 @@ M8 adds a separate local `analytics.sqlite` schema v1 with bounded, idempotent, 
 
 - M7: `db82ac141094db749835a0cc7f1f79dc780005e4` — ACCEPTED / PASS by STATE-7; evidence HEAD `d15dccfd3415e7c705600526a6ef7d634d8c90c5`, `121/121` tests, typecheck/build/check, and actual Pi/fake reviewer reject→repair→re-review lineage passed.
 
-- M8: corrective implementation is present in analytics, billing, host, and fake-gateway tests; Planner acceptance and loopback-capable full Pi telemetry evidence remain pending.
+- M8: `c5f741e` implementation accepted by STATE-8 with evidence HEAD `809394f`; `134/134` and actual Pi/fake analytics evidence passed.
 
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M8 is accepted or that its partial telemetry covers all mission/quality flows; M7 acceptance does not imply Boss/planner or parallel-work orchestration.
+- Do not assume M8.5 or M9 has started; M8 acceptance does not imply Boss/planner runtime, AI-assisted recommendation analysis, parallel/worktree orchestration, or release readiness.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

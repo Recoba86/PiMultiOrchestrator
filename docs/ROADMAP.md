@@ -117,11 +117,11 @@ Deliverables:
 - explicit Verify/Re-verify and confirmation-gated bounded quality-loop host actions; and
 - quality rejection kept separate from M4 health/fallback and canonical evidence admission.
 
-Exit gate: PASS — `121/121` tests, typecheck/build/check, and actual Pi `0.84.1` + fake-gateway reviewer reject→routed repair→re-review pass with durable lineage. STATE-7 records Planner acceptance; M8 is next planned and not started.
+Exit gate: PASS — `121/121` tests, typecheck/build/check, and actual Pi `0.84.1` + fake-gateway reviewer reject→routed repair→re-review pass with durable lineage. At the STATE-7 handoff, M8 was next planned and not started; STATE-8 later records M8 acceptance.
 
 ## M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations
 
-Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+Status: ACCEPTED / PASS by STATE-8.
 
 Deliverables:
 
@@ -131,9 +131,15 @@ Deliverables:
 - explicit Apply/Ignore/Details actions with no silent mutation.
 - local `analytics.sqlite` schema v1 with idempotent privacy-minimal events, Pi usage/latency capture, `/analytics`, and `/recommendations`.
 
-Exit gate: corrective deterministic M8 suites `38/38`, typecheck/build pass, persistent ConfigV1→V2 billing migration, recommendation Apply/Ignore/stale coverage, and nine analytics drill-down views. The current sandbox aggregate is `124/133` with 9 loopback `listen EPERM` failures; rerun the complete suite on a loopback-capable verifier before Planner acceptance. M8 remains IMPLEMENTED BUT NOT ACCEPTED.
+Exit gate: PASS — `134/134` tests, `npm run check`, actual Pi 0.84.1 fake-gateway analytics/fallback/quality telemetry, token provenance/UNKNOWN handling, restart dedupe, ConfigV1→V2 billing migration/persistence, nine analytics detail views, and recommendation Details/Ignore/Apply/stale protection. STATE-8 records Planner acceptance; live/paid calls `0`.
+
+## M8.5 — Next planned
+
+Status: NEXT PLANNED — NOT STARTED.
 
 ## M9 — Full TUI control center
+
+Status: NOT STARTED.
 
 Deliverables:
 

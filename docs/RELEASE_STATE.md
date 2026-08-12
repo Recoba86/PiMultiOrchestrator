@@ -8,9 +8,9 @@ This file records releasable product state. It does not promote development prog
 
 | Field | State |
 |---|---|
-| Latest accepted development milestone | M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation |
-| Accepted development commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
-| Accepted evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
+| Latest accepted development milestone | M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations |
+| Accepted development commit | `c5f741e65412dc4133e58962c314e2fae82f622e` |
+| Accepted evidence HEAD | `809394fdbc53c40ca86dbcd6f4dcd37573d5523f` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
@@ -28,15 +28,16 @@ Milestone acceptance does not itself create a product release.
 
 | Evidence | Current result |
 |---|---|
-| Configuration schema | Version 1 |
+| Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | M6 accepted deterministic/fake baseline | `111/111 PASS` |
 | M7 accepted verification suite | `121/121 PASS`; typecheck/build/check PASS; Pi/fake quality-loop proof PASS |
+| M8 accepted verification suite | `134/134 PASS`; typecheck/build/check PASS; Pi/fake analytics/fallback/quality/billing/recommendation proof PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
 | Tested Node.js version | `22.23.0`; package requires `>=22.19.0` |
 | Fake gateway integration | PASS |
-| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, parent→child execution, mission→packet→proposed→accepted→reopen flow, and M7 reviewer reject→repair→re-review lineage |
+| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, parent→child execution, mission→analytics telemetry, token provenance, fallback, quality reject→repair→re-review, and recommendation controls |
 | Real live 9Router catalog | NOT VERIFIED — credential-gated probe was skipped |
 | Real paid inference | NOT PERFORMED |
 
@@ -46,7 +47,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, complete loopback-proven analytics/quality joins, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M7 remains the latest accepted development state; M8 corrective implementation is present but pending Planner acceptance; no stable release is implied.
+- Boss runtime, AI-assisted recommendation analysis, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M8 is the latest accepted development state; no stable release is implied.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record
