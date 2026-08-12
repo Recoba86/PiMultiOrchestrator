@@ -96,8 +96,8 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 - **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
 - **Starting HEAD:** `8695bacab826c9829028c2b9fe97c4aa03285b7f`
-- **Implementation commit:** Pending final implementation commit.
-- **Accepted evidence HEAD:** None; Planner acceptance is pending.
+- **Implementation commit:** `62282c1618f395b032e359005d018721e2b36868` — `feat(missions): add canonical mission state and context broker`.
+- **Accepted evidence HEAD:** None; implementation evidence was verified at `62282c1618f395b032e359005d018721e2b36868`; Planner acceptance is pending.
 - **Purpose:** Add the durable mission boundary and deterministic context/packet boundary consumed by future quality/reviewer work.
 - **Major outcomes:** Node `node:sqlite` MissionStore with schema metadata, foreign keys, busy timeout, transactional revisions, tasks/attempts, proposed/accepted/rejected evidence, canonical items, event journal, checkpoints, leases, corruption checks, and interrupted-task recovery. ContextBroker emits accepted-only immutable bounded TaskPacketV1 values with deterministic ordering, omission counts, digest, and M5 child-request adaptation. Pi host exposes `/missions`, Context & Mission Settings, packet/task inspection, evidence accept/reject, and manual checkpoint actions while keeping session entries as pointers.
 - **Tests/evidence:** Context Broker focused suite `6/6 PASS`; MissionStore focused suite `5/5 PASS`; provider host suite `14/14 PASS`; escalated canonical aggregate suite `111/111 PASS`; typecheck/build PASS; actual Pi `0.84.1` + fake gateway mission task flow passed packet generation, built-in read, proposed evidence, explicit acceptance, and MissionStore reopen. This remains implementation evidence rather than Planner acceptance evidence.

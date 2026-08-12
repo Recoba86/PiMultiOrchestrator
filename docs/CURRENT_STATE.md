@@ -164,7 +164,7 @@ M5 is accepted by STATE-5. M6 implementation is complete but acceptance is pendi
 - M4: `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` — `feat(routing): add health-aware fallback engine` — ACCEPTED / PASS; evidence HEAD `f5e25e21bbebe7995a9cc050efea3ed20d94f18c`, `86/86` tests, and isolated Pi/fake-gateway routing/health evidence passed.
 - M5: `80b00a65da0a922633d9809b8520983f90038118` — `feat(agents): add routed subagent execution` — ACCEPTED / PASS by STATE-5; evidence HEAD `c2e431aaf3384fc73acb2e7cd6201aa406d5266f`, `97/97` tests, typecheck/build/check, and isolated Pi `0.84.1` parent→child evidence passed.
 
-- M6: implementation work is present in the current worktree; Planner acceptance and the final implementation/documentation commit are pending. M6 evidence must not be treated as accepted or release evidence.
+- M6: `62282c1618f395b032e359005d018721e2b36868` — `feat(missions): add canonical mission state and context broker` — IMPLEMENTED BUT NOT ACCEPTED; `111/111` implementation evidence passed, Planner acceptance remains pending and the documentation correction is recorded separately.
 
 ## Assumptions agents must not make
 
