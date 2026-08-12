@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { ConfigConflictError, ConfigRecoveryError, ConfigValidationError } from "./errors.js";
 import { migrateConfigV1ToV2 } from "./migrations.js";
 import { deterministicJson, } from "./serialize.js";
-import { ensureStorageDirectories, writeAtomicFile, STORAGE_DIRECTORY_MODE } from "./history.js";
+import { ensureStorageDirectories, writeAtomicFile, withStorageLock, STORAGE_DIRECTORY_MODE } from "./history.js";
 import { validateConfigV2, validateStoredConfig, validateStoredConfigV2 } from "./schema.js";
 import type { ConfigV1, ConfigV2, StoredConfigV2 } from "./types.js";
 
@@ -52,7 +52,7 @@ export class ConfigV2Store {
     this.activeFile = options.activeFile ?? V2_ACTIVE_FILE;
   }
 
-  load(): Promise<ConfigV2LoadResult> { return this.enqueue(() => this.loadUnlocked()); }
+  load(): Promise<ConfigV2LoadResult> { return this.enqueue(() => this.loadUnlocked(), false); }
 
   initialize(config: ConfigV2): Promise<ConfigV2MutationResult> {
     const candidate = validateConfigV2(config);
@@ -95,8 +95,8 @@ export class ConfigV2Store {
     });
   }
 
-  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(operation, operation);
+  private enqueue<T>(operation: () => Promise<T>, lock = true): Promise<T> {
+    const run = this.queue.then(() => lock ? withStorageLock(this.root, operation) : operation(), () => lock ? withStorageLock(this.root, operation) : operation());
     this.queue = run.then(() => undefined, () => undefined);
     return run;
   }

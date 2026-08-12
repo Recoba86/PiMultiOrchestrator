@@ -74,6 +74,7 @@ import {
 	type AnalyticsRange,
 	type AnalyticsStoreAdapter,
 } from "../core/analytics/index.js";
+import { TrustStore, PathSafetyPolicy, SecretSanitizer, getCapabilityMatrix } from "../core/security/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -181,6 +182,8 @@ export interface PiHostOptions {
 	readonly subagentExecutor?: SubagentExecutor;
 	readonly analyticsStore?: AnalyticsStoreAdapter;
 	readonly recommendationAnalyst?: RecommendationAnalystContract;
+	/** Local-only project trust state; never part of portable ConfigStore data. */
+	readonly trustStore?: TrustStore;
 }
 
 export interface ReconcileResult {
@@ -200,6 +203,7 @@ export interface PiHost {
 	readonly qualityService?: QualityService;
 	readonly analyticsStore?: AnalyticsStoreAdapter;
 	readonly recommendationAnalyst?: RecommendationAnalystContract;
+	readonly trustStore?: TrustStore;
 	readonly qualityExecutor?: SubagentExecutor;
 	reconcile(): Promise<ReconcileResult>;
 	registerCommands(): void;
@@ -608,6 +612,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const recommendationAnalyst = options.recommendationAnalyst;
 	const analytics = analyticsStore ? new AnalyticsQueryService(analyticsStore) : undefined;
 	const recommendationApplication = analyticsStore ? new RecommendationApplicationService(analyticsStore, poolManager) : undefined;
+	const sanitizer = new SecretSanitizer();
 	const recordAnalytics = (event: AnalyticsEventV1): void => {
 		try { const result = analyticsStore?.append(event); if (result && typeof (result as Promise<unknown>).then === "function") void (result as Promise<unknown>).catch(() => undefined); } catch { /* analytics is non-critical */ }
 	};
@@ -616,7 +621,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const lifetime = new AbortController();
 
 	const notifyError = (ctx: ExtensionContext | ExtensionCommandContext, prefix: string, error: unknown): void => {
-		ctx.ui.notify(`${prefix}: ${errorMessage(error)}`, "error");
+		ctx.ui.notify(`${prefix}: ${sanitizer.sanitizeText(errorMessage(error))}`, "error");
 	};
 
 	const requireIdle = (ctx: ExtensionContext | ExtensionCommandContext, subject = "9Router state"): boolean => {
@@ -1202,11 +1207,37 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		} else {
 			lines.push("observed route health: UNKNOWN");
 		}
+		const projectRoot = typeof ctx.cwd === "string" && ctx.cwd.trim().length > 0 ? ctx.cwd : "UNKNOWN";
+		const trust = options.trustStore?.get(projectRoot);
+		lines.push(`Security & Trust: ${trust?.state === "trusted" ? "TRUSTED" : "UNTRUSTED"}`);
+		lines.push(`project path: ${trust?.projectRoot ?? projectRoot}`);
+		lines.push("protected-path policy: ACTIVE (application-level; not an OS sandbox)");
+		lines.push(`permission matrix: ${getCapabilityMatrix().length} profiles`);
+		const missionHealth = options.missionStore ? (() => { try { options.missionStore.integrityCheck(); return "HEALTHY"; } catch { return "CORRUPT / RECOVERY REQUIRED"; } })() : "UNAVAILABLE";
+		const analyticsHealth = analyticsStore?.integrityCheck ? (analyticsStore.integrityCheck().length === 0 ? "HEALTHY" : "DEGRADED") : analyticsStore ? "UNKNOWN" : "UNAVAILABLE";
+		lines.push(`Mission DB: ${missionHealth}`, `Analytics DB: ${analyticsHealth}`);
 		lines.push("logs, prompts, tool output, and credentials are not displayed");
 		ctx.ui.notify(lines.join("\n"), "info");
 		if (ctx.mode !== "tui" && !ctx.hasUI) return;
-		const action = await ctx.ui.select("Diagnostics", ["Refresh", "Back"]);
-		if (action === "Refresh") ctx.ui.notify(lines.join("\n"), "info");
+		const action = await ctx.ui.select("Diagnostics", ["Security & Trust", "Permission matrix", "Refresh", "Back"]);
+		if (action === "Security & Trust") {
+			const record = options.trustStore?.get(projectRoot);
+			const security = new PathSafetyPolicy({ projectRoot: projectRoot === "UNKNOWN" ? "." : projectRoot, ...(options.trustStore ? { trustStore: options.trustStore } : {}) });
+			const securityLines = ["Security & Trust", `project path: ${record?.projectRoot ?? projectRoot}`, `state: ${record?.state === "trusted" ? "TRUSTED" : "UNTRUSTED"}`, "mutations require explicit trust; protected paths and credentials remain denied", `sample policy: ${security.authorizeWrite(".m10-probe").decision}`];
+			ctx.ui.notify(securityLines.join("\n"), "info");
+			if (ctx.mode === "tui" || ctx.hasUI) {
+				const trustAction = await ctx.ui.select("Security & Trust", ["Trust Project", "Revoke Trust", "Back"]);
+				if (trustAction === "Trust Project" || trustAction === "Revoke Trust") {
+					if (!(await ctx.ui.confirm(`${trustAction}?`, projectRoot))) return;
+					if (!options.trustStore) { ctx.ui.notify("Local TrustStore unavailable", "warning"); return; }
+					if (trustAction === "Trust Project") options.trustStore.trust(projectRoot);
+					else options.trustStore.revoke(projectRoot);
+					ctx.ui.notify(`Project ${trustAction === "Trust Project" ? "trusted" : "revoked"}; future mutating runs require the current state`, "info");
+				}
+			}
+		} else if (action === "Permission matrix") {
+			ctx.ui.notify(getCapabilityMatrix().map((row) => `${row.profile}: tools=${row.tools.join(",")} mutation=${row.mutation ? "YES" : "NO"} bash=${row.bash ? "YES" : "NO"} trust=${row.trustRequired ? "REQUIRED" : "NO"}`).join("\n"), "info");
+		} else if (action === "Refresh") ctx.ui.notify(lines.join("\n"), "info");
 	};
 
 	const showBackupRestore = async (ctx: ExtensionCommandContext): Promise<void> => {
@@ -1217,19 +1248,33 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		try {
 			const [loaded, history] = await Promise.all([configStore.load(), configStore.listHistory()]);
 			const generation = loaded.snapshot?.generation ?? "UNKNOWN";
+			const missionBackup = options.missionStore && typeof options.missionStore.backup === "function";
+			const analyticsBackup = analyticsStore && typeof analyticsStore.backup === "function";
 			const details = [
 				"Backup / Restore",
 				`active ConfigStore generation: ${generation}`,
 				`history entries: ${history.entries.length}`,
-				"ConfigStore export/import/restore are available here; MissionStore and AnalyticsStore backup: Not implemented yet",
+				`Mission DB backup: ${missionBackup ? "AVAILABLE" : "UNAVAILABLE"}`,
+				`Analytics DB backup: ${analyticsBackup ? "AVAILABLE" : "UNAVAILABLE"}`,
+				"restore requires preview, validation, and explicit confirmation; backups use SQLite-native consistent snapshots",
 			].join("\n");
 			ctx.ui.notify(details, "info");
 			if (ctx.mode !== "tui" && !ctx.hasUI) return;
-			const action = await ctx.ui.select("Backup / Restore", ["Export config", "Restore history generation", "Back"]);
+			const action = await ctx.ui.select("Backup / Restore", ["Export config", "Backup Mission DB", "Backup Analytics DB", "Restore history generation", "Back"]);
 			if (action === "Export config") {
 				const exported = await configStore.export();
 				if (typeof ctx.ui.editor === "function") await ctx.ui.editor("Config export (safe references only)", exported);
 				else ctx.ui.notify(`Config export ready (${exported.length} bytes; secrets are environment references only)`, "info");
+				return;
+			}
+			if (action === "Backup Mission DB" || action === "Backup Analytics DB") {
+				if (!(await ctx.ui.confirm(`${action}?`, "Create a validated local backup snapshot"))) return;
+				try {
+					const backup = action === "Backup Mission DB" ? options.missionStore?.backup : analyticsStore?.backup;
+					if (typeof backup !== "function") { ctx.ui.notify(`${action} is unavailable`, "warning"); return; }
+					const path = await backup.call(action === "Backup Mission DB" ? options.missionStore : analyticsStore);
+					ctx.ui.notify(`${action} created: ${path}`, "info");
+				} catch (error) { notifyError(ctx, `${action} failed`, error); }
 				return;
 			}
 			if (action !== "Restore history generation") return;
@@ -1475,6 +1520,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			ctx.ui.notify("Routed subagent execution is unavailable", "error");
 			return undefined;
 		}
+		if (params.pool === "implementation" && options.trustStore && !options.trustStore.isTrusted(ctx.cwd)) {
+			ctx.ui.notify("TRUST REQUIRED — mutating agent execution is disabled for this project", "error");
+			return undefined;
+		}
 		const request: SubagentExecutionRequest = {
 			roleId: params.role,
 			poolId: params.pool,
@@ -1545,7 +1594,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const role = await ctx.ui.input("Role ID", "debugger");
 		const task = await ctx.ui.input("Task", "");
 		if (!role?.trim() || !task?.trim()) return;
-		ctx.ui.notify(`Pool: ${poolLabels[poolId]} | tools: ${poolId === "implementation" ? "read, grep, find, ls, bash, edit, write" : poolId === "verification" ? "read, grep, find, ls, bash" : "read, grep, find, ls"} | routing: M4 fallback policy`, "info");
+		ctx.ui.notify(`Pool: ${poolLabels[poolId]} | tools: ${poolId === "implementation" ? "read, grep, find, ls, bash, edit, write" : "read, grep, find, ls"} | routing: M4 fallback policy`, "info");
 		if (poolId === "implementation" && !(await ctx.ui.confirm("Implementation tools may modify files. Continue?", ctx.cwd))) return;
 		await runSubagent(ctx, { role: role.trim(), pool: poolId, task: task.trim() }, ctx.signal);
 	};
@@ -1924,6 +1973,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		if (action === "Build packet") { await showMissionPacket(ctx, String(mission.missionId), String(task.taskId)); return; }
 		if (action !== "Run task" || !subagentExecutor || !options.contextBroker) return;
 		if (!requireIdle(ctx, "mission task")) return;
+		if (task.executionClass === "implementation" && options.trustStore && !options.trustStore.isTrusted(ctx.cwd)) {
+			ctx.ui.notify("TRUST REQUIRED — mutating mission execution is disabled for this project", "error");
+			return;
+		}
 		if (task.executionClass === "implementation" && !(await ctx.ui.confirm("Run implementation task?", "The child may modify the current working tree."))) return;
 		try {
 			const result = await executeMissionTask({ store, contextBroker: options.contextBroker, executor: subagentExecutor, missionId: mission.missionId, taskId: task.taskId, cwd: ctx.cwd, ...(analyticsStore ? { analytics: analyticsStore } : {}) });
@@ -2542,13 +2595,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		reconciled = true;
 	};
 
-		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), reconcile, registerCommands, dispose };
+		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
 	const runtime = await import("@earendil-works/pi-coding-agent");
 	const root = process.env.PI_MULTI_ORCH_CONFIG_ROOT ?? join(runtime.getAgentDir(), "pi-multi-orchestrator");
 	const configStore = new ConfigStore({ root });
+	const trustStore = new TrustStore({ root: join(root, "trust") });
 	let analyticsStore: AnalyticsStoreAdapter | undefined;
 	try {
 		const configSnapshot = await configStore.load();
@@ -2620,7 +2674,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 			},
 		});
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, trustStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

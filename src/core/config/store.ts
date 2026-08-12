@@ -17,6 +17,7 @@ import {
   readHistory,
   writeAtomicFile,
   writeHistorySnapshot,
+  withStorageLock,
   type HistoryDiagnostic,
   type HistoryEntry,
   type HistoryHooks,
@@ -124,7 +125,7 @@ export class ConfigStore {
 
   /** Read active state. This method never repairs or overwrites files. */
   load(): Promise<ConfigLoadResult> {
-    return this.enqueue(() => this.loadUnlocked());
+    return this.enqueue(() => this.loadUnlocked(), false);
   }
 
   /** Write defaults only when no active configuration exists. */
@@ -190,7 +191,7 @@ export class ConfigStore {
   }
 
   listHistory(): Promise<HistoryListResult> {
-    return this.enqueue(() => this.readHistoryUnlocked());
+    return this.enqueue(() => this.readHistoryUnlocked(), false);
   }
 
   restore(generation: number, options: { readonly expectedGeneration?: number } = {}): Promise<ConfigMutationResult> {
@@ -255,7 +256,7 @@ export class ConfigStore {
       const result = await this.loadUnlocked();
       if (!result.snapshot) throw new ConfigRecoveryError("no-valid-config-to-export");
       return exportConfig(result.snapshot.config);
-    });
+    }, false);
   }
 
   previewImport(input: string | unknown): Promise<ImportPreview> {
@@ -271,7 +272,7 @@ export class ConfigStore {
         after,
         expectedGeneration: active.kind === "valid" ? active.stored.generation : 0,
       };
-    });
+    }, false);
   }
 
   activateImport(input: string | unknown | ImportPreview, options: { readonly confirmed: boolean; readonly expectedGeneration?: number } ): Promise<ConfigMutationResult> {
@@ -286,8 +287,8 @@ export class ConfigStore {
     });
   }
 
-  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(operation, operation);
+  private enqueue<T>(operation: () => Promise<T>, lock = true): Promise<T> {
+    const run = this.queue.then(() => lock ? withStorageLock(this.root, operation, this.hooks) : operation(), () => lock ? withStorageLock(this.root, operation, this.hooks) : operation());
     this.queue = run.then(
       () => undefined,
       () => undefined,

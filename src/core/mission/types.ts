@@ -246,6 +246,8 @@ export interface AttemptRecord {
 export interface LeaseRecord {
   readonly missionId: MissionId;
   readonly owner: LeaseOwner;
+  /** The caller-supplied owner token; retained as an explicit alias for API clarity. */
+  readonly ownerToken: LeaseOwner;
   readonly acquiredAt: string;
   readonly heartbeatAt: string;
   readonly expiresAt: string;
@@ -364,6 +366,8 @@ export interface MissionStoreAdapter extends QualityPersistence {
   listEvents(missionId: MissionId | string): readonly MissionEventRecord[];
   recoverInterrupted(options?: { readonly now?: Date; readonly owner?: string }): readonly AttemptRecord[];
   integrityCheck(): void;
+  integrityDiagnostics?(): readonly string[];
+  backup?(destinationPath?: string): Promise<string>;
 }
 
 export type MissionStore = MissionStoreAdapter;

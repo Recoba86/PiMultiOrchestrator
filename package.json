@@ -46,6 +46,10 @@
       "types": "./dist/core/analytics/index.d.ts",
       "import": "./dist/core/analytics/index.js"
     },
+		"./security": {
+			"types": "./dist/core/security/index.d.ts",
+			"import": "./dist/core/security/index.js"
+		},
 		"./quality": {
 			"types": "./dist/core/quality/index.d.ts",
 			"import": "./dist/core/quality/index.js"

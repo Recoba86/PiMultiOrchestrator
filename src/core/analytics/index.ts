@@ -1,6 +1,6 @@
-import { DatabaseSync } from "node:sqlite";
-import { chmodSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { backup as sqliteBackup, DatabaseSync } from "node:sqlite";
+import { chmodSync, mkdirSync, renameSync, unlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 
 export const ANALYTICS_SCHEMA_VERSION = 1 as const;
@@ -164,6 +164,8 @@ export interface AnalyticsStoreAdapter {
   updateRecommendationStatus?(recommendationId: string, status: AnalyticsRecommendation["status"]): boolean;
   saveAnalystAnalysis?(analysis: import("./analyst.js").AnalystAnalysisRecord): Promise<void> | void;
   listAnalystAnalyses?(): readonly import("./analyst.js").AnalystAnalysisRecord[];
+  backup?(destinationPath?: string): Promise<string>;
+  integrityCheck?(): readonly string[];
   close?(): void;
 }
 export type AnalyticsStore = AnalyticsStoreAdapter;
@@ -244,57 +246,85 @@ const safeRecommendation = (recommendation: AnalyticsRecommendation): AnalyticsR
   return { ...recommendation, recommendationId: safeText(recommendation.recommendationId, 160) ?? "invalid", poolId: safeText(recommendation.poolId, 64) ?? "invalid", proposedRouteId: safeText(recommendation.proposedRouteId, 64) ?? "invalid", ...(baselineRouteId === undefined ? {} : { baselineRouteId }), evidence: recommendation.evidence.slice(0, 16).map((item) => safeText(item, 256)).filter((item): item is string => item !== undefined), limitations: recommendation.limitations.slice(0, 16).map((item) => safeText(item, 256)).filter((item): item is string => item !== undefined), proposedDiff };
 };
 
+function analyticsIntegrityIssues(db: DatabaseSync): string[] {
+  const issues: string[] = [];
+  const result = db.prepare("PRAGMA integrity_check").get() as Record<string, unknown> | undefined;
+  if (result && Object.values(result)[0] !== "ok") issues.push(String(Object.values(result)[0]));
+  if (db.prepare("PRAGMA foreign_key_check").all().length > 0) issues.push("foreign-key integrity check failed");
+  for (const table of ["analytics_events", "analytics_recommendations", "analytics_analyst_results"] as const) {
+    for (const row of db.prepare(`SELECT payload_json FROM ${table}`).all() as Array<{ payload_json?: unknown }>) {
+      if (typeof row.payload_json !== "string") issues.push(`${table} payload is not text`);
+      else { try { JSON.parse(row.payload_json); } catch { issues.push(`${table} contains invalid JSON`); } }
+    }
+  }
+  return [...new Set(issues)];
+}
+
 export class SQLiteAnalyticsStore implements AnalyticsStoreAdapter, AnalyticsSink {
   readonly enabled: boolean;
-  private readonly db: DatabaseSync;
+  readonly diagnostics: readonly string[];
+  private db: DatabaseSync | undefined;
+  private readonly databasePath: string;
   private closed = false;
   constructor(options: { readonly root: string; readonly enabled?: boolean; readonly databasePath?: string }) {
     this.enabled = options.enabled !== false;
     mkdirSync(options.root, { recursive: true, mode: 0o700 });
     const path = options.databasePath ?? join(options.root, "analytics.sqlite");
-    this.db = new DatabaseSync(path);
-    const hadEventsTable = this.db.prepare("SELECT 1 AS present FROM sqlite_master WHERE type='table' AND name='analytics_events'").get() as { present?: number } | undefined;
-    const previousSchema = hadEventsTable?.present
-      ? this.db.prepare("SELECT value FROM analytics_meta WHERE key='schema_version'").get() as { value?: string } | undefined
-      : undefined;
-    if (hadEventsTable?.present && !previousSchema) {
-      this.db.close();
-      throw new Error("analytics schema metadata is missing");
+    this.databasePath = path;
+    let opened: DatabaseSync | undefined;
+    try {
+      opened = new DatabaseSync(path);
+      const hadEventsTable = opened.prepare("SELECT 1 AS present FROM sqlite_master WHERE type='table' AND name='analytics_events'").get() as { present?: number } | undefined;
+      const previousSchema = hadEventsTable?.present
+        ? opened.prepare("SELECT value FROM analytics_meta WHERE key='schema_version'").get() as { value?: string } | undefined
+        : undefined;
+      if (hadEventsTable?.present && !previousSchema) throw new Error("analytics schema metadata is missing");
+      opened.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;" + ANALYTICS_SCHEMA_V1);
+      const existing = previousSchema ?? opened.prepare("SELECT value FROM analytics_meta WHERE key='schema_version'").get() as { value?: string } | undefined;
+      if (existing?.value !== undefined && Number(existing.value) !== ANALYTICS_SCHEMA_VERSION) throw new Error("unsupported analytics schema version");
+      opened.prepare("INSERT OR IGNORE INTO analytics_meta(key,value) VALUES ('schema_version',?)").run(String(ANALYTICS_SCHEMA_VERSION));
+      this.db = opened;
+      this.diagnostics = analyticsIntegrityIssues(opened);
+      try { chmodSync(path, 0o600); } catch { /* best effort */ }
+    } catch (error) {
+      try { opened?.close(); } catch { /* preserve corruption diagnostic */ }
+      this.db = undefined;
+      this.diagnostics = [error instanceof Error ? error.message : "analytics database unavailable"];
     }
-    this.db.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;" + ANALYTICS_SCHEMA_V1);
-    const existing = previousSchema ?? this.db.prepare("SELECT value FROM analytics_meta WHERE key='schema_version'").get() as { value?: string } | undefined;
-    if (existing?.value !== undefined && Number(existing.value) !== ANALYTICS_SCHEMA_VERSION) {
-      this.db.close();
-      throw new Error("unsupported analytics schema version");
-    }
-    this.db.prepare("INSERT OR IGNORE INTO analytics_meta(key,value) VALUES ('schema_version',?)").run(String(ANALYTICS_SCHEMA_VERSION));
-    try { chmodSync(path, 0o600); } catch { /* best effort */ }
   }
   record(event: AnalyticsEventV1): void { this.append(event); }
   append(event: AnalyticsEventV1): boolean {
-    if (!this.enabled || this.closed) return false;
+    if (!this.enabled || this.closed || !this.db) return false;
     if (!isAnalyticsEvent(event)) return false;
     const eventId = safeText(event.eventId, 160); if (!eventId) return false;
     const occurredAt = safeText(event.occurredAt, 64); if (!occurredAt || Number.isNaN(Date.parse(occurredAt))) return false;
     try { const result = this.db.prepare("INSERT OR IGNORE INTO analytics_events(event_id,occurred_at,event_type,payload_json) VALUES (?,?,?,?)").run(eventId, occurredAt, event.eventType, safeJson(event)); return Number(result.changes) === 1; } catch { return false; }
   }
   list(range?: AnalyticsRange): readonly AnalyticsEventV1[] {
-    if (this.closed) return [];
+    if (this.closed || !this.db) return [];
     const from = range?.from ?? "0000-01-01T00:00:00.000Z"; const to = range?.to ?? "9999-12-31T23:59:59.999Z";
-    return (this.db.prepare("SELECT payload_json FROM analytics_events WHERE occurred_at>=? AND occurred_at<=? ORDER BY occurred_at,event_id").all(from, to) as Array<{ payload_json: string }>).map((row) => parseEvent(row.payload_json)).filter((event): event is AnalyticsEventV1 => event !== undefined);
+    try { return (this.db.prepare("SELECT payload_json FROM analytics_events WHERE occurred_at>=? AND occurred_at<=? ORDER BY occurred_at,event_id").all(from, to) as Array<{ payload_json: string }>).map((row) => parseEvent(row.payload_json)).filter((event): event is AnalyticsEventV1 => event !== undefined); } catch { return []; }
   }
   summary(range?: AnalyticsRange): AnalyticsSummary { return summarize(this.list(range), range); }
   saveRecommendation(recommendation: AnalyticsRecommendation): void {
-    if (!this.enabled || this.closed) return;
+    if (!this.enabled || this.closed || !this.db) return;
     const safe = safeRecommendation(recommendation); if (safe.recommendationId === "invalid") return;
-    this.db.prepare("INSERT OR IGNORE INTO analytics_recommendations(recommendation_id,created_at,status,payload_json) VALUES (?,?,?,?)").run(safe.recommendationId, new Date().toISOString(), safe.status, JSON.stringify(safe));
+    try { this.db.prepare("INSERT OR IGNORE INTO analytics_recommendations(recommendation_id,created_at,status,payload_json) VALUES (?,?,?,?)").run(safe.recommendationId, new Date().toISOString(), safe.status, JSON.stringify(safe)); } catch { /* analytics is non-critical */ }
   }
-  listRecommendations(): readonly AnalyticsRecommendation[] { if (this.closed) return []; return (this.db.prepare("SELECT payload_json FROM analytics_recommendations ORDER BY created_at,recommendation_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { return [JSON.parse(row.payload_json) as AnalyticsRecommendation]; } catch { return []; } }); }
-  updateRecommendationStatus(recommendationId: string, status: AnalyticsRecommendation["status"]): boolean { if (this.closed) return false; const row = this.db.prepare("SELECT payload_json FROM analytics_recommendations WHERE recommendation_id=?").get(recommendationId) as { payload_json?: string } | undefined; if (!row?.payload_json) return false; try { const payload = { ...(JSON.parse(row.payload_json) as AnalyticsRecommendation), status }; const result = this.db.prepare("UPDATE analytics_recommendations SET status=?,payload_json=? WHERE recommendation_id=?").run(status, JSON.stringify(payload), recommendationId); return Number(result.changes) > 0; } catch { return false; } }
-  saveAnalystAnalysis(analysis: import("./analyst.js").AnalystAnalysisRecord): void { if (!this.enabled || this.closed) return; const payload = JSON.stringify(analysis); const analysisId = `${analysis.recommendationId}:${analysis.routeId}:${analysis.inputFingerprint}`; this.db.prepare("INSERT OR IGNORE INTO analytics_analyst_results(analysis_id,recommendation_id,analyzed_at,route_id,input_fingerprint,payload_json) VALUES (?,?,?,?,?,?)").run(analysisId, analysis.recommendationId, analysis.analyzedAt, analysis.routeId, analysis.inputFingerprint, payload); }
-  listAnalystAnalyses(): readonly import("./analyst.js").AnalystAnalysisRecord[] { if (this.closed) return []; return (this.db.prepare("SELECT payload_json FROM analytics_analyst_results ORDER BY analyzed_at,analysis_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { const value: unknown = JSON.parse(row.payload_json); return value && typeof value === "object" ? [value as import("./analyst.js").AnalystAnalysisRecord] : []; } catch { return []; } }); }
-  close(): void { if (!this.closed) { this.closed = true; this.db.close(); } }
+  listRecommendations(): readonly AnalyticsRecommendation[] { if (this.closed || !this.db) return []; try { return (this.db.prepare("SELECT payload_json FROM analytics_recommendations ORDER BY created_at,recommendation_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { return [JSON.parse(row.payload_json) as AnalyticsRecommendation]; } catch { return []; } }); } catch { return []; } }
+  updateRecommendationStatus(recommendationId: string, status: AnalyticsRecommendation["status"]): boolean { if (this.closed || !this.db) return false; try { const row = this.db.prepare("SELECT payload_json FROM analytics_recommendations WHERE recommendation_id=?").get(recommendationId) as { payload_json?: string } | undefined; if (!row?.payload_json) return false; const payload = { ...(JSON.parse(row.payload_json) as AnalyticsRecommendation), status }; const result = this.db.prepare("UPDATE analytics_recommendations SET status=?,payload_json=? WHERE recommendation_id=?").run(status, JSON.stringify(payload), recommendationId); return Number(result.changes) > 0; } catch { return false; } }
+  saveAnalystAnalysis(analysis: import("./analyst.js").AnalystAnalysisRecord): void { if (!this.enabled || this.closed || !this.db) return; const payload = JSON.stringify(analysis); const analysisId = `${analysis.recommendationId}:${analysis.routeId}:${analysis.inputFingerprint}`; try { this.db.prepare("INSERT OR IGNORE INTO analytics_analyst_results(analysis_id,recommendation_id,analyzed_at,route_id,input_fingerprint,payload_json) VALUES (?,?,?,?,?,?)").run(analysisId, analysis.recommendationId, analysis.analyzedAt, analysis.routeId, analysis.inputFingerprint, payload); } catch { /* analytics is non-critical */ } }
+  listAnalystAnalyses(): readonly import("./analyst.js").AnalystAnalysisRecord[] { if (this.closed || !this.db) return []; try { return (this.db.prepare("SELECT payload_json FROM analytics_analyst_results ORDER BY analyzed_at,analysis_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { const value: unknown = JSON.parse(row.payload_json); return value && typeof value === "object" ? [value as import("./analyst.js").AnalystAnalysisRecord] : []; } catch { return []; } }); } catch { return []; } }
+  integrityCheck(): readonly string[] { if (!this.db || this.closed) return [...this.diagnostics, "analytics database is unavailable"]; try { return analyticsIntegrityIssues(this.db); } catch (error) { return [error instanceof Error ? error.message : "analytics integrity check failed"]; } }
+  async backup(destinationPath = join(dirname(this.databasePath), "backups", `analytics-${new Date().toISOString().replaceAll(/[:.]/gu, "-")}.sqlite`)): Promise<string> { if (!this.db || this.closed) throw new Error("analytics database is unavailable"); if (destinationPath === this.databasePath) throw new Error("destination-matches-source"); mkdirSync(dirname(destinationPath), { recursive: true, mode: 0o700 }); const temporary = `${destinationPath}.tmp-${createHash("sha256").update(`${process.pid}:${Date.now()}`).digest("hex").slice(0, 16)}`; try { await sqliteBackup(this.db, temporary); const check = new DatabaseSync(temporary, { readOnly: true }); const issues = analyticsIntegrityIssues(check); check.close(); if (issues.length > 0) throw new Error(`analytics backup integrity check failed: ${issues.join("; ")}`); removeSqliteSidecars(destinationPath); renameSync(temporary, destinationPath); try { chmodSync(destinationPath, 0o600); } catch { /* best effort */ } return destinationPath; } catch (error) { try { unlinkSync(temporary); } catch { /* best effort */ } throw error; } }
+  static async restore(options: { readonly root: string; readonly enabled?: boolean; readonly databasePath?: string }, backupPath: string): Promise<SQLiteAnalyticsStore> { const source = new DatabaseSync(backupPath, { readOnly: true }); try { const issues = analyticsIntegrityIssues(source); if (issues.length > 0) throw new Error(`analytics backup integrity check failed: ${issues.join("; ")}`); } finally { source.close(); } mkdirSync(options.root, { recursive: true, mode: 0o700 }); const target = options.databasePath ?? join(options.root, "analytics.sqlite"); if (target === backupPath) throw new Error("source-matches-destination"); const temporary = `${target}.restore-${createHash("sha256").update(`${process.pid}:${Date.now()}`).digest("hex").slice(0, 16)}`; const reopened = new DatabaseSync(backupPath, { readOnly: true }); try { await sqliteBackup(reopened, temporary); } finally { reopened.close(); } try { removeSqliteSidecars(target); renameSync(temporary, target); chmodSync(target, 0o600); } catch (error) { try { unlinkSync(temporary); } catch { /* best effort */ } throw error; } return new SQLiteAnalyticsStore(options); }
+  close(): void { if (!this.closed) { this.closed = true; this.db?.close(); } }
 }
+
+function removeSqliteSidecars(path: string): void { for (const sidecar of [`${path}-wal`, `${path}-shm`]) { try { unlinkSync(sidecar); } catch { /* absent or already cleaned by SQLite */ } } }
+
+export const backupAnalyticsStore = (store: SQLiteAnalyticsStore, destinationPath?: string): Promise<string> => store.backup(destinationPath);
+export const restoreAnalyticsStore = (options: { readonly root: string; readonly enabled?: boolean; readonly databasePath?: string }, backupPath: string): Promise<SQLiteAnalyticsStore> => SQLiteAnalyticsStore.restore(options, backupPath);
 
 export class PersistentAnalyticsSink implements AnalyticsSink {
   constructor(private readonly store: AnalyticsStoreAdapter) {}

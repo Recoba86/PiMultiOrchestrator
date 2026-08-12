@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { chmod, mkdir, open, readdir, readFile, rename, unlink } from "node:fs/promises";
+import { chmod, mkdir, open, readdir, readFile, rename, stat, unlink } from "node:fs/promises";
 import { join, basename, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -12,6 +12,9 @@ export const STORAGE_FILE_MODE = 0o600;
 export const STORAGE_DIRECTORY_MODE = 0o700;
 
 export type StorageFaultPoint =
+  | "lock-open"
+  | "lock-wait"
+  | "lock-release"
   | "directory-create"
   | "history-temp-open"
   | "history-write"
@@ -35,6 +38,13 @@ export interface HistoryHooks {
   readonly fault?: (point: StorageFaultPoint) => void | Promise<void>;
   readonly id?: () => string;
   readonly now?: () => string;
+}
+
+export interface StorageLockOptions {
+  /** Maximum time to wait for another process' lock. */
+  readonly timeoutMs?: number;
+  /** A lock older than this is considered abandoned after a crashed writer. */
+  readonly staleMs?: number;
 }
 
 export interface HistoryEntry {
@@ -64,6 +74,67 @@ const persistenceError = (operation: string, reasonCode: string, cause?: unknown
 
 async function fault(hooks: HistoryHooks | undefined, point: StorageFaultPoint): Promise<void> {
   await hooks?.fault?.(point);
+}
+
+/**
+ * Serialize configuration mutations across independent Node processes.
+ * The lock is an O_EXCL marker, not a correctness store: every mutation
+ * still rereads and validates the active generation while holding it.
+ */
+export async function withStorageLock<T>(
+  root: string,
+  operation: () => Promise<T>,
+  hooks?: HistoryHooks,
+  options: StorageLockOptions = {},
+): Promise<T> {
+  await mkdir(root, { recursive: true, mode: STORAGE_DIRECTORY_MODE });
+  const lockPath = join(root, ".config.lock");
+  const timeoutMs = options.timeoutMs ?? 15_000;
+  const staleMs = options.staleMs ?? 60_000;
+  const started = Date.now();
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  while (!handle) {
+    try {
+      await fault(hooks, "lock-open");
+      handle = await open(lockPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, STORAGE_FILE_MODE);
+      await handle.writeFile(JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() }), "utf8");
+      await handle.close();
+      handle = undefined;
+      break;
+    } catch (error) {
+      if (handle) {
+        try { await handle.close(); } catch { /* preserve acquisition failure */ }
+        handle = undefined;
+      }
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw persistenceError("lock-open", "lock-acquire-failed", error);
+      let abandoned = false;
+      try {
+        const lockStat = await stat(lockPath);
+        abandoned = Date.now() - lockStat.mtimeMs > staleMs;
+        if (abandoned) {
+          try {
+            const metadata = JSON.parse(await readFile(lockPath, "utf8")) as { pid?: unknown };
+            if (typeof metadata.pid === "number" && Number.isInteger(metadata.pid) && metadata.pid > 0) {
+              try { process.kill(metadata.pid, 0); abandoned = false; } catch { /* owner is gone */ }
+            }
+          } catch { /* malformed old lock may be recovered by age */ }
+        }
+      } catch { /* raced with release */ }
+      if (abandoned) {
+        try { await unlink(lockPath); } catch { /* another waiter may have won */ }
+        continue;
+      }
+      await fault(hooks, "lock-wait");
+      if (Date.now() - started >= timeoutMs) throw new ConfigPersistenceError("lock", "lock-timeout");
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    }
+  }
+  try {
+    return await operation();
+  } finally {
+    await fault(hooks, "lock-release").catch(() => undefined);
+    try { await unlink(lockPath); } catch { /* the owner may have been replaced after a stale recovery */ }
+  }
 }
 
 export async function ensureStorageDirectories(root: string, hooks?: HistoryHooks): Promise<void> {

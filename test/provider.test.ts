@@ -30,6 +30,7 @@ import type { SubagentExecutor, SubagentRunResult } from "../src/core/workers/in
 import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/types.js";
 import type { QualityPersistence, TaskQualityStatus, VerificationRunRecord } from "../src/core/quality/types.js";
 import { summarize, type AnalyticsEventV1, type AnalyticsRecommendation, type AnalyticsStoreAdapter } from "../src/core/analytics/index.js";
+import { TrustStore } from "../src/core/security/index.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -370,6 +371,24 @@ describe("Pi 9Router host adapter", () => {
 		assert.deepEqual(fixture.setEnabledCalls, []);
 		assert.match(notifications[0] ?? "", /remote: remote-a/);
 		assert.ok(notifications.some((message) => /active 9Router model/.test(message)));
+	});
+
+	it("[U][fixture-pi-0.84.1][M10] exposes Security & Trust without adding a control-center section", async () => {
+		const project = await mkdtemp(join(tmpdir(), "pi-m10-host-project-"));
+		const state = await mkdtemp(join(tmpdir(), "pi-m10-host-state-"));
+		const trustStore = new TrustStore({ root: state });
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), trustStore });
+		host.registerCommands();
+		const notifications: string[] = [];
+		const selections: string[] = ["Diagnostics", "Security & Trust", "Trust Project"];
+		await pi.commands.get("orchestrator")!.handler("", {
+			mode: "tui", hasUI: true, cwd: project,
+			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
+		assert.equal(trustStore.isTrusted(project), true);
+		assert.equal([...pi.commands.keys()].filter((name) => name === "orchestrator").length, 1);
 	});
 
 	it("[U][fixture-pi-0.84.1] runs the manual Recommendation Analyst against a Verification Pool route", async () => {
