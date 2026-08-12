@@ -24,7 +24,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | M11 candidate | `0.1.0-rc.1` — local, not public |
-| M11 implementation evidence | `161/161 PASS`; package-specific release suite `2/2 PASS`; typecheck/build/check PASS; clean artifact manifest generated after docs commit |
+| M11 implementation evidence | `161/161 PASS`; package-specific release suite `2/2 PASS`; typecheck/build/check PASS; clean artifact `b048a0c9a50c2283ffc69f52f728ac8abb3afd8150ab8bfe683a8a46a7c5fab2` |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -268,9 +268,12 @@ dogfood log, and an independent-review bundle marked
 
 Diagnostics exposes package version/release status, Pi compatibility, and
 Config/Mission/Analytics schema versions without requiring Git or a source
-checkout. Isolated Pi install, clean-start, upgrade, rollback, and rescue
-procedures use temporary HOME/settings/runtime roots. No real-route smoke was
-authorized or performed. M10 remains the last Planner-accepted milestone.
+checkout. Isolated Pi install/list, clean-start Control Center/Diagnostics,
+upgrade from a represented M10 package, rollback, and rescue procedures
+passed in temporary HOME/settings/runtime roots; Config, Mission, and
+Analytics database hashes were unchanged across upgrade and rollback. No
+real-route smoke was authorized or performed. M10 remains the last
+Planner-accepted milestone.
 
 ## Accepted evidence history
 

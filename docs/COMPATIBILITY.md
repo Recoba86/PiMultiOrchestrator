@@ -12,8 +12,8 @@ is not a live-provider or public-release claim.
 | Provider | Fake OpenAI-compatible 9Router only | Real 9Router, subscription/account metadata |
 | Persistence | Config schema 2, MissionStore schema 2, Analytics schema 1 retained across candidate install test | Schema migration introduced by M11: none |
 | Platform | Current macOS development host, isolated temporary roots | Other OSes/Termius/remote TUI |
-| Upgrade | M10-compatible package representation to `0.1.0-rc.1` in temporary roots | Public package-manager upgrade |
-| Rollback | Temporary candidate removal and prior accepted package representation | Rollback across future schema changes |
+| Upgrade | M10-compatible package representation to `0.1.0-rc.1` in temporary roots; Config/Mission/Analytics hashes preserved | Public package-manager upgrade |
+| Rollback | Temporary candidate removal and prior accepted package representation; package version returned to `0.0.0-development`, state hashes preserved | Rollback across future schema changes |
 
 The package declares Pi as a peer dependency and has no runtime npm
 dependencies. Runtime state, databases, credentials, `.git`, source checkout

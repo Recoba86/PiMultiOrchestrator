@@ -35,7 +35,7 @@ Milestone acceptance does not itself create a product release.
 | M8.5 accepted verification suite | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS |
 | M9 accepted verification suite | `146/146 PASS`; Control Center sections/navigation, typecheck/build/check, package dry-run, diff/secret/state validation PASS |
 | M10 accepted verification | `3a6990d`; `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
-| M11 implementation candidate | `4cebcce`; `0.1.0-rc.1`; package manifest, allowlist, artifact checksum/manifest, isolated install/upgrade/rollback/rescue docs, compatibility matrix, dogfood log, and review bundle present; acceptance pending |
+| M11 implementation candidate | `4cebcce`; `0.1.0-rc.1`; artifact SHA-256 `b048a0c9a50c2283ffc69f52f728ac8abb3afd8150ab8bfe683a8a46a7c5fab2`; clean manifest, allowlist, isolated install/upgrade/rollback/rescue evidence, compatibility matrix, dogfood log, and review bundle present; acceptance pending |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
