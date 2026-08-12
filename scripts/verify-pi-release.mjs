@@ -218,7 +218,10 @@ const rpcControlCenter = async (piPath, env, cwd) => new Promise((resolvePromise
 	let settled = false;
 	const timeout = setTimeout(() => { child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 500).unref(); finish(new Error("Pi RPC startup timed out")); }, 45_000);
 	const finish = (error, result) => { if (settled) return; settled = true; clearTimeout(timeout); if (error) reject(error); else resolvePromise({ ...result, stdout: stdout.slice(-4_000), stderr: stderr.slice(-2_000) }); };
-	const send = (value) => child.stdin.write(`${JSON.stringify(value)}\n`);
+	const send = (value) => {
+		if (child.stdin.destroyed || child.stdin.writableEnded || !child.stdin.writable) return;
+		child.stdin.write(`${JSON.stringify(value)}\n`);
+	};
 	child.stdout.setEncoding("utf8");
 	child.stderr.setEncoding("utf8");
 	child.stdout.on("data", (chunk) => {
