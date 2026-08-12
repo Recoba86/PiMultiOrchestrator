@@ -49,6 +49,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
 - Boss runtime, scheduled/autonomous tuning, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M8.5 is the latest accepted development state; no stable release is implied.
+- M9 Control Center implementation exists at `2032a2b` but is not Planner-accepted; human keyboard TUI smoke remains pending. M8.5 remains the latest accepted development state.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

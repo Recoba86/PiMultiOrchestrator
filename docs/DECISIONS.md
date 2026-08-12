@@ -179,3 +179,9 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Rationale:** Deterministic metrics and recommendations remain the source of truth while an operator may request bounded qualitative context. Reusing M4/M5 preserves route identity, retries, health separation, and privacy boundaries without hard-coding a model.
 - **Persistence:** Store only recommendation ID, route ID, timestamp, deterministic input fingerprint, verdict, factors, caveats, and concise explanation. Keep prior records; a changed fingerprint makes the old analysis stale. Never persist prompts, transcripts, source, tool output, or secrets.
 - **Consequences:** AI-assisted analysis is optional and manual-only; unavailable/rate-limited/timed-out analyst routes leave the deterministic recommendation usable. Scheduled analysis, automatic tuning, and automatic Apply remain deferred.
+
+## ADR-027 — M9 uses one fixed native Control Center shell
+
+- **Decision:** `/orchestrator` exposes exactly twelve fixed top-level sections in product order. The host shell uses Pi `0.84.1` native selectors for TUI and RPC UI, reuses existing domain commands/services, and presents a safe dashboard before section navigation.
+- **Rationale:** One small presentation boundary keeps navigation consistent without duplicating M2–M8.5 business logic or inventing future runtime engines.
+- **Consequences:** Deferred capabilities are textual `Not implemented yet`/`Planned`; ConfigStore backup uses existing export/history/restore, while MissionStore/AnalyticsStore backup remains unavailable until a safe primitive exists. M9 does not imply Boss runtime, background work, autonomous tuning, or release readiness.

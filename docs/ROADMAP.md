@@ -149,7 +149,7 @@ Evidence: `141/141` full tests, analyst/provider focused suites, typecheck/build
 
 ## M9 — Full TUI control center
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
 
 Deliverables:
 
@@ -157,9 +157,13 @@ Deliverables:
 - keyboard-accessible navigation, progress, error, stale-data, confirmation, and empty states;
 - live mission/agent/route/review visibility without log inspection.
 
-Exit gate: scripted component tests plus an explicitly controlled Pi TUI smoke checklist pass.
+Implementation evidence: exact twelve-section/dashboard and RPC/native selector suite `5/5 PASS`; existing provider suite `17/17 PASS`; full suite `146/146 PASS`; `npm run check`, typecheck, build, and diff check PASS. Human keyboard-driven TUI smoke remains pending because no authorized interactive keyboard session was available; automated RPC/native selector coverage passed. M9 does not add Boss runtime, autonomous scheduling, background work, or automatic priority mutation.
+
+Exit gate: Planner acceptance of the implementation evidence plus an explicitly controlled human Pi TUI smoke checklist. M9 implementation commit: `2032a2b` (`feat(tui): add full orchestrator control center`).
 
 ## M10 — Safety and hardening
+
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 

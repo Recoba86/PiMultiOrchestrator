@@ -616,6 +616,12 @@ M8 acceptance note: STATE-8 records `134/134 PASS` and the actual Pi/fake-gatewa
 - **Action:** open the three pool sections from `/orchestrator`, then use `/pool-models` and `/pool-status`.
 - **Pass:** one reusable editor supports add, confirmed membership removal, per-pool enable/disable, move up/down, inspect, refresh, and safe cancel; empty and unavailable states are textual; no manual JSON edit is required.
 
+### TUI-04 — M9 Control Center shell
+
+- **Level:** U/P, fixture-v1
+- **Action:** open `/orchestrator` through Pi native TUI/RPC selectors and inspect the dashboard, each top-level section, deferred boundaries, state labels, and Back/Esc behavior.
+- **Pass:** exactly twelve required sections appear in order; dashboard metadata is safe and textual; accepted domain views remain reachable; Boss/deferred engines say `Not implemented yet` or `Planned`; empty/stale/error/busy states are explicit; direct commands and explicit recommendation actions remain compatible; no automatic Apply or priority mutation occurs.
+
 ### OBS-01 — Active mission visibility
 
 - **Level:** I/P

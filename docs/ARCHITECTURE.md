@@ -219,6 +219,14 @@ M8.5 adds an optional manual Recommendation Analyst above the deterministic reco
 
 Renders the twelve Control Center sections using Pi TUI components and calls application operations. Components do not read files, query SQLite, resolve secrets, or call 9Router directly. Each screen receives view data plus explicit commands so non-TUI tests can exercise the same operations.
 
+M9 implements this boundary in the host with one native selector shell and a
+dashboard-first summary. The fixed top-level order is Models & 9Router,
+Investigation Pool, Implementation Pool, Verification Pool, Boss / Orchestrator
+Profiles, Routing & Fallback, Health & Quotas, Budget / Quality Profiles,
+Context & Mission Settings, Statistics & Analytics, Diagnostics, and Backup /
+Restore. Deferred runtime engines are shown as planned rather than exposed as
+fake controls; ConfigStore backup uses its existing export/history/restore API.
+
 ## 6. Core data model
 
 The following shapes are conceptual TypeScript contracts; exact syntax is an M1 deliverable.
