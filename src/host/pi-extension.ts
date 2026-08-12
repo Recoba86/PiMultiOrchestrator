@@ -4,9 +4,12 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionContext,
+	ModelRuntime,
 	ProviderConfig,
 	ProviderModelConfig,
 } from "@earendil-works/pi-coding-agent";
+import { ModelRuntime as RuntimeModelRuntime } from "@earendil-works/pi-coding-agent";
+import { createDefaultConfig } from "../core/config/defaults.js";
 import type { SecretRefV1, StableId } from "../core/config/types.js";
 import { ConfigStore } from "../core/config/store.js";
 import { HealthStore, type RouteHealthRecord } from "../core/health/index.js";
@@ -36,6 +39,15 @@ import {
 	type CatalogRow,
 	type ProviderProjection,
 } from "../core/ninerouter/index.js";
+import {
+	createSubagentExecutor,
+	WorkerError,
+	type SubagentExecutionRequest,
+	type SubagentExecutor,
+	type SubagentRunResult,
+	type RouteAttemptAdapter,
+} from "../core/workers/index.js";
+import type { FailureClassification, RoutingRequest } from "../core/routing/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -97,6 +109,7 @@ export interface PiHostOptions {
 	readonly configStore?: ConfigStore;
 	readonly healthStore?: HealthStore;
 	readonly providerId?: string;
+	readonly subagentExecutor?: SubagentExecutor;
 }
 
 export interface ReconcileResult {
@@ -115,10 +128,23 @@ export interface PiHost {
 	dispose(): void;
 }
 
+const SUBAGENT_PARAMETERS = {
+	type: "object",
+	additionalProperties: false,
+	properties: {
+		role: { type: "string", minLength: 1, maxLength: 160 },
+		pool: { type: "string", enum: [...POOL_IDS] },
+		task: { type: "string", minLength: 1, maxLength: 32_000 },
+		acceptanceCriteria: { type: "array", maxItems: 16, items: { type: "string", maxLength: 1_000 } },
+		timeoutMs: { type: "integer", minimum: 1, maximum: 86_400_000 },
+	},
+	required: ["role", "pool", "task"],
+} as unknown;
+
 const errorMessage = (error: unknown): string =>
 	error instanceof NineRouterError
 		? error.toJSON().message
-		: error instanceof NineRouterManagerError || error instanceof SecretResolutionError || error instanceof PoolManagerError
+		: error instanceof NineRouterManagerError || error instanceof SecretResolutionError || error instanceof PoolManagerError || error instanceof WorkerError
 			? error.message
 			: "operation unavailable";
 
@@ -284,6 +310,89 @@ const asProviderConfig = (projection: ProviderProjection): ProviderConfig | unde
 	return config;
 };
 
+/** Build the M5 adapter from the already-authoritative M3/M4 stores. */
+async function createHostSubagentExecutor(
+	manager: PiManagerContract,
+	poolManager: PoolManagerContract,
+	configStore: ConfigStore,
+	healthStore: HealthStore | undefined,
+): Promise<SubagentExecutor> {
+	const loaded = await configStore.load();
+	const initialPolicy = loaded.snapshot?.config.routing ?? createDefaultConfig().routing;
+	const routeAdapter: RouteAttemptAdapter = {
+		policy: initialPolicy,
+		routingRequest: async ({ request, attemptedRouteIds, excludedRouteIds }): Promise<RoutingRequest> => {
+			const currentPolicy = (await configStore.load()).snapshot?.config.routing ?? initialPolicy;
+			const pool = await poolManager.getPool(request.poolId);
+			const health = healthStore ? await healthStore.list() : {};
+			return {
+				poolId: request.poolId,
+				policy: currentPolicy,
+				now: new Date(),
+				attemptedRouteIds,
+				excludedRouteIds,
+				...(request.diversity === undefined ? {} : { diversity: request.diversity }),
+				candidates: pool.entries.map((entry): RoutingRequest["candidates"][number] => ({
+					routeId: entry.routeId,
+					poolId: request.poolId,
+					poolPosition: entry.index,
+					poolEnabled: entry.poolEnabled,
+					globalEnabled: entry.globalEnabled,
+					remoteModelId: entry.remoteModelId,
+					...(entry.resourceId ? { resourceId: entry.resourceId } : {}),
+					...(entry.underlyingFamily ? { underlyingFamily: entry.underlyingFamily } : {}),
+					availability: entry.state === "missing" ? "missing" : entry.state === "provider-unavailable" ? "unavailable" : entry.state === "unknown" ? "unknown" : entry.catalogState === "stale" ? "stale" : "available",
+					available: entry.state === "active" && entry.globalEnabled && entry.poolEnabled,
+					...(health[entry.routeId] ? { health: health[entry.routeId] } : {}),
+				})),
+			};
+		},
+		resolveRoute: async (routeId) => {
+			const projection = await manager.providerProjection();
+			const selected = projection?.models.find((model) => model.routeId === routeId);
+			if (!projection?.baseUrl || !projection.apiKeyReference || !selected) {
+				throw new WorkerError("route-resolution", "Selected route is not currently registered");
+			}
+			const runtime = await RuntimeModelRuntime.create({
+				modelsPath: null,
+				allowModelNetwork: false,
+				refreshOnCreate: false,
+				credentials: {
+					read: async () => undefined,
+					list: async () => [],
+					modify: async (_provider: string, fn: (current: undefined) => Promise<undefined>) => fn(undefined),
+					delete: async () => undefined,
+				} as never,
+			});
+			runtime.registerProvider(projection.providerId, {
+				name: "9Router",
+				baseUrl: projection.baseUrl,
+				api: projection.api,
+				apiKey: projection.apiKeyReference,
+				authHeader: projection.authHeader,
+				models: [{
+					id: selected.id,
+					name: selected.name,
+					reasoning: selected.reasoning,
+					input: [...selected.input],
+					cost: { ...selected.cost },
+					contextWindow: selected.contextWindow,
+					maxTokens: selected.maxTokens,
+				}],
+			} as never);
+			await runtime.refresh({ providers: [projection.providerId], allowNetwork: false });
+			const model = runtime.getModel(projection.providerId, selected.id);
+			if (!model || model.id !== selected.id) throw new WorkerError("route-model-mismatch", "Selected route model is unavailable");
+			return { routeId, remoteModelId: selected.id, model: model as never, modelRuntime: runtime };
+		},
+		...(healthStore ? {
+			recordSuccess: (routeId: StableId, at: Date) => healthStore.recordSuccess(routeId, at),
+			recordFailure: (routeId: StableId, failure: FailureClassification, at: Date) => healthStore.recordFailure(routeId, failure, { now: at }),
+		} : {}),
+	};
+	return createSubagentExecutor({ routeAdapter });
+}
+
 /**
  * Build the Pi-facing adapter around a domain manager.  The adapter owns no
  * catalog/configuration state; it only projects the manager's current enabled
@@ -295,6 +404,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const poolManager = options.poolManager ?? emptyPoolManager();
 	const configStore = options.configStore;
 	const healthStore = options.healthStore;
+	const subagentExecutor = options.subagentExecutor;
 	let registeredFingerprint: string | undefined;
 	let reconciled = false;
 	const lifetime = new AbortController();
@@ -930,6 +1040,83 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
+	const runSubagent = async (
+		ctx: ExtensionContext | ExtensionCommandContext,
+		params: { readonly role: string; readonly pool: string; readonly task: string; readonly acceptanceCriteria?: readonly string[]; readonly timeoutMs?: number },
+		signal?: AbortSignal,
+	): Promise<SubagentRunResult | undefined> => {
+		if (!subagentExecutor || !isPoolId(params.pool)) {
+			ctx.ui.notify("Routed subagent execution is unavailable", "error");
+			return undefined;
+		}
+		const request: SubagentExecutionRequest = {
+			roleId: params.role,
+			poolId: params.pool,
+			task: params.task,
+			cwd: ctx.cwd,
+			...(params.acceptanceCriteria ? { acceptanceCriteria: params.acceptanceCriteria } : {}),
+			...(params.timeoutMs === undefined ? {} : { timeoutMs: params.timeoutMs }),
+		};
+		const activeSignal = signal && ctx.signal ? AbortSignal.any([signal, ctx.signal]) : signal ?? ctx.signal;
+		try {
+			const result = await subagentExecutor.run(request, activeSignal);
+			ctx.ui.notify(`Subagent ${result.terminalStatus}: ${result.summary}`, result.terminalStatus === "completed" ? "info" : "warning");
+			return result;
+		} catch (error) {
+			notifyError(ctx, "Subagent execution failed", error);
+			return undefined;
+		}
+	};
+
+	const registerSubagentTool = (): void => {
+		if (!subagentExecutor || typeof (pi as unknown as { registerTool?: unknown }).registerTool !== "function") return;
+		const tool = {
+			name: "delegate_agent",
+			label: "Delegate agent",
+			description: "Run one bounded child worker through the configured execution pool and M4 route policy.",
+			parameters: SUBAGENT_PARAMETERS,
+			execute: async (_toolCallId: string, params: unknown, signal: AbortSignal | undefined, _onUpdate: unknown, ctx: ExtensionContext) => {
+				if (!params || typeof params !== "object") return { content: [{ type: "text", text: "Invalid delegation request" }] };
+				const input = params as Record<string, unknown>;
+				if (typeof input.role !== "string" || typeof input.pool !== "string" || typeof input.task !== "string") {
+					return { content: [{ type: "text", text: "Delegation requires role, pool, and task" }] };
+				}
+				const criteria = Array.isArray(input.acceptanceCriteria) && input.acceptanceCriteria.every((item) => typeof item === "string")
+					? input.acceptanceCriteria as string[] : undefined;
+				const timeoutMs = typeof input.timeoutMs === "number" ? input.timeoutMs : undefined;
+				const result = await runSubagent(ctx, { role: input.role, pool: input.pool, task: input.task, ...(criteria ? { acceptanceCriteria: criteria } : {}), ...(timeoutMs === undefined ? {} : { timeoutMs }) }, signal);
+				if (!result) return { content: [{ type: "text", text: "Delegation unavailable" }] };
+				return {
+					content: [{ type: "text", text: `${result.terminalStatus}: ${result.summary}` }],
+					details: { terminalStatus: result.terminalStatus, finalRouteId: result.finalRouteId, fallbackCount: result.fallbackCount, potentialMutationObserved: result.potentialMutationObserved, structuredResult: result.structuredResult },
+				};
+			},
+		};
+		pi.registerTool(tool as never);
+	};
+
+	const openSubagentRunner = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (!subagentExecutor) {
+			ctx.ui.notify("Routed subagent execution is unavailable", "error");
+			return;
+		}
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("/subagent-run requires TUI or RPC UI mode", "error");
+			return;
+		}
+		if (!requireIdle(ctx, "subagent execution")) return;
+		const poolLabel = await ctx.ui.select("Execution pool", POOL_IDS.map((poolId) => `${poolLabels[poolId]} (${poolId})`));
+		if (!poolLabel) return;
+		const poolId = POOL_IDS.find((pool) => poolLabel.endsWith(`(${pool})`));
+		if (!poolId) return;
+		const role = await ctx.ui.input("Role ID", "debugger");
+		const task = await ctx.ui.input("Task", "");
+		if (!role?.trim() || !task?.trim()) return;
+		ctx.ui.notify(`Pool: ${poolLabels[poolId]} | tools: ${poolId === "implementation" ? "read, grep, find, ls, bash, edit, write" : poolId === "verification" ? "read, grep, find, ls, bash" : "read, grep, find, ls"} | routing: M4 fallback policy`, "info");
+		if (poolId === "implementation" && !(await ctx.ui.confirm("Implementation tools may modify files. Continue?", ctx.cwd))) return;
+		await runSubagent(ctx, { role: role.trim(), pool: poolId, task: task.trim() }, ctx.signal);
+	};
+
 	const openRoutingSettings = async (ctx: ExtensionCommandContext): Promise<void> => {
 		if (!configStore) {
 			ctx.ui.notify("Routing settings are unavailable until the configuration store is configured", "error");
@@ -980,6 +1167,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const registerCommands = (): void => {
+		registerSubagentTool();
 		pi.registerCommand("orchestrator", {
 			description: "Open Pi Multi-Orchestrator control center",
 			handler: async (_args, ctx) => openControlCenter(ctx),
@@ -1016,6 +1204,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			description: "Edit the configured routing and fallback policy",
 			handler: async (_args, ctx) => openRoutingSettings(ctx),
 		});
+		pi.registerCommand("subagent-run", {
+			description: "Run one routed foreground subagent",
+			handler: async (_args, ctx) => openSubagentRunner(ctx),
+		});
 	};
 
 	const dispose = (): void => {
@@ -1035,7 +1227,14 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	const manager = createNineRouterManager(root, configStore) as PiManagerContract;
 	const poolManager = createPoolManager(root, configStore);
 	const healthStore = new HealthStore({ root });
-	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore });
+	let subagentExecutor: SubagentExecutor | undefined;
+	try {
+		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore);
+	} catch {
+		// Keep the M2/M3/M4 host available when no configured route can yet be resolved.
+		subagentExecutor = undefined;
+	}
+	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(subagentExecutor ? { subagentExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

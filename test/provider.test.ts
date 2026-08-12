@@ -24,6 +24,7 @@ import { classifyFailure } from "../src/core/routing/index.js";
 import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/ninerouter/index.js";
 import type { StableId } from "../src/core/config/types.js";
 import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
+import type { SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -139,6 +140,7 @@ interface PiFixture {
 	readonly commands: Map<string, { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> }>;
 	readonly unregisters: string[];
 	readonly registerCalls: string[];
+	readonly tools: Map<string, unknown>;
 }
 
 function piFixture(): PiFixture {
@@ -146,6 +148,7 @@ function piFixture(): PiFixture {
 	const commands = new Map<string, { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> }>();
 	const unregisters: string[] = [];
 	const registerCalls: string[] = [];
+	const tools = new Map<string, unknown>();
 	const pi = {
 		registerProvider(name: string, config: ProviderConfig): void {
 			registerCalls.push(name);
@@ -158,8 +161,11 @@ function piFixture(): PiFixture {
 		registerCommand(name: string, options: { handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> }): void {
 			commands.set(name, options);
 		},
+		registerTool(tool: { name: string }): void {
+			tools.set(tool.name, tool);
+		},
 	} as unknown as ExtensionAPI;
-	return { pi, providers, commands, unregisters, registerCalls };
+	return { pi, providers, commands, unregisters, registerCalls, tools };
 }
 
 describe("Pi 9Router host adapter", () => {
@@ -216,7 +222,7 @@ describe("Pi 9Router host adapter", () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: fixture });
 		host.registerCommands();
-		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings"]);
+		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "subagent-run"]);
 
 		const notifications: string[] = [];
 		let prompts = 0;
@@ -245,6 +251,26 @@ describe("Pi 9Router host adapter", () => {
 		assert.deepEqual(fixture.setEnabledCalls, []);
 		assert.match(notifications[0] ?? "", /remote: remote-a/);
 		assert.ok(notifications.some((message) => /active 9Router model/.test(message)));
+	});
+
+	it("[U][fixture-pi-0.84.1] registers parent-only delegate tool and returns bounded child result", async () => {
+		const pi = piFixture();
+		const result: SubagentRunResult = {
+			protocolVersion: 1,
+			runId: "run-1",
+			roleId: "debugger",
+			poolId: "investigation",
+			terminalStatus: "completed",
+			attempts: [],
+			potentialMutationObserved: false,
+			fallbackCount: 0,
+			summary: "child complete",
+		};
+		const executor = { run: async () => result } as unknown as SubagentExecutor;
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), subagentExecutor: executor });
+		host.registerCommands();
+		assert.ok(pi.tools.has("delegate_agent"));
+		assert.ok(pi.commands.has("subagent-run"));
 	});
 
 	it("[U][fixture-pi-0.84.1] opens all three pool sections from orchestrator", async () => {

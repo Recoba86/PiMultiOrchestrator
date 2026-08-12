@@ -218,8 +218,8 @@ function parseJsonLines(value: string): Record<string, unknown>[] {
 		});
 }
 
-async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>): Promise<T> {
-	const server = new FakeNineRouter({ models: sourceModels });
+async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean } = {}): Promise<T> {
+	const server = new FakeNineRouter({ models: sourceModels, ...options });
 	const root = await mkdtemp(join(tmpdir(), "pi-m2-integration-"));
 	const agentRoot = join(root, "agent");
 	const sessionsRoot = join(root, "sessions");
@@ -361,6 +361,40 @@ test("[P][fixture-v1] Pi commands register and fake completion returns determini
 			await rm(root, { recursive: true, force: true });
 		}
 	});
+});
+
+test("[P][fixture-v1] Pi parent delegates to an isolated child with exact model and bounded result tool", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m5-run-"));
+		try {
+			const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+			const result = await runPi(
+				[
+					"--offline", "--no-extensions", "-e", builtEntry, "--no-context-files", "--no-session", "--mode", "json",
+					"--provider", "9router", "--model", selectedRemoteIds[0]!, "--print", "delegate once",
+				],
+				env,
+				30_000,
+			);
+			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
+			assert.equal(result.signal, null);
+			const parent = server.chatRequests.find((request) => request.toolNames?.includes("delegate_agent"));
+			assert.ok(parent, result.stdout);
+			assert.equal(parent.model, selectedRemoteIds[0]);
+			const child = server.chatRequests.find((request) => request.toolNames?.includes("submit_agent_result"));
+			assert.ok(child, result.stdout);
+			assert.equal(child.model, selectedRemoteIds[0]);
+			assert.equal(child.toolNames?.includes("delegate_agent"), false);
+			assert.equal(child.toolNames?.includes("read"), true);
+			assert.equal(child.toolNames?.includes("edit"), false);
+			assert.equal(child.toolNames?.includes("write"), false);
+			assert.ok(server.chatRequests.some((request) => request.toolNames?.includes("submit_agent_result")));
+			assert.equal(result.stdout.includes(server.token), false);
+			assert.equal(result.stderr.includes(server.token), false);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	}, { toolCallFlow: true });
 });
 
 test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configuration", { skip: integrationSkip }, async () => {

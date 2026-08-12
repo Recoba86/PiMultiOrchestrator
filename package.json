@@ -30,6 +30,10 @@
       "types": "./dist/core/health/index.d.ts",
       "import": "./dist/core/health/index.js"
     },
+    "./workers": {
+      "types": "./dist/core/workers/index.d.ts",
+      "import": "./dist/core/workers/index.js"
+    },
     "./pi": {
       "types": "./dist/host/pi-extension.d.ts",
       "import": "./dist/host/pi-extension.js"

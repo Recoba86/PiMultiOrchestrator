@@ -29,6 +29,8 @@ export interface FakeNineRouterOptions {
 	readonly modelsMode?: ModelsMode;
 	readonly delayMs?: number;
 	readonly completionText?: string;
+	/** When enabled, exercise parent delegate -> child read -> structured result. */
+	readonly toolCallFlow?: boolean;
 }
 
 export interface FakeRequestObservation {
@@ -39,6 +41,7 @@ export interface FakeRequestObservation {
 	readonly stream?: boolean;
 	readonly includeUsage?: boolean;
 	readonly messageCount?: number;
+	readonly toolNames?: readonly string[];
 }
 
 const DEFAULT_TOKEN = "m2-fake-token";
@@ -135,6 +138,7 @@ export class FakeNineRouter {
 	private mode: ModelsMode;
 	private readonly delayMs: number;
 	private readonly completionText: string;
+	private readonly toolCallFlow: boolean;
 	private portNumber: number | undefined;
 
 	constructor(options: FakeNineRouterOptions = {}) {
@@ -143,6 +147,7 @@ export class FakeNineRouter {
 		this.mode = options.modelsMode ?? "valid";
 		this.delayMs = options.delayMs ?? 250;
 		this.completionText = options.completionText ?? DEFAULT_COMPLETION;
+		this.toolCallFlow = options.toolCallFlow ?? false;
 		this.server = createServer((req, res) => {
 			void this.handle(req, res);
 		});
@@ -279,6 +284,11 @@ export class FakeNineRouter {
 					: false,
 			...(typeof body.model === "string" ? { model: body.model } : {}),
 			...(messages ? { messageCount: messages.length } : {}),
+			...(Array.isArray(body.tools) ? { toolNames: body.tools.flatMap((tool) => {
+				if (!tool || typeof tool !== "object") return [];
+				const fn = (tool as { function?: { name?: unknown } }).function;
+				return typeof fn?.name === "string" ? [fn.name] : [];
+			}) } : {}),
 		};
 		this.record(req, observation);
 		if (!this.authorized(req)) {
@@ -286,6 +296,32 @@ export class FakeNineRouter {
 			return;
 		}
 		const model = typeof body.model === "string" ? body.model : "unknown-model";
+		if (this.toolCallFlow) {
+			const tools = Array.isArray(body.tools) ? body.tools.flatMap((tool) => {
+				if (!tool || typeof tool !== "object") return [];
+				const fn = (tool as { function?: { name?: unknown } }).function;
+				return typeof fn?.name === "string" ? [fn.name] : [];
+			}) : [];
+			const hasToolResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { role?: unknown }).role === "tool") === true;
+			const hasDelegateResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-delegate") === true;
+			if (tools.includes("delegate_agent") && !hasToolResult) {
+				await this.sendToolCall(res, model, "call-delegate", "delegate_agent", JSON.stringify({ role: "debugger", pool: "investigation", task: "Read package.json and report the package name." }));
+				return;
+			}
+			if (tools.includes("delegate_agent") && hasDelegateResult) {
+				// Parent receives a concise final answer after the child tool returns.
+				this.sendCompletion(res, model);
+				return;
+			}
+			if (tools.includes("read") && tools.includes("submit_agent_result") && !hasToolResult) {
+				await this.sendToolCall(res, model, "call-read", "read", JSON.stringify({ path: "package.json", limit: 40 }));
+				return;
+			}
+			if (tools.includes("submit_agent_result") && hasToolResult) {
+				await this.sendToolCall(res, model, "call-result", "submit_agent_result", JSON.stringify({ status: "completed", summary: "Read package metadata", evidence: ["package.json was read"], filesChanged: [], tests: [], risks: [], questions: [] }));
+				return;
+			}
+		}
 		if (body.stream !== true) {
 			json(res, 200, {
 				id: "fake-completion",
@@ -301,6 +337,10 @@ export class FakeNineRouter {
 			"cache-control": "no-cache",
 			connection: "keep-alive",
 		});
+		this.sendCompletion(res, model);
+	}
+
+	private sendCompletion(res: ServerResponse, model: string): void {
 		const chunks = [
 			{
 				id: "fake-completion",
@@ -323,6 +363,25 @@ export class FakeNineRouter {
 			},
 		];
 		for (const chunk of chunks) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+		res.end("data: [DONE]\n\n");
+	}
+
+	private async sendToolCall(res: ServerResponse, model: string, id: string, name: string, args: string): Promise<void> {
+		if (res.headersSent === false) {
+			res.writeHead(200, {
+				"content-type": "text/event-stream",
+				"cache-control": "no-cache",
+				connection: "keep-alive",
+			});
+		}
+		const chunk = {
+			id: "fake-tool-call",
+			object: "chat.completion.chunk",
+			model,
+			choices: [{ index: 0, delta: { role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: args } }] }, finish_reason: null }],
+		};
+		res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+		res.write(`data: ${JSON.stringify({ id: "fake-tool-call", object: "chat.completion.chunk", model, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] })}\n\n`);
 		res.end("data: [DONE]\n\n");
 	}
 }
