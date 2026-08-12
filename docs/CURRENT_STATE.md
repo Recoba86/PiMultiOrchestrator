@@ -26,7 +26,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M11 candidate | `0.1.0-rc.3` — local, not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
 | M11-R4 historical release evidence | rc.2 artifact and `165/165 PASS`; rejected by Independent Review #3 for the custom-tool bypass |
-| M11-R6 release evidence | rc.3 safety/remediation and release verification are required from the final clean commit; exact artifact/source/build identities belong to the generated manifest and external bundle |
+| M11-R6 release evidence | rc.3 safety/remediation, release, compatibility, rescue, privacy, provenance, and bundle verification PASS from the final clean commit; exact artifact/source/build identities belong to the generated manifest and external bundle |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -274,11 +274,13 @@ RC workflow is checksum verification, fresh extraction, and `pi install
 never installed. `run-release-verification.mjs` records actual check/test
 evidence, Pi startup/Diagnostics/all-twelve-section results, remove/reinstall,
 M10 compatibility-baseline upgrade, rollback, state hashes, and rescue in a
-self-contained review bundle. R4 evidence is complete: the artifact-derived
-directory-source workflow passed on Pi `0.84.1`, with direct `.tgz` installation
-explicitly recorded as unsupported. The release manifest binds the clean Git
-commit/tree, source digest, build digest, trusted Node/npm/Pi identities,
-artifact checksum, and file records; the privacy report is clean and
+self-contained review bundle. R6 evidence is complete: the artifact-derived
+directory-source workflow passed on Pi `0.84.1`, the actual Pi `submit_evil`
+regression passed, and the full release/compatibility/rescue workflow passed
+with `169/169` tests. Direct `.tgz` installation is explicitly recorded as
+unsupported. The release manifest binds the clean Git commit/tree, source
+digest, build digest, trusted Node/npm/Pi identities, artifact checksum, file
+records, and worker-safety evidence; the privacy report is clean and
 machine-neutral. The bundle verifies as `EXTERNAL_REVIEW_PENDING`. No
 real-route smoke was authorized or performed.
 M10 remains the last Planner-accepted milestone.
@@ -301,7 +303,7 @@ M10 remains the last Planner-accepted milestone.
 - M9: `2032a2b` — `feat(tui): add full orchestrator control center` — ACCEPTED / PASS by STATE-9; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`, `146/146`, typecheck/build/check/package/diff/secret/state validation PASS.
 - M10: `3a6990d` — `feat(safety): harden trust permissions and recovery` — ACCEPTED / PASS by STATE-10; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca`, `159/159`, typecheck/build/check/package/diff/secret validation PASS; human keyboard smoke remains pending open validation.
 - M11: rc.1 historical candidate was rejected by Independent Review #2. M11-R4 remediation commits `50ee46f` (integrated worker safety) and `55a15cc` (trusted release provenance/privacy/bundle) produce rc.2 evidence; `165/165`, isolated Pi directory-source/upgrade/rollback/rescue, seeded-state preservation, and self-contained bundle verification PASS. Exact artifact/source/build identities are in the generated manifest. External review and Planner acceptance remain pending.
-- M11-R6: External Review #3 found that caller-supplied `submit_evil` custom-tool handlers could execute in an untrusted Pi child session. rc.3 replaces caller-supplied executable result tools with declarative capture-only protocols, rejects unknown/colliding tools, and reruns the release/compatibility/rescue gates. M11 remains implemented but not accepted; External Review #4 and Planner acceptance remain pending.
+- M11-R6: External Review #3 found that caller-supplied `submit_evil` custom-tool handlers could execute in an untrusted Pi child session. rc.3 replaces caller-supplied executable result tools with declarative capture-only protocols, rejects unknown/colliding tools, and passes the `169/169` release, actual-Pi safety, compatibility, rescue, privacy, provenance, and bundle gates. M11 remains implemented but not accepted; External Review #4 and Planner acceptance remain pending.
 
 ## Assumptions agents must not make
 

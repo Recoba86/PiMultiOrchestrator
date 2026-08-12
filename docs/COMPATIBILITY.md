@@ -12,8 +12,8 @@ is not a live-provider or public-release claim.
 | Provider | Fake OpenAI-compatible 9Router only | Real 9Router, subscription/account metadata |
 | Persistence | Config schema 2, MissionStore schema 2, Analytics schema 1 retained across candidate install test | Schema migration introduced by M11: none |
 | Platform | Current macOS development host, isolated temporary roots | Other OSes/Termius/remote TUI |
-| Upgrade | Real M10 implementation baseline commit `c65470c001e539c36f0a53cacd912f48eb05ff7f` → verified extracted `0.1.0-rc.3` directory in temporary roots; seeded Config/Mission/Analytics/Trust state and hashes recorded before and after; R6 harness required | Public package-manager upgrade |
-| Rollback | Candidate removal → reinstall of the real M10 compatibility baseline directory; before/after state hashes, package version, and seeded-state recovery are recorded; R6 harness required | Rollback across future schema changes |
+| Upgrade | PASS — real M10 implementation baseline commit `c65470c001e539c36f0a53cacd912f48eb05ff7f` → verified extracted `0.1.0-rc.3` directory in temporary roots; seeded Config/Mission/Analytics/Trust state and hashes recorded before and after | Public package-manager upgrade |
+| Rollback | PASS — candidate removal → reinstall of the real M10 compatibility baseline directory; before/after state hashes, package version, and seeded-state recovery recorded | Rollback across future schema changes |
 
 The package declares Pi as a peer dependency and has no runtime npm
 dependencies. Runtime state, databases, credentials, `.git`, source checkout

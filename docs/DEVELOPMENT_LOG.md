@@ -212,9 +212,11 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 ### M11-R6 — close custom worker-tool bypass and build rc.3
 
 - **Status:** IMPLEMENTED / REMEDIATED; M11 remains NOT ACCEPTED.
+- **Starting HEAD:** `6e4498c6e4c0b64b1d02f4a167438e2856904bfb`.
 - **Trigger:** Independent Review #3 reproduced a HIGH-severity Pi `0.84.1` bypass in which a caller-supplied `submit_evil` result-tool handler mutated a fixture while project trust was false.
 - **Remediation:** Replace caller-supplied executable child result tools with declarative, bounded capture-only protocol specifications. M5 owns protocol-tool construction; protocol execution validates and captures in memory only. Guarded capabilities and protocol submissions have explicit classifications; unknown tools and collisions fail closed. Existing agent, verification, repair, and recommendation protocols retain their bounded schemas and duplicate handling.
-- **Release:** Version `0.1.0-rc.3` is the new local candidate. The hardened release pipeline must regenerate provenance/privacy evidence, actual Pi/fake-gateway safety regressions, M10 compatibility upgrade/rollback, broken-candidate rescue, and a self-contained `EXTERNAL_REVIEW_PENDING` bundle outside the checkout.
+- **Implementation commits:** `e9aab31` (`fix(safety): close custom worker tool bypass`), `6d438a9` (`fix(release): bind rc3 safety evidence`), and `e6b9807` (`fix(release): guard RPC teardown writes`).
+- **Release evidence:** Version `0.1.0-rc.3` is the local candidate. The final clean release pipeline passed `169/169`, actual Pi `0.84.1` `submit_evil` regression, provenance/privacy, M10 compatibility upgrade/rollback, broken-candidate rescue, and self-contained `EXTERNAL_REVIEW_PENDING` bundle verification outside the checkout.
 - **Boundary:** no live route, provider call, publication, tag, push, live Pi configuration, credentials, or paid inference. Stage 3 remains NOT AUTHORIZED / NOT PERFORMED; next required action is a clean-parent plus clean-reviewer External Review #4.
 
 - **Milestone:**
