@@ -121,7 +121,7 @@ Exit gate: PASS — `121/121` tests, typecheck/build/check, and actual Pi `0.84.
 
 ## M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
 
 Deliverables:
 
@@ -129,8 +129,9 @@ Deliverables:
 - mission, agent, token, cost, route, pool, Boss, and fallback reports;
 - explainable, sample-size-aware pool-specific recommendations;
 - explicit Apply/Ignore/Details actions with no silent mutation.
+- local `analytics.sqlite` schema v1 with idempotent privacy-minimal events, Pi usage/latency capture, `/analytics`, and `/recommendations`.
 
-Exit gate: aggregation, unknown-cost, subscription-vs-metered, privacy, explainability, and recommendation-no-mutation tests pass.
+Exit gate: focused analytics `7/7`, provider `15/15`, worker `11/11`, typecheck/build pass; full aggregate `npm test` is `120/129` with 9 sandbox-only loopback `listen EPERM` failures. Full Pi/fake telemetry, mission/quality joins, currency/pricing coverage, stale Apply checks, and Planner acceptance remain pending.
 
 ## M9 — Full TUI control center
 

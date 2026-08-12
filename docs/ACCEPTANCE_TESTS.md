@@ -507,6 +507,8 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** finish attempt.
 - **Pass:** one versioned event references mission/task/role/pool/route and known metrics; unknown cache/cost are null with provenance, not zero/fabricated; no prompt/source/tool output exists in row.
 
+M8 implementation note: the current focused evidence exercises bounded synthetic events, mission-attempt observer hooks, and the host command surface (`7/7` analytics focused tests). Actual Pi/fake-gateway mission→quality→analytics, live usage provenance, and loopback proof remain required before Planner acceptance.
+
 ### AN-02 — Fallback and quality counts remain distinct
 
 - **Level:** U/I

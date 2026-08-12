@@ -61,6 +61,7 @@ import { createMissionStore } from "../core/mission/index.js";
 import { executeMissionTask } from "../core/mission/index.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
+import { AnalyticsQueryService, RecommendationApplicationService, RecommendationEngine, SQLiteAnalyticsStore, type AnalyticsEventV1, type AnalyticsStoreAdapter } from "../core/analytics/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -130,6 +131,7 @@ export interface PiHostOptions {
 	readonly qualityExecutor?: SubagentExecutor;
 	readonly providerId?: string;
 	readonly subagentExecutor?: SubagentExecutor;
+	readonly analyticsStore?: AnalyticsStoreAdapter;
 }
 
 export interface ReconcileResult {
@@ -147,6 +149,7 @@ export interface PiHost {
 	readonly contextBroker?: ContextBroker;
 	readonly qualityStore?: QualityPersistence;
 	readonly qualityService?: QualityService;
+	readonly analyticsStore?: AnalyticsStoreAdapter;
 	readonly qualityExecutor?: SubagentExecutor;
 	reconcile(): Promise<ReconcileResult>;
 	registerCommands(): void;
@@ -436,6 +439,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const qualityExecutor = options.qualityExecutor;
 	const qualityStore = options.qualityStore ?? options.missionStore;
 	const qualityService = options.qualityService ?? (qualityStore ? new QualityService(qualityStore) : undefined);
+	const analyticsStore = options.analyticsStore;
+	const analytics = analyticsStore ? new AnalyticsQueryService(analyticsStore) : undefined;
+	const recommendationApplication = analyticsStore ? new RecommendationApplicationService(analyticsStore, poolManager) : undefined;
+	const recordAnalytics = (event: AnalyticsEventV1): void => {
+		try { const result = analyticsStore?.append(event); if (result && typeof (result as Promise<unknown>).then === "function") void (result as Promise<unknown>).catch(() => undefined); } catch { /* analytics is non-critical */ }
+	};
 	let registeredFingerprint: string | undefined;
 	let reconciled = false;
 	const lifetime = new AbortController();
@@ -882,6 +891,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			"9Router status",
 			"Pool status",
 			"Connection setup",
+			"Statistics & Analytics",
+			"Recommendations",
 			"Close",
 		]);
 		switch (choice) {
@@ -917,6 +928,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				return;
 			case "Connection setup":
 				await configureConnection(ctx);
+				return;
+			case "Statistics & Analytics":
+				await showAnalytics(ctx);
+				return;
+			case "Recommendations":
+				await showRecommendations(ctx);
 				return;
 			default:
 				return;
@@ -1095,6 +1112,13 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const activeSignal = signal && ctx.signal ? AbortSignal.any([signal, ctx.signal]) : signal ?? ctx.signal;
 		try {
 			const result = await subagentExecutor.run(request, activeSignal);
+			if (analyticsStore) {
+				const base = { runId: result.runId, roleId: params.role, poolId: params.pool };
+				const events: AnalyticsEventV1[] = [{ eventId: `run-${result.runId}`, occurredAt: new Date().toISOString(), eventType: "run", ...base, ...(result.finalRouteId ? { routeId: result.finalRouteId } : {}), ...(result.finalRemoteModelId ? { remoteModelId: result.finalRemoteModelId } : {}), outcome: result.terminalStatus, dimensions: { fallbackCount: result.fallbackCount } }];
+				for (const attempt of result.attempts) { const attemptEvent: AnalyticsEventV1 = { eventId: `attempt-${attempt.attemptId}`, occurredAt: attempt.endedAt, eventType: "attempt", ...base, attemptId: attempt.attemptId, routeId: attempt.routeId, remoteModelId: attempt.remoteModelId, outcome: attempt.outcome }; if (attempt.latencyMs !== undefined) (attemptEvent as { durationMs?: number }).durationMs = attempt.latencyMs; if (attempt.infrastructureFailure?.class) (attemptEvent as { failureClass?: string }).failureClass = attempt.infrastructureFailure.class; if (attempt.usage) (attemptEvent as { tokenUsage?: AnalyticsEventV1["tokenUsage"] }).tokenUsage = { ...(attempt.usage.input === undefined ? {} : { inputTokens: attempt.usage.input }), ...(attempt.usage.output === undefined ? {} : { outputTokens: attempt.usage.output }), ...(attempt.usage.cacheRead === undefined ? {} : { cacheReadTokens: attempt.usage.cacheRead }), ...(attempt.usage.cacheWrite === undefined ? {} : { cacheWriteTokens: attempt.usage.cacheWrite }), ...(attempt.usage.reasoning === undefined ? {} : { reasoningTokens: attempt.usage.reasoning }), ...(attempt.usage.totalTokens === undefined ? {} : { totalTokens: attempt.usage.totalTokens }), provenance: "observed" }; events.push(attemptEvent); }
+				for (let index = 0; index + 1 < result.attempts.length; index++) { const from = result.attempts[index]!; const to = result.attempts[index + 1]!; if (from.failureAction !== "FALLBACK_NEXT_ROUTE") continue; events.push({ eventId: `fallback-${result.runId}-${index}`, occurredAt: to.startedAt, eventType: "fallback", ...base, fallbackFromRouteId: from.routeId, fallbackToRouteId: to.routeId, ...(from.infrastructureFailure?.class ? { failureClass: from.infrastructureFailure.class } : {}), outcome: "fallback" }); }
+				for (const event of events) { try { analyticsStore.append(event); } catch { /* analytics is non-critical */ } }
+			}
 			ctx.ui.notify(`Subagent ${result.terminalStatus}: ${result.summary}`, result.terminalStatus === "completed" ? "info" : "warning");
 			return result;
 		} catch (error) {
@@ -1315,10 +1339,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			recordReviewerRun(verificationId, result);
 			if (result.terminalStatus !== "completed") {
 				qualityService.failVerification(verificationId, result.potentialMutationObserved ? "interrupted" : "blocked", result.summary);
+				recordAnalytics({ eventId: `quality-${verificationId}-blocked`, occurredAt: new Date().toISOString(), eventType: "quality", missionId, taskId, runId: targetRunId, verificationId, poolId: "verification", ...(result.finalRouteId === undefined ? {} : { routeId: result.finalRouteId }), outcome: result.terminalStatus, qualityOutcome: "blocked" });
 				ctx.ui.notify(`Verification ${verificationId} ${result.terminalStatus}; quality remains review_required`, "warning");
 				return;
 			}
 			const completed = qualityService.completeVerification(verificationId, result.protocolResult ?? result.structuredResult, criteria);
+				recordAnalytics({ eventId: `quality-${completed.decision.decisionId}`, occurredAt: completed.decision.createdAt, eventType: "quality", missionId, taskId, runId: targetRunId, verificationId, qualityRound: completed.run.round, poolId: "implementation", ...(completed.run.implementationRouteId === undefined ? {} : { routeId: completed.run.implementationRouteId }), outcome: completed.decision.verdict, qualityOutcome: completed.decision.verdict, firstPass: completed.decision.verdict === "pass" && completed.run.round === 0, repairRound: completed.run.round, dimensions: completed.run.reviewerRouteId === undefined ? {} : { reviewerRouteId: completed.run.reviewerRouteId } });
 			ctx.ui.notify(`Quality ${completed.decision.verdict}: ${completed.decision.reviewerSummary}`, completed.decision.verdict === "pass" ? "info" : "warning");
 		} catch (error) {
 			try { qualityService.failVerification(verificationId, "blocked", "Reviewer protocol or infrastructure result was unavailable"); } catch { /* preserve original bounded diagnostic */ }
@@ -1394,12 +1420,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const packet = task?.packet && typeof task.packet === "object" && typeof (task.packet as Record<string, unknown>).packetId === "string"
 				? String((task.packet as Record<string, unknown>).packetId)
 				: undefined;
+			const targetAttempt = targetRunId ? options.missionStore?.getAttempt(targetRunId) : undefined;
 			const run = qualityService.startVerification({
 				missionId,
 				taskId,
 				targetRunId,
 				...(packet ? { targetPacketId: packet } : {}),
 				round: status?.qualityRound ?? 0,
+				...(targetAttempt?.routeId === undefined ? {} : { implementationRouteId: targetAttempt.routeId }),
 				...(task?.lastRunId ? {} : { potentialMutationObserved: false }),
 			});
 			if (qualityExecutor) await runReviewer(ctx, missionId, taskId, run.verificationId, targetRunId);
@@ -1447,12 +1475,13 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				},
 				repair: async (_round, feedback, exclusions) => {
 					if (task.executionClass !== "implementation" && task.poolId !== "implementation") throw new Error("Quality repair requires the Implementation pool");
-					const repaired = await executeMissionTask({ store: options.missionStore!, contextBroker: options.contextBroker!, executor: subagentExecutor!, missionId, taskId, cwd: ctx.cwd, ...(ctx.signal === undefined ? {} : { signal: ctx.signal }), ...(exclusions.length === 0 ? {} : { excludedRouteIds: exclusions as StableId[] }), allowQualityRepair: true, repairFeedback: feedback });
+					const repaired = await executeMissionTask({ store: options.missionStore!, contextBroker: options.contextBroker!, executor: subagentExecutor!, missionId, taskId, cwd: ctx.cwd, ...(analyticsStore ? { analytics: analyticsStore } : {}), ...(ctx.signal === undefined ? {} : { signal: ctx.signal }), ...(exclusions.length === 0 ? {} : { excludedRouteIds: exclusions as StableId[] }), allowQualityRepair: true, repairFeedback: feedback });
 					targetRunId = repaired.attempt.attemptId;
 					implementationRouteId = repaired.attempt.routeId as StableId | undefined;
 					return { implementationRouteId: repaired.attempt.routeId ?? exclusions[0] ?? "repair-route" };
 				},
 			});
+			for (const decision of qualityList<{ readonly decisionId: string; readonly verificationId: string; readonly targetRunId: string; readonly round: number; readonly verdict: "pass" | "reject" | "blocked"; readonly reviewerRouteId?: string; readonly implementationRouteId?: string; readonly createdAt: string }>("listQualityDecisions", missionId, taskId)) recordAnalytics({ eventId: `quality-${decision.decisionId}`, occurredAt: decision.createdAt, eventType: "quality", missionId, taskId, runId: decision.targetRunId, verificationId: decision.verificationId, qualityRound: decision.round, poolId: "implementation", ...(decision.implementationRouteId === undefined ? {} : { routeId: decision.implementationRouteId }), outcome: decision.verdict, qualityOutcome: decision.verdict, firstPass: decision.verdict === "pass" && decision.round === 0, repairRound: decision.round, dimensions: decision.reviewerRouteId === undefined ? {} : { reviewerRouteId: decision.reviewerRouteId } });
 			ctx.ui.notify(`Quality loop ${loop.status} after round ${loop.rounds}`, loop.status === "passed" ? "info" : "warning");
 		} catch (error) { notifyError(ctx, "Quality loop failed", error); }
 	};
@@ -1523,7 +1552,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		if (!requireIdle(ctx, "mission task")) return;
 		if (task.executionClass === "implementation" && !(await ctx.ui.confirm("Run implementation task?", "The child may modify the current working tree."))) return;
 		try {
-			const result = await executeMissionTask({ store, contextBroker: options.contextBroker, executor: subagentExecutor, missionId: mission.missionId, taskId: task.taskId, cwd: ctx.cwd });
+			const result = await executeMissionTask({ store, contextBroker: options.contextBroker, executor: subagentExecutor, missionId: mission.missionId, taskId: task.taskId, cwd: ctx.cwd, ...(analyticsStore ? { analytics: analyticsStore } : {}) });
 			ctx.ui.notify(`Task ${task.taskId} finished: ${result.run.terminalStatus}; evidence ${result.evidence?.status ?? "none"}`, "info");
 		} catch (error) { notifyError(ctx, "Task execution failed", error); }
 	};
@@ -1827,6 +1856,31 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
+	const showAnalytics = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
+		if (!analytics) { ctx.ui.notify("Analytics is disabled or unavailable", "warning"); return; }
+		const parts = (args ?? "").trim().split(/\s+/u).filter(Boolean); const window = parts[0];
+		let range: { readonly from?: string; readonly to?: string } | undefined;
+		if (window === "24h" || window === "7d" || window === "30d") { const days = window === "24h" ? 1 / 24 : window === "7d" ? 7 : 30; range = { from: new Date(Date.now() - days * 86_400_000).toISOString() }; }
+		else if (window === "custom" && parts[1] && parts[2] && !Number.isNaN(Date.parse(parts[1])) && !Number.isNaN(Date.parse(parts[2]))) range = { from: new Date(parts[1]).toISOString(), to: new Date(parts[2]).toISOString() };
+		try { const summary = analytics.overview(range); ctx.ui.notify([`events=${summary.eventCount}`, `runs=${summary.runs}`, `attempts=${summary.attempts}`, `successes=${summary.successes}`, `failures=${summary.failures}`, `fallbacks=${summary.fallbacks}`, `quality pass/reject/blocked=${summary.qualityPasses}/${summary.qualityRejects}/${summary.qualityBlocked}`, `tokens=${summary.tokens.total ?? "unknown"}`, `unknown token attempts=${summary.unknownTokenAttempts}`, `actual cost micros=${summary.actualCostMicros ?? "unknown"}`, `estimated cost micros=${summary.estimatedCostMicros ?? "unknown"}`, `unknown cost events=${summary.unknownCostEvents}`].join("\n"), "info"); } catch (error) { notifyError(ctx, "Analytics failed", error); }
+	};
+	const showRecommendations = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
+		if (!analytics || !analyticsStore) { ctx.ui.notify("Recommendations are unavailable while analytics is disabled", "warning"); return; }
+		try {
+			const input = (args ?? "").trim(); const [action, id] = input.split(/\s+/u, 2); const saved = analytics.recommendations();
+			if (action === "ignore" && id) { recommendationApplication?.ignore(id); ctx.ui.notify(`Recommendation ${id} ignored`, "info"); return; }
+			if (action === "details" && id) { const recommendation = saved.find((item) => item.recommendationId === id); ctx.ui.notify(recommendation ? JSON.stringify(recommendation, null, 2) : `Recommendation ${id} not found`, recommendation ? "info" : "warning"); return; }
+			if (action === "apply" && id) {
+				const recommendation = saved.find((item) => item.recommendationId === id); if (!recommendation) { ctx.ui.notify(`Recommendation ${id} not found`, "warning"); return; }
+				if (recommendation.status !== "proposed") { ctx.ui.notify(`Recommendation ${id} is already ${recommendation.status}`, "warning"); return; }
+				if (ctx.mode === "tui" || ctx.hasUI) { if (!(await ctx.ui.confirm("Apply recommendation?", `${recommendation.poolId}: move ${recommendation.proposedRouteId} to first priority`))) return; }
+				if (!isPoolId(recommendation.poolId) || !recommendationApplication) { ctx.ui.notify("Recommendation has an invalid pool", "warning"); return; }
+				const applied = await recommendationApplication.apply(id); ctx.ui.notify(applied === "applied" ? `Recommendation ${id} applied` : applied === "stale" ? `Recommendation ${id} is stale; regenerate it` : `Recommendation ${id} is unavailable`, applied === "applied" ? "info" : "warning"); return;
+			}
+			const poolId = input || "implementation"; if (!isPoolId(poolId)) { ctx.ui.notify(`Unknown pool: ${poolId}`, "warning"); return; } const currentPool = await poolManager.getPool(poolId); const generated = new RecommendationEngine().generate(analytics.overview(), poolId, { currentOrder: currentPool.entries.map((entry) => entry.routeId) }); if (!generated) { ctx.ui.notify(`Insufficient analytics data or no priority change for ${poolId} (minimum 10 observed runs per route)`, "warning"); return; } const recommendation = { ...generated, proposedDiff: { ...generated.proposedDiff, baselineOrder: currentPool.entries.map((entry) => entry.routeId) } }; analyticsStore.saveRecommendation(recommendation); ctx.ui.notify([`recommendation=${recommendation.recommendationId}`, `pool=${recommendation.poolId}`, `route=${recommendation.proposedRouteId}`, `sample=${recommendation.sampleSize}`, `score=${recommendation.score}`, `formula=${recommendation.formulaVersion}`, `evidence=${recommendation.evidence.join("; ")}`, `limitations=${recommendation.limitations.join("; ")}`, "status=proposed (no configuration changed)", `actions: /recommendations details ${recommendation.recommendationId} | apply ${recommendation.recommendationId} | ignore ${recommendation.recommendationId}`].join("\n"), "info");
+		} catch (error) { notifyError(ctx, "Recommendations failed", error); }
+	};
+
 	const registerCommands = (): void => {
 		registerSubagentTool();
 		pi.registerCommand("orchestrator", {
@@ -1896,6 +1950,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				await startTaskVerification(ctx, missionId, taskId, runId);
 			},
 		});
+		pi.registerCommand("analytics", { description: "Show local metadata-only analytics", handler: async (args, ctx) => showAnalytics(ctx, args) });
+		pi.registerCommand("recommendations", { description: "Show explainable pool recommendations", handler: async (args, ctx) => showRecommendations(ctx, args) });
 	};
 
 	const dispose = (): void => {
@@ -1903,17 +1959,26 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		pi.unregisterProvider(providerId);
 		const close = (options.missionStore as { readonly close?: unknown } | undefined)?.close;
 		if (typeof close === "function") close.call(options.missionStore);
+		try { analyticsStore?.close?.(); } catch { /* analytics is non-critical */ }
 		registeredFingerprint = undefined;
 		reconciled = true;
 	};
 
-		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), reconcile, registerCommands, dispose };
+		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
 	const runtime = await import("@earendil-works/pi-coding-agent");
 	const root = process.env.PI_MULTI_ORCH_CONFIG_ROOT ?? join(runtime.getAgentDir(), "pi-multi-orchestrator");
 	const configStore = new ConfigStore({ root });
+	let analyticsStore: AnalyticsStoreAdapter | undefined;
+	try {
+		const configSnapshot = await configStore.load();
+		analyticsStore = new SQLiteAnalyticsStore({ root, enabled: configSnapshot.snapshot?.config.analytics.enabled === true });
+	} catch {
+		// Telemetry is non-critical; execution remains available if its DB is unavailable.
+		analyticsStore = undefined;
+	}
 	const manager = createNineRouterManager(root, configStore) as PiManagerContract;
 	const poolManager = createPoolManager(root, configStore);
 	const healthStore = new HealthStore({ root });
@@ -1941,7 +2006,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	} catch {
 		qualityExecutor = undefined;
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(analyticsStore ? { analyticsStore } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

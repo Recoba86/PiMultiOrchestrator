@@ -167,3 +167,8 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Decision:** Every structured M5 worker result enters MissionStore as proposed evidence. Only explicit operator acceptance may create/update a canonical item and advance the mission revision. ContextBroker defaults to accepted canonical items and emits immutable, bounded, digest-linked TaskPacketV1 values.
 - **Rationale:** Execution completion is not quality verification, and proposed/rejected findings must not silently steer later work. Packet lineage and omission reporting make context deterministic and inspectable without persisting transcripts.
 - **Consequences:** M7 owns reviewer/quality acceptance; M6 provides no Boss planning, automatic evidence admission, parallel scheduling, or transcript resume.
+## ADR-025 — M8 analytics remains separate, metadata-only, and operator-applied
+
+- **Decision:** M8 stores bounded idempotent telemetry in a separate local `analytics.sqlite` schema v1. ConfigV1 remains version 1 and its existing disabled-by-default `analytics` policy is authoritative.
+- **Consequences:** Analytics failures are non-critical; unsupported Pi usage fields and provider-default zero pricing remain unknown; mixed currencies are not summed; recommendations are pool-specific, sample-gated, explainable, and never mutate configuration until an explicit Apply action uses PoolManager.
+- **Privacy:** Prompts, transcripts, source, tool arguments/results, headers, credentials, and completion text are not persisted.

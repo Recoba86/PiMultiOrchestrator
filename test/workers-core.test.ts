@@ -17,6 +17,7 @@ import {
 } from "../src/core/workers/profiles.js";
 import {
 	SubagentExecutor,
+	extractWorkerUsage,
 	type ChildSessionFactory,
 	type RouteAttemptAdapter,
 	type ResolvedWorkerRoute,
@@ -46,6 +47,35 @@ describe("M5 worker core", () => {
 		assert.equal(isPotentiallyMutatingTool("read"), false);
 		assert.equal(isPotentiallyMutatingTool("submit_agent_result"), false);
 		assert.equal(isPotentiallyMutatingTool("custom_tool"), true);
+	});
+
+	it("extracts bounded Pi assistant usage without treating unknowns as zero", () => {
+		const usage = extractWorkerUsage({
+			role: "assistant",
+			stopReason: "stop",
+			usage: {
+				input: 12,
+				output: 7,
+				cacheRead: 1,
+				cacheWrite: 0,
+				cacheWrite1h: 0,
+				reasoning: 3,
+				totalTokens: 20,
+				cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
+			},
+		});
+		assert.deepEqual(usage, {
+			input: 12,
+			output: 7,
+			cacheRead: 1,
+			cacheWrite: 0,
+			cacheWrite1h: 0,
+			reasoning: 3,
+			totalTokens: 20,
+			cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
+		});
+		assert.equal(extractWorkerUsage({ role: "assistant", stopReason: "error", usage: { input: 3, totalTokens: 3 } }), undefined);
+		assert.equal(extractWorkerUsage({ role: "assistant", stopReason: "stop", usage: { input: Number.POSITIVE_INFINITY, totalTokens: 0 } }), undefined);
 	});
 
 	it("accepts one bounded structured result and rejects duplicates/oversized values", async () => {
@@ -88,6 +118,9 @@ describe("M5 worker core", () => {
 			assert.equal(result.attempts[0]?.toolNamesUsed.includes("read"), true);
 			assert.equal(result.attempts[0]?.potentialMutationObserved, false);
 			assert.equal(result.structuredResult?.summary, "child complete");
+			assert.equal(result.attempts[0]?.usage?.input, 14);
+			assert.equal(result.attempts[0]?.usage?.totalTokens, 23);
+			assert.equal(typeof result.attempts[0]?.latencyMs, "number");
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -302,6 +335,21 @@ function fakeSessionHandle(submitTool: Parameters<ChildSessionFactory["create"]>
 			listener?.({ type: "tool_execution_start", toolCallId: "submit-1", toolName: submitTool.name });
 			await submitTool.execute("result-1", mode === "verification" ? { verdict: "pass", criterionResults: [{ criterion: "tests", status: "satisfied", evidenceSummary: "observed" }], mechanicalChecks: [], findings: [], requiredFixes: [], risks: [], summary: "verified" } : { status: "completed", summary: "child complete" }, undefined, undefined, undefined as never);
 			listener?.({ type: "tool_execution_end", toolCallId: "submit-1", toolName: submitTool.name, isError: false });
+			listener?.({ type: "message_end", message: { role: "assistant", stopReason: "toolUse", usage: { input: 2, output: 1, totalTokens: 3 } } });
+			session.messages = [{
+				role: "assistant",
+				stopReason: "stop",
+				usage: {
+					input: 12,
+					output: 7,
+					cacheRead: 1,
+					cacheWrite: 0,
+					reasoning: 3,
+					totalTokens: 20,
+					cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
+				},
+			}];
+			listener?.({ type: "message_end", message: session.messages[0] });
 		},
 		abort: async () => { aborted = true; },
 		dispose: () => { aborted = true; },

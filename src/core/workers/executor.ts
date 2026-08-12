@@ -27,6 +27,7 @@ import {
 	type SubagentRunResult,
 	type SubagentTerminalStatus,
 	type ToolObservation,
+	type WorkerUsage,
 	 type WorkerProgressEvent,
 	 type SubagentExecutorOptions,
 	 type ResolvedWorkerRoute,
@@ -251,6 +252,7 @@ export class SubagentExecutor {
 		let terminalState: SubagentAttempt["sessionTerminalState"] = "error";
 		let protocolViolation = false;
 		let result: unknown;
+		let observedUsage: WorkerUsage | undefined;
 		let handle: Awaited<ReturnType<ChildSessionFactory["create"]>> | undefined;
 		let unsubscribe: (() => void) | undefined;
 		try {
@@ -264,7 +266,10 @@ export class SubagentExecutor {
 				...(options.signal === undefined ? {} : { signal: options.signal }),
 			});
 			unsubscribe = handle.session.subscribe((event) => {
-				if (event.type === "tool_execution_start") {
+				if (event.type === "message_end") {
+					const usage = extractWorkerUsage(event.message);
+					if (usage) observedUsage = mergeWorkerUsage(observedUsage, usage);
+				} else if (event.type === "tool_execution_start") {
 					const observation: ToolObservationMutable = {
 						toolCallId: event.toolCallId,
 						toolName: event.toolName,
@@ -307,6 +312,7 @@ export class SubagentExecutor {
 			} else {
 				const messages = Array.isArray(handle.session.messages) ? handle.session.messages : [];
 				const lastMessage = [...messages].reverse().find((message) => (message as { role?: string }).role === "assistant") as { stopReason?: string; errorMessage?: string; rawStopReason?: string } | undefined;
+				if (observedUsage === undefined) observedUsage = extractWorkerUsage(lastMessage);
 				if (lastMessage?.stopReason === "error") {
 					failure = classifyFailure(failureInputFromProviderText(lastMessage.errorMessage ?? lastMessage.rawStopReason));
 					outcome = failure.class === "timeout" ? "timed_out" : "infrastructure_failure";
@@ -345,6 +351,7 @@ export class SubagentExecutor {
 			terminalState = terminalState === "error" ? "error" : "disposed";
 		}
 		const endedAt = this.clock().toISOString();
+		const latencyMs = elapsedMilliseconds(startedAt, endedAt);
 		const potentialMutationObserved = observations.some((observation) => observation.potentialMutation) || [...observationByCall.values()].some((observation) => observation.potentialMutation);
 		const toolNamesUsed = [...new Set([...observations, ...observationByCall.values()].map((observation) => observation.toolName))];
 		const attempt: SubagentAttempt = {
@@ -359,6 +366,8 @@ export class SubagentExecutor {
 			toolNamesUsed,
 			toolObservations: observations,
 			potentialMutationObserved,
+			...(observedUsage === undefined ? {} : { usage: observedUsage }),
+			...(latencyMs === undefined ? {} : { latencyMs }),
 					...(isStructuredChildResult(result) ? { structuredResult: result } : {}),
 					...(result === undefined ? {} : { protocolResult: result }),
 			sessionTerminalState: terminalState,
@@ -454,8 +463,88 @@ async function validateExecutionRequest(request: SubagentExecutionRequest, defau
 	return { ...request, roleId: request.roleId.trim(), task: request.task.trim(), cwd, timeoutMs };
 }
 
+const MAX_OBSERVED_NUMBER = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Extract only the bounded numeric fields Pi exposes on an assistant message.
+ * Pi's own compaction helper ignores error/aborted and all-zero usage; M8 uses
+ * the same rule so failed turns do not masquerade as measured consumption.
+ */
+export function extractWorkerUsage(message: unknown): WorkerUsage | undefined {
+	if (!isRecord(message) || message.role !== "assistant" || message.stopReason === "error" || message.stopReason === "aborted") return undefined;
+	const raw = message.usage;
+	if (!isRecord(raw)) return undefined;
+	const input = boundedObservedNumber(raw.input);
+	const output = boundedObservedNumber(raw.output);
+	const cacheRead = boundedObservedNumber(raw.cacheRead);
+	const cacheWrite = boundedObservedNumber(raw.cacheWrite);
+	const cacheWrite1h = boundedObservedNumber(raw.cacheWrite1h);
+	const reasoning = boundedObservedNumber(raw.reasoning);
+	const totalTokens = boundedObservedNumber(raw.totalTokens);
+	const cost = extractWorkerUsageCost(raw.cost);
+	const tokenValues = [input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning, totalTokens].filter((value): value is number => value !== undefined);
+	if (!tokenValues.some((value) => value > 0)) return undefined;
+	return {
+		...(input === undefined ? {} : { input }),
+		...(output === undefined ? {} : { output }),
+		...(cacheRead === undefined ? {} : { cacheRead }),
+		...(cacheWrite === undefined ? {} : { cacheWrite }),
+		...(cacheWrite1h === undefined ? {} : { cacheWrite1h }),
+		...(reasoning === undefined ? {} : { reasoning }),
+		...(totalTokens === undefined ? {} : { totalTokens }),
+		...(cost === undefined ? {} : { cost }),
+	};
+}
+
+function mergeWorkerUsage(previous: WorkerUsage | undefined, next: WorkerUsage): WorkerUsage {
+	if (!previous) return next;
+	const add = (a: number | undefined, b: number | undefined): number | undefined => a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
+	const output: Record<string, unknown> = {};
+	const set = (key: string, value: number | undefined): void => { if (value !== undefined) output[key] = value; };
+	set("input", add(previous.input, next.input)); set("output", add(previous.output, next.output)); set("cacheRead", add(previous.cacheRead, next.cacheRead)); set("cacheWrite", add(previous.cacheWrite, next.cacheWrite)); set("cacheWrite1h", add(previous.cacheWrite1h, next.cacheWrite1h)); set("reasoning", add(previous.reasoning, next.reasoning)); set("totalTokens", add(previous.totalTokens, next.totalTokens));
+	if (previous.cost || next.cost) {
+		const cost: Record<string, unknown> = {};
+		const setCost = (key: string, value: number | undefined): void => { if (value !== undefined) cost[key] = value; };
+		setCost("input", add(previous.cost?.input, next.cost?.input)); setCost("output", add(previous.cost?.output, next.cost?.output)); setCost("cacheRead", add(previous.cost?.cacheRead, next.cost?.cacheRead)); setCost("cacheWrite", add(previous.cost?.cacheWrite, next.cost?.cacheWrite)); setCost("total", add(previous.cost?.total, next.cost?.total));
+		output.cost = cost;
+	}
+	return output as WorkerUsage;
+}
+
+function extractWorkerUsageCost(value: unknown): WorkerUsage["cost"] {
+	if (!isRecord(value)) return undefined;
+	const input = boundedObservedNumber(value.input);
+	const output = boundedObservedNumber(value.output);
+	const cacheRead = boundedObservedNumber(value.cacheRead);
+	const cacheWrite = boundedObservedNumber(value.cacheWrite);
+	const total = boundedObservedNumber(value.total);
+	if ([input, output, cacheRead, cacheWrite, total].every((item) => item === undefined)) return undefined;
+	return {
+		...(input === undefined ? {} : { input }),
+		...(output === undefined ? {} : { output }),
+		...(cacheRead === undefined ? {} : { cacheRead }),
+		...(cacheWrite === undefined ? {} : { cacheWrite }),
+		...(total === undefined ? {} : { total }),
+	};
+}
+
+function boundedObservedNumber(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= MAX_OBSERVED_NUMBER ? value : undefined;
+}
+
+function elapsedMilliseconds(startedAt: string, endedAt: string): number | undefined {
+	const start = Date.parse(startedAt);
+	const end = Date.parse(endedAt);
+	const elapsed = end - start;
+	return Number.isSafeInteger(elapsed) && elapsed >= 0 ? elapsed : undefined;
+}
+
 function isStableId(value: unknown): value is StableId {
 	return typeof value === "string" && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(value) && value.length <= 64;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function childPrompt(request: SubagentExecutionRequest, resultToolName: string): string {

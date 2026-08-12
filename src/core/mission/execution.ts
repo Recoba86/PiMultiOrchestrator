@@ -4,6 +4,7 @@ import { MissionNotFoundError, MissionValidationError } from "./errors.js";
 import type { AttemptRecord, EvidenceRecord, MissionId, MissionStoreAdapter, TaskRecord } from "./types.js";
 import type { VerificationResultV1 } from "../quality/types.js";
 import type { StableId } from "../config/types.js";
+import type { AnalyticsEventV1 } from "../analytics/index.js";
 
 export interface MissionTaskExecutionOptions {
 	readonly store: MissionStoreAdapter;
@@ -18,6 +19,8 @@ export interface MissionTaskExecutionOptions {
 	readonly allowQualityRepair?: boolean;
 	readonly repairFeedback?: VerificationResultV1;
 	readonly excludedRouteIds?: readonly StableId[];
+	/** Observer-only telemetry; failures never affect mission execution. */
+	readonly analytics?: { append(event: AnalyticsEventV1): Promise<unknown> | unknown };
 }
 
 export interface MissionTaskExecutionResult {
@@ -69,6 +72,15 @@ export async function executeMissionTask(options: MissionTaskExecutionOptions): 
 	}
 
 	const finalAttempt = run.attempts.at(-1);
+	const recordAnalytics = (event: AnalyticsEventV1): void => {
+		try { const result = options.analytics?.append(event); if (result && typeof (result as Promise<unknown>).then === "function") void (result as Promise<unknown>).catch(() => undefined); } catch { /* analytics is non-critical */ }
+	};
+	if (options.analytics) {
+		const base = { missionId, taskId: options.taskId, runId: run.runId, roleId: task.roleId, ...(task.poolId === undefined ? {} : { poolId: task.poolId }) };
+		recordAnalytics({ eventId: `run-${run.runId}`, occurredAt: new Date().toISOString(), eventType: "run", ...base, ...(run.finalRouteId === undefined ? {} : { routeId: run.finalRouteId }), ...(run.finalRemoteModelId === undefined ? {} : { remoteModelId: run.finalRemoteModelId }), outcome: run.terminalStatus, dimensions: { fallbackCount: run.fallbackCount } });
+		for (const attempt of run.attempts) recordAnalytics({ eventId: `attempt-${attempt.attemptId}`, occurredAt: attempt.endedAt, eventType: "attempt", ...base, attemptId: attempt.attemptId, routeId: attempt.routeId, remoteModelId: attempt.remoteModelId, outcome: attempt.outcome, ...(attempt.latencyMs === undefined ? {} : { durationMs: attempt.latencyMs }), ...(attempt.infrastructureFailure?.class === undefined ? {} : { failureClass: attempt.infrastructureFailure.class }), ...(attempt.usage === undefined ? {} : { tokenUsage: { ...(attempt.usage.input === undefined ? {} : { inputTokens: attempt.usage.input }), ...(attempt.usage.output === undefined ? {} : { outputTokens: attempt.usage.output }), ...(attempt.usage.cacheRead === undefined ? {} : { cacheReadTokens: attempt.usage.cacheRead }), ...(attempt.usage.reasoning === undefined ? {} : { reasoningTokens: attempt.usage.reasoning }), ...(attempt.usage.cacheWrite === undefined ? {} : { cacheWriteTokens: attempt.usage.cacheWrite }), ...(attempt.usage.totalTokens === undefined ? {} : { totalTokens: attempt.usage.totalTokens }), provenance: "observed" } }), });
+		for (let index = 0; index + 1 < run.attempts.length; index++) { const from = run.attempts[index]!; const to = run.attempts[index + 1]!; if (from.failureAction !== "FALLBACK_NEXT_ROUTE") continue; recordAnalytics({ eventId: `fallback-${run.runId}-${index}`, occurredAt: to.startedAt, eventType: "fallback", ...base, fallbackFromRouteId: from.routeId, fallbackToRouteId: to.routeId, ...(from.infrastructureFailure?.class === undefined ? {} : { failureClass: from.infrastructureFailure.class }), outcome: "fallback" }); }
+	}
 	const routedAttempt = finalAttempt && finalAttempt.routeId !== undefined
 		? options.store.updateAttemptProvenance(attempt.attemptId, { routeId: finalAttempt.routeId, remoteModelId: finalAttempt.remoteModelId, packetRevision: packetTask.packetRevision })
 		: attempt;

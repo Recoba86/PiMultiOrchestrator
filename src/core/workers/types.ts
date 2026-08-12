@@ -76,6 +76,30 @@ export interface ToolObservation {
 	readonly isError?: boolean;
 }
 
+/**
+ * Numeric usage reported by Pi's 0.84.1 AssistantMessage.  Fields remain
+ * optional because providers may omit cache/reasoning/cost details; unknown
+ * values are not replaced with zero.
+ */
+export interface WorkerUsageCost {
+	readonly input?: number;
+	readonly output?: number;
+	readonly cacheRead?: number;
+	readonly cacheWrite?: number;
+	readonly total?: number;
+}
+
+export interface WorkerUsage {
+	readonly input?: number;
+	readonly output?: number;
+	readonly cacheRead?: number;
+	readonly cacheWrite?: number;
+	readonly cacheWrite1h?: number;
+	readonly reasoning?: number;
+	readonly totalTokens?: number;
+	readonly cost?: WorkerUsageCost;
+}
+
 export type AttemptTerminalOutcome =
 	| "completed"
 	| "invalid_child_result"
@@ -98,6 +122,9 @@ export interface SubagentAttempt {
 	readonly toolNamesUsed: readonly string[];
 	readonly toolObservations: readonly ToolObservation[];
 	readonly potentialMutationObserved: boolean;
+	readonly usage?: WorkerUsage;
+	/** Wall-clock duration of this route attempt, when timestamps are valid. */
+	readonly latencyMs?: number;
 	readonly structuredResult?: StructuredChildResult;
 	/** Result emitted by a caller-supplied protocol (kept separate for M7). */
 	readonly protocolResult?: unknown;

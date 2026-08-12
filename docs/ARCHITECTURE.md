@@ -271,7 +271,8 @@ Conceptual locations:
   config.json                  global human-portable config
   history/                     prior valid config generations
   catalog.json                 validated M2 runtime cache, not exported
-  runtime.sqlite               missions, health, catalog, analytics, audit (M6+)
+  mission.sqlite               missions, quality, evidence, checkpoints (M6+)
+  analytics.sqlite             metadata-only analytics and recommendations (M8+)
   backups/                     validated runtime database backups (M6+)
 
 <project>/<CONFIG_DIR_NAME>/pi-multi-orchestrator.json

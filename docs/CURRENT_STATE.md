@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M7 accepted; M8 next planned / not started |
+| Development phase | M8 implemented; awaiting Planner acceptance |
 | Last accepted milestone | M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -30,7 +30,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M5 — Routed Subagent Execution | ACCEPTED / PASS |
 | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation | ACCEPTED / PASS |
 | M7 — Quality Gates, Review, and Escalation | ACCEPTED / PASS |
-| M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | NEXT PLANNED / NOT STARTED |
+| M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE |
 
 ## Stable / accepted capabilities
 
@@ -168,9 +168,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 - automatic broad mission decomposition and task scheduling;
 - general role generation;
 - parallel workers and worktree isolation/fan-out;
-- analytics collection and dashboard;
-- model performance statistics and token/cost accounting;
-- Quality/Value scoring and auto-tuning recommendations;
+- mission-linked analytics dashboards and automatic autonomous tuning;
 - automatic pool reordering and budget-aware routing;
 - public release tooling;
 - cross-process configuration locking; and
@@ -178,7 +176,11 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6 and M7 is accepted by STATE-7. M8 is next planned and not started. Do not start M8.
+M6 is accepted by STATE-6 and M7 is accepted by STATE-7. M8 is implemented but not accepted; Planner review is pending. Do not start M9.
+
+## M8 implementation snapshot
+
+M8 adds a separate local `analytics.sqlite` schema v1 with bounded, idempotent, metadata-only events. The host records bounded routed run/attempt/fallback observations and worker usage/latency fields without prompts, transcripts, tool arguments, source, headers, or secrets. `/analytics` exposes basic time-window summaries; `/recommendations` exposes deterministic sample-gated pool recommendations and explicit details/apply/ignore actions. ConfigV1 remains version 1 and analytics remains disabled by default. Current evidence is analytics `7/7`, provider `15/15`, worker `11/11`, typecheck/build PASS; mission-linked quality/fallback Pi proof and complete provider usage provenance remain pending Planner acceptance.
 
 ## Accepted evidence history
 
@@ -193,11 +195,13 @@ M6 is accepted by STATE-6 and M7 is accepted by STATE-7. M8 is next planned and 
 
 - M7: `db82ac141094db749835a0cc7f1f79dc780005e4` — ACCEPTED / PASS by STATE-7; evidence HEAD `d15dccfd3415e7c705600526a6ef7d634d8c90c5`, `121/121` tests, typecheck/build/check, and actual Pi/fake reviewer reject→repair→re-review lineage passed.
 
+- M8: implementation is present in `src/core/analytics` and host commands; focused analytics/provider tests pass, but Planner acceptance and full fake-Pi telemetry evidence remain pending.
+
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M8 has started; M7 acceptance does not imply Boss/planner, analytics, or parallel-work orchestration is implemented.
+- Do not assume M8 is accepted or that its partial telemetry covers all mission/quality flows; M7 acceptance does not imply Boss/planner or parallel-work orchestration.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

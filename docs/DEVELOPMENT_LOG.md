@@ -116,11 +116,21 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Major outcomes:** Mission DB schema 1→2 migration; durable verification runs, quality decisions/status, mechanical provenance, escalations, interrupted-verification recovery, reviewer diversity, deterministic QualityGate semantics, caller-supplied `submit_verification_result` through M5, explicit quality host commands/history, and bounded verification→repair→re-review orchestration.
 - **Tests/evidence:** `121/121` tests PASS; typecheck/build/check PASS; real Pi `0.84.1` + fake gateway `[P][fixture-v1]` reviewer reject→routed repair→re-review pass and MissionStore reopen lineage PASS; paid calls `0`.
 - **Important decisions:** Config schema remains version 1; MissionStore quality schema is version 2; quality is separate from execution completion and M4 infrastructure health; quality rejection never updates M4 health or triggers infrastructure fallback; reviewer infrastructure failure still uses M4 health/fallback; reviewer/repair claims remain non-canonical until explicit M6 evidence admission; the quality loop is bounded and preserves immutable historical decisions; quality PASS alone is not Planner acceptance or mission completion.
-- **Deferred work:** Boss/planner runtime, analytics, parallel/worktree orchestration, live-provider validation, and release work remain deferred. M8 is next planned and not started.
+- **Deferred work:** Boss/planner runtime, analytics, parallel/worktree orchestration, live-provider validation, and release work remain deferred. M8 was subsequently implemented and is pending Planner acceptance.
 - **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network were used.
-- **Acceptance boundary:** STATE-7 records M7 Planner acceptance; M8 must not start.
+- **Acceptance boundary:** STATE-7 records M7 Planner acceptance; M8 implementation is recorded below and remains pending Planner acceptance.
 
-## Future milestone entry template
+## M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Starting HEAD:** `95844baf25810215a0fa134f6888d33f065c25c0`
+- **Implementation:** separate local AnalyticsStore schema v1, bounded idempotent metadata events, Pi usage/latency fields, summaries, cost provenance, pool-specific recommendations, `/analytics`, and `/recommendations`.
+- **Evidence:** analytics focused suite `7/7 PASS`; provider host focused suite `15/15 PASS`; worker focused suite `11/11 PASS`; `npm run typecheck` and `npm run build` PASS; aggregate `npm test` reached `120/129 PASS` with 9 sandbox-only loopback `listen EPERM` failures. Full fake-Pi telemetry and mission/quality join proof are pending a loopback-capable verifier.
+- **Decisions:** ConfigV1 remains version 1; analytics is separate from ConfigStore, MissionStore, and HealthStore; disabled collection keeps history and rejects new rows; unknown cost is not zero; recommendation generation does not mutate configuration and Apply uses PoolManager.
+- **Live impact:** no live Pi/provider configuration, credentials, Keychain, paid calls, or external network used.
+- **Next:** Planner acceptance of M8; do not start M9.
+
+**Correction:** Earlier M7 handoff text described M8 as next planned. M8 implementation is now present; it remains unaccepted pending Planner review and full fake-Pi telemetry evidence.
 
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED
@@ -134,3 +144,5 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Deferred work:**
 - **Live environment impact:**
 - **Next authorized milestone:**
+
+## Future milestone entry template
