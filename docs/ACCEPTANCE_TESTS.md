@@ -796,7 +796,7 @@ A milestone is complete only when every required case through that milestone pas
 
 - **Level:** U/I
 - **Action:** build the candidate and inspect `package.json`, `pi` manifest, peer/runtime dependencies, and the generated file list.
-- **Pass:** SemVer `0.1.0-rc.1`, explicit compiled entrypoint, `pi-package` keyword, Pi peer only, no runtime dependency confusion, and no source/runtime-state files.
+- **Pass:** SemVer `0.1.0-rc.2`, explicit compiled entrypoint, `pi-package` keyword, Pi peer only, no runtime dependency confusion, and no source/runtime-state files.
 
 ### RELEASE-02 — Artifact verification and source independence
 
@@ -821,3 +821,15 @@ A milestone is complete only when every required case through that milestone pas
 - **Level:** U/I
 - **Action:** inspect `COMPATIBILITY.md`, `RELEASE_CHECKLIST.md`, `DOGFOOD_LOG.md`, and the generated review bundle.
 - **Pass:** tested vs untested rows are separated, real-route smoke requires authorization, independent review is marked pending until a separate reviewer acts, and M11 remains implemented but not accepted.
+
+### RELEASE-06 — Trusted provenance and evidence binding
+
+- **Level:** U/I
+- **Action:** run the release verifier with a fake executable earlier on `PATH`, alter source/build/evidence inputs in isolated copies, and verify the clean Git/tree/source/build identity, trusted Node/npm/Pi identities, strict test-total parsing, artifact/checksum binding, and machine-neutral evidence.
+- **Pass:** ambient `PATH` tools cannot forge release totals or Pi identity; stale, dirty, altered, or path-leaking evidence is rejected; the clean rc.2 bundle verifies as `EXTERNAL_REVIEW_PENDING`.
+
+### RELEASE-07 — Integrated worker safety enforcement
+
+- **Level:** I/P, fake provider only
+- **Action:** invoke Investigation, Verification, Implementation, and analyst child sessions through the real Pi SDK worker path and attempt profile-expanding tools, protected/out-of-root/symlink paths, destructive or secret-bearing commands, and allowed result submission.
+- **Pass:** disallowed tools and arguments are denied before Pi executes them; Implementation mutation requires project trust; read-only roles cannot mutate; analyst remains read-only; bounded result submission remains available; no live or paid provider call occurs.

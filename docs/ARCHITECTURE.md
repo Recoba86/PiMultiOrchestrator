@@ -208,6 +208,7 @@ Builds role-specific Task Packets from an immutable canonical-state generation. 
 Owns direct Pi SDK child-session invocation, tool visibility, structured result submission, progress, timeout, cancellation, cleanup, and concurrency.
 
 M5 constructs fresh `AgentSession` instances with `SessionManager.inMemory`, an extension/skills/context-free resource loader, an exact M4-selected model, and retry disabled. Investigation, Implementation, and Verification receive distinct allowlists; `edit`, `write`, and `bash` are conservatively treated as potentially mutating. Shared-worktree Implementation runs are serial by normalized cwd, and a mutation prevents automatic cross-route fallback. The shipped child-process example remains a portability reference, not a second executor.
+M11-R4 adds an execution-time `WorkerSafetyGuard` to the same child-session boundary: active tools are clamped to the worker profile, and every tool call is authorized before Pi invokes it. Path, command, trust, and mutation policy therefore applies to real worker execution, not only diagnostics or capability metadata; the bounded result-submission tool remains the only non-filesystem protocol exception.
 
 ### 5.10 `analytics`
 
@@ -220,6 +221,7 @@ M8.5 adds an optional manual Recommendation Analyst above the deterministic reco
 M10 keeps project trust separate from portable configuration in a local, restrictive TrustStore. Projects are untrusted by default; explicit trust/revoke is operator-controlled and is never imported from a backup. PathSafetyPolicy canonicalizes existing ancestors, confines workspace access, rejects protected/credential paths and symlink escapes, and is applied before mutating host flows. CommandSafetyPolicy is a pure conservative classifier: safe commands may run, destructive commands block, and ambiguous shell constructs require review. SecretSanitizer removes registered values and sensitive structures from diagnostics/errors; capability rows expose read-only Investigation/Verification versus trust-gated Implementation mutation.
 
 ConfigStore mutations reread under a short cross-process lock. MissionStore leases carry owner tokens and expiry checks, while active attempts are race-safe and non-owner release/renewal is rejected. MissionStore and AnalyticsStore remain separate SQLite databases with validated native backup/restore and integrity diagnostics. Analytics corruption degrades to a diagnostic state instead of inventing empty history. These are application-level policies, not OS/kernel sandboxing; no autonomous approval or automatic rerun is implied.
+M11-R4 verifies that this policy is installed on the Pi child-session `beforeToolCall` boundary and that unknown or role-expanding tools are denied before execution. This remains application-level enforcement, not an OS/kernel sandbox.
 
 ### 5.12 `tui`
 
@@ -628,6 +630,7 @@ Accessibility baseline includes keyboard-only operation, visible focus, non-colo
 - Intercept destructive/protected-path operations before execution.
 - Do not put secrets in argv, environment copied to diagnostics, prompt files, or task results.
 - Track owned PID/process group for cancellation and cleanup.
+- Install the worker safety guard at the child-session tool boundary; never rely on a diagnostic capability matrix as enforcement.
 
 ### 19.4 Persistence/export
 

@@ -1,6 +1,6 @@
 # Development log
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
@@ -199,6 +199,15 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Remediation scope:** fresh ignored-`dist` replacement/build provenance, stale runtime milestone projection, stronger secret/private-key/path/runtime-state scanning, self-contained artifact/checksum/review evidence, deterministic bundle verification, and reproducible upgrade/rollback/rescue harnesses.
 - **Evidence:** Corrective commits are `82fa48b` and `5cdc305`. The self-contained bundle includes the exact artifact/checksum, artifact-derived directory source, `test-evidence.json` (`163/163`, check/package PASS), `pi-install-evidence.json` (Pi `0.84.1`, all-twelve/dashboard/Diagnostics, install/remove/reinstall, upgrade/rollback hashes, rescue, UNTRUSTED default), and `REVIEW_EVIDENCE.json` with `EXTERNAL_REVIEW_PENDING`.
 - **Boundary:** no real-route smoke, publication, tag, push, live Pi configuration, credentials, or paid inference. Planner acceptance remains open pending a new independent clean-context M11 review.
+
+### M11-R4 — release provenance and integrated worker safety remediation
+
+- **Status:** IMPLEMENTED / REMEDIATED; M11 remains NOT ACCEPTED.
+- **Implementation commits:** `50ee46f` — `fix(safety): enforce worker tool safety at execution`; `55a15cc` — `fix(release): bind rc evidence to trusted provenance`.
+- **Purpose:** Close Independent Review #2 findings without changing M10 acceptance: enforce M10 path/command/trust policy at the real Pi child-session tool boundary, prevent role/profile tool expansion, bind release evidence to trusted executables and clean source/build identity, strengthen privacy/symlink checks, use the real M10 baseline, preserve seeded state, and exercise extension-independent rescue.
+- **Evidence:** local `0.1.0-rc.2`; exact artifact checksum/source/build identities in the generated release manifest; `165/165 PASS`; release-candidate `4/4 PASS`; typecheck/build/check/package dry-run/diff/secret/state checks PASS; Pi `0.84.1` directory-source install, all twelve Control Center sections, trusted M10 baseline upgrade/rollback, seeded Config/Mission/Analytics/Trust preservation, broken-candidate rescue, clean privacy report, and self-contained bundle verification PASS.
+- **Release provenance:** manifest records clean Git commit/tree, source digest, build digest, trusted Node/npm/Pi identities, artifact file records, checksum, and machine-neutral evidence. A fake `PATH` executable cannot supply release totals or Pi identity.
+- **Boundary:** no real-route smoke, publication, tag, push, live Pi configuration, credentials, or paid inference. Review bundle status remains `EXTERNAL_REVIEW_PENDING`; human keyboard smoke and Planner acceptance remain open.
 
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED

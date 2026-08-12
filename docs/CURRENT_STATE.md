@@ -1,6 +1,6 @@
 # Current project state
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 Read this first for a fast operational snapshot. Git and verification evidence take precedence if this file is stale; see [Project state policy](PROJECT_STATE_POLICY.md).
 
@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M11 implemented / acceptance pending |
+| Development phase | M10 accepted; M11 rc.2 remediated / acceptance pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,8 +23,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M11 candidate | `0.1.0-rc.1` — local, not public |
-| M11-R2 implementation evidence | `163/163 PASS`; release-candidate subtests `4/4 PASS`; typecheck/build/check/package dry-run/diff/secret/state checks PASS; fresh artifact `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005` (103 files, 155072 bytes) |
+| M11 candidate | `0.1.0-rc.2` — local, not public |
+| M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
+| M11-R4 release evidence | `165/165 PASS`; release-candidate subtests `4/4 PASS`; typecheck/build/check/package dry-run/diff/secret/state checks PASS; rc.2 artifact, file count/size/checksum, source commit/tree, and clean source/tree/build identity are recorded in the generated release manifest |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -251,12 +252,12 @@ Config mutations now use a cross-process lock and reread-under-lock CAS path. Mi
 | Planner acceptance / STATE-10 | ACCEPTED / PASS |
 | Paid calls / live environment changes | `0` / NONE |
 
-M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. Human keyboard-driven TUI smoke remains open validation and is not an M10 acceptance blocker. M11 is implemented but not accepted and is not production-ready.
+M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. Review #2 found that the accepted M10 evidence did not exercise policy at the integrated real worker tool boundary; M11-R4 adds that pre-tool enforcement without changing M10's accepted status. Human keyboard-driven TUI smoke remains open validation and is not an M10 acceptance blocker. M11 is implemented but not accepted and is not production-ready.
 
 ## M11 implementation snapshot — acceptance pending
 
 M11 packages the compiled Pi extension as local release candidate
-`0.1.0-rc.1` using Pi's `pi-package` manifest and explicit
+`0.1.0-rc.2` using Pi's `pi-package` manifest and explicit
 `dist/host/pi-extension.js` entrypoint. The allowlist contains compiled
 JavaScript/declarations, README, and the small operator guide; runtime
 databases, sessions, source checkout paths, `.git`, dependencies, and secrets
@@ -272,10 +273,13 @@ RC workflow is checksum verification, fresh extraction, and `pi install
 never installed. `run-release-verification.mjs` records actual check/test
 evidence, Pi startup/Diagnostics/all-twelve-section results, remove/reinstall,
 M10 compatibility-baseline upgrade, rollback, state hashes, and rescue in a
-self-contained review bundle. R2 evidence is complete: the artifact-derived
+self-contained review bundle. R4 evidence is complete: the artifact-derived
 directory-source workflow passed on Pi `0.84.1`, with direct `.tgz` installation
-explicitly recorded as unsupported, and the bundle remains
-`EXTERNAL_REVIEW_PENDING`. No real-route smoke was authorized or performed.
+explicitly recorded as unsupported. The release manifest binds the clean Git
+commit/tree, source digest, build digest, trusted Node/npm/Pi identities,
+artifact checksum, and file records; the privacy report is clean and
+machine-neutral. The bundle verifies as `EXTERNAL_REVIEW_PENDING`. No
+real-route smoke was authorized or performed.
 M10 remains the last Planner-accepted milestone.
 
 ## Accepted evidence history
@@ -295,7 +299,7 @@ M10 remains the last Planner-accepted milestone.
 - M8.5: `28b75be` implementation accepted by STATE-8.5 with evidence HEAD `28b75be`; `141/141`, actual Pi/fake analyst evidence, and manual-only/stale/privacy/explicit-Apply checks passed.
 - M9: `2032a2b` — `feat(tui): add full orchestrator control center` — ACCEPTED / PASS by STATE-9; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`, `146/146`, typecheck/build/check/package/diff/secret/state validation PASS.
 - M10: `3a6990d` — `feat(safety): harden trust permissions and recovery` — ACCEPTED / PASS by STATE-10; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca`, `159/159`, typecheck/build/check/package/diff/secret validation PASS; human keyboard smoke remains pending open validation.
-- M11: `4cebcce` implementation plus R2 corrective commits `82fa48b` and `5cdc305`; fresh `0.1.0-rc.1` artifact SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; `163/163` and isolated Pi directory-source/upgrade/rollback/rescue evidence PASS; independent Review #2 and Planner acceptance remain pending.
+- M11: rc.1 historical candidate was rejected by Independent Review #2. M11-R4 remediation commits `50ee46f` (integrated worker safety) and `55a15cc` (trusted release provenance/privacy/bundle) produce rc.2 evidence; `165/165`, isolated Pi directory-source/upgrade/rollback/rescue, seeded-state preservation, and self-contained bundle verification PASS. Exact artifact/source/build identities are in the generated manifest. External review and Planner acceptance remain pending.
 
 ## Assumptions agents must not make
 

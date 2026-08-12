@@ -26,10 +26,10 @@ that extracted `package/` directory. With isolated `HOME`,
 `PI_CODING_AGENT_DIR`, session/config roots, the verified workflow is:
 
 ```sh
-shasum -a 256 -c pi-multi-orchestrator-0.1.0-rc.1.tgz.sha256
+shasum -a 256 -c pi-multi-orchestrator-0.1.0-rc.2.tgz.sha256
 rm -rf /tmp/pi-multi-orchestrator-rc-package
 mkdir -p /tmp/pi-multi-orchestrator-rc-package
-tar -xzf pi-multi-orchestrator-0.1.0-rc.1.tgz -C /tmp/pi-multi-orchestrator-rc-package
+tar -xzf pi-multi-orchestrator-0.1.0-rc.2.tgz -C /tmp/pi-multi-orchestrator-rc-package
 pi install /tmp/pi-multi-orchestrator-rc-package/package --no-approve
 pi list
 ```
@@ -46,3 +46,9 @@ Before any future publication, obtain separate authorization for real-route
 smoke, human keyboard smoke, independent external review, npm publish, tags,
 GitHub releases, and live configuration changes. M11 remains implemented but
 not accepted until those applicable gates are closed by the Planner.
+
+The rc.2 gate also requires a clean source/tree/build identity, trusted
+absolute Node/npm/Pi tool identities, strict test totals (`165/165` with no
+failures/cancellations), clean privacy evidence, and integrated worker
+pre-tool denial for blocked paths, unsafe commands, and role/profile-expanding
+tools. A fake executable earlier on `PATH` must not control release evidence.

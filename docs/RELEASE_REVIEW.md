@@ -3,15 +3,18 @@
 The review bundle is generated outside the checkout from a clean candidate:
 
 ```sh
-node scripts/run-release-verification.mjs --output /tmp/pi-multi-orchestrator-release-r2-final --bundle /tmp/pi-multi-orchestrator-review-r2-final --force
-node scripts/create-review-bundle.mjs --release-dir /tmp/pi-multi-orchestrator-release-r2-final --output /tmp/pi-multi-orchestrator-review-r2-final --force
+node scripts/run-release-verification.mjs --output /tmp/pi-multi-orchestrator-r4-release-final --bundle /tmp/pi-multi-orchestrator-r4-bundle --force
+node scripts/create-review-bundle.mjs --release-dir /tmp/pi-multi-orchestrator-r4-release-final --output /tmp/pi-multi-orchestrator-r4-bundle --force
 ```
 
 It contains copies of the exact release `.tgz`, its SHA-256 file, release
 manifest, artifact file list, privacy scan, test evidence, compatibility matrix,
 release checklist, dogfood log, package metadata, exact Git HEAD, upgrade/
 rollback evidence, and an explicit deterministic bundle-verifier result. The
-implementation context does not mark its own review as independent. Until a
+implementation context does not mark its own review as independent. The current
+offline rc.2 evidence is bound to the clean source commit/tree/build digests,
+trusted Node/npm/Pi executable identities, and artifact checksum recorded in
+the generated manifest. Until a
 separate reviewer/process records a result, the status is
 `EXTERNAL_REVIEW_PENDING`.
 
@@ -22,5 +25,7 @@ not supported because Pi later tries to load the tarball as JavaScript. The
 source checkout is not an installation source.
 
 Review scope: package manifest and allowlist, compiled-entrypoint independence,
-dependency/lifecycle policy, isolated install/upgrade/rollback, persistence
-compatibility, rescue path, privacy scan, and truthful release-state wording.
+trusted tool provenance, source/build identity, strict test-total parsing,
+integrated worker pre-tool safety, isolated install/upgrade/rollback, seeded
+persistence compatibility, broken-candidate rescue path, privacy scan, and
+truthful release-state wording.
