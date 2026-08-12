@@ -110,7 +110,7 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 - **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
 - **Starting HEAD:** `e4014730caf709b2ae2ceae4823583c14c810c1e`
-- **Implementation/final HEAD:** Pending final implementation commit; this entry is the implementation handoff, not STATE-7 acceptance.
+- **Implementation/final HEAD:** `db82ac141094db749835a0cc7f1f79dc780005e4` — `feat(quality): add verification gates and bounded review loop`; this entry is the implementation handoff, not STATE-7 acceptance.
 - **Purpose:** Add a durable, bounded quality-control boundary above M5 execution and M6 mission state without conflating quality judgment with M4 infrastructure health or canonical evidence.
 - **Major outcomes:** Mission DB schema 1→2 migration; durable verification runs, quality decisions/status, mechanical provenance, escalations, interrupted-verification recovery, reviewer diversity, deterministic QualityGate semantics, caller-supplied `submit_verification_result` through M5, explicit quality host commands/history, and bounded verification→repair→re-review orchestration.
 - **Tests/evidence:** `121/121` tests PASS; typecheck/build/check PASS; real Pi `0.84.1` + fake gateway `[P][fixture-v1]` reviewer reject→routed repair→re-review pass and MissionStore reopen lineage PASS; paid calls `0`.

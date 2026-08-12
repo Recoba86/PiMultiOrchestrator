@@ -46,7 +46,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, M7 planner acceptance, analytics, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M6 MissionStore/ContextBroker and M7 implementation evidence are development milestones only; no stable release is implied.
+- Boss runtime, M7 planner acceptance, analytics, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M6 MissionStore/ContextBroker remains accepted development state; M7 implementation commit `db82ac141094db749835a0cc7f1f79dc780005e4` still awaits STATE-7 acceptance. No stable release is implied.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

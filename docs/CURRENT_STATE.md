@@ -187,7 +187,7 @@ M6 is accepted by STATE-6. M7 is implemented but planner acceptance is pending. 
 
 - M6: `62282c1618f395b032e359005d018721e2b36868` — `feat(missions): add canonical mission state and context broker` — ACCEPTED / PASS by STATE-6; evidence HEAD `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298`, `111/111` tests, typecheck/build/check, and isolated Pi `0.84.1` mission flow passed.
 
-- M7 implementation: current worktree — IMPLEMENTED BUT NOT ACCEPTED; Mission DB v1→v2 migration, durable quality records/status, structured reviewer protocol, deterministic gate, bounded escalation/repair/re-review, host quality commands, focused tests, and actual Pi/fake reviewer reject→repair→re-review evidence are present. STATE-7 planner acceptance remains pending.
+- M7 implementation: `db82ac141094db749835a0cc7f1f79dc780005e4` — IMPLEMENTED BUT NOT ACCEPTED; Mission DB v1→v2 migration, durable quality records/status, structured reviewer protocol, deterministic gate, bounded escalation/repair/re-review, host quality commands, focused tests, and actual Pi/fake reviewer reject→repair→re-review evidence are present. STATE-7 planner acceptance remains pending.
 
 ## Assumptions agents must not make
 
