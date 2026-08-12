@@ -10,6 +10,8 @@ npm run check
 npm run build
 npm pack --dry-run
 npm run release:candidate -- --output /tmp/pi-multi-orchestrator-release --force
+node scripts/verify-pi-release.mjs --release-dir /tmp/pi-multi-orchestrator-release
+node scripts/run-release-verification.mjs --output /tmp/pi-multi-orchestrator-release-final --bundle /tmp/pi-multi-orchestrator-review-final --force
 ```
 
 Then verify the generated `release-manifest.json`, checksum, sorted file list,
@@ -18,12 +20,27 @@ absolute paths, `.git`, `node_modules`, runtime databases, sessions, or source
 checkout files. Import the unpacked entrypoint with Node while the checkout is
 absent.
 
-Use an isolated `HOME`, `PI_CODING_AGENT_DIR`, session directory, config root,
-and fake gateway for `pi install <artifact>`, `pi list`, clean startup,
-`/orchestrator`, upgrade, and rollback. Do not touch the user's live Pi
-settings. The external rescue path is independent of the extension: disable or
-remove the candidate in the isolated settings, select the prior pinned package,
-or use an external Codex/harness to inspect and repair the repository.
+The `.tgz` is the immutable release artifact, not a Pi local install source.
+Verify its SHA-256, extract it into a fresh temporary directory, and install
+that extracted `package/` directory. With isolated `HOME`,
+`PI_CODING_AGENT_DIR`, session/config roots, the verified workflow is:
+
+```sh
+shasum -a 256 -c pi-multi-orchestrator-0.1.0-rc.1.tgz.sha256
+rm -rf /tmp/pi-multi-orchestrator-rc-package
+mkdir -p /tmp/pi-multi-orchestrator-rc-package
+tar -xzf pi-multi-orchestrator-0.1.0-rc.1.tgz -C /tmp/pi-multi-orchestrator-rc-package
+pi install /tmp/pi-multi-orchestrator-rc-package/package --no-approve
+pi list
+```
+
+Then run clean startup, `/orchestrator`, Diagnostics, upgrade, rollback,
+remove, and reinstall using the extracted directory. Direct `pi install
+<artifact>.tgz` is unsupported on Pi `0.84.1` and MUST NOT be documented as a
+working path. Do not touch the user's live Pi settings. The external rescue
+path is independent of the extension: remove or disable the candidate in the
+isolated settings, reinstall the M10 compatibility baseline directory, or use
+an external Codex/harness to inspect and repair the repository.
 
 Before any future publication, obtain separate authorization for real-route
 smoke, human keyboard smoke, independent external review, npm publish, tags,

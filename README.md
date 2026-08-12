@@ -8,24 +8,18 @@ M0 through M10 are accepted. M11 is implemented but not accepted: it packages a 
 
 This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox; human keyboard-driven TUI smoke remains open validation. M11's local RC is not public or production-ready; independent review, authorized real-route smoke, and applicable human/manual acceptance remain open. A quality PASS is not by itself mission completion, canonical evidence admission, or release readiness.
 
-The implementation contract is split across:
-
-- [Product specification](docs/PRODUCT_SPEC.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Acceptance tests](docs/ACCEPTANCE_TESTS.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Decision log](docs/DECISIONS.md)
-
-Future agents must read [AGENTS.md](AGENTS.md) before changing the repository.
+The implementation contract is split across the repository files
+`docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`,
+`docs/ROADMAP.md`, and `docs/DECISIONS.md`. Future agents must read `AGENTS.md`
+before changing the repository.
 
 ## Project state
 
-For the authoritative current development snapshot, read [Current state](docs/CURRENT_STATE.md) first.
-
-- [Release state](docs/RELEASE_STATE.md) — actual stability, packaging, compatibility, and release claims
-- [Development log](docs/DEVELOPMENT_LOG.md) — milestone outcomes and accepted evidence
-- [Project state policy](docs/PROJECT_STATE_POLICY.md) — truth hierarchy and update rules
-- [Operator guide](docs/OPERATOR_GUIDE.md) — Control Center navigation and safety boundaries
+For the authoritative current development snapshot, read `docs/CURRENT_STATE.md`
+first. Release claims, milestone history, and policy are in
+`docs/RELEASE_STATE.md`, `docs/DEVELOPMENT_LOG.md`, and
+`docs/PROJECT_STATE_POLICY.md`. The packaged [Operator Guide](docs/OPERATOR_GUIDE.md)
+covers Control Center navigation and safety boundaries.
 
 ## Validated host baseline
 
@@ -37,11 +31,19 @@ M0 inspected the installed runtime on 2026-08-12:
 - Pi supports extension commands, custom TUI components, dynamic provider registration and removal, model/session APIs, provider lifecycle events, and an embeddable SDK.
 - Pi's shipped subagent example creates isolated workers as child `pi` processes. Pi does not natively implement the Boss policy, three pools, canonical mission state, quality gates, or analytics required here.
 
-Evidence and proof-of-concept boundaries are recorded in [Architecture](docs/ARCHITECTURE.md).
+Evidence and proof-of-concept boundaries are recorded in `docs/ARCHITECTURE.md`.
 
 ## Local checks
 
 Requires Node.js `>=22.19.0` and npm.
+
+## Local release candidate install
+
+The `.tgz` is the immutable release artifact. Pi `0.84.1` does not unpack a
+local tarball passed directly to `pi install`; verify its checksum, extract it
+to a fresh directory, and install the extracted `package/` directory in
+isolated Pi settings. The source checkout is never the installed package. The
+candidate is local-only and not a public or production release.
 
 ```sh
 npm install
@@ -72,7 +74,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M11 implementation work did not modify any live environment. M10 is the latest accepted milestone; M11 is implemented but not accepted. See [Roadmap](docs/ROADMAP.md).
+M1 through M11 implementation work did not modify any live environment. M10 is the latest accepted milestone; M11 is implemented but not accepted. See `docs/ROADMAP.md` for the release gate.
 
 ## M9 accepted capability snapshot
 

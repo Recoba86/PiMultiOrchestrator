@@ -1121,7 +1121,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			lines.push("AI Analyst: UNKNOWN");
 		}
 		lines.push("latest warning/error: none observed in this view");
-		lines.push("accepted milestone: M8.5; M9 control center implementation pending Planner acceptance");
+		lines.push(`latest accepted milestone: ${PACKAGE_INFO.latestAcceptedMilestone}`);
+		lines.push(`${PACKAGE_INFO.developmentMilestone}: ${PACKAGE_INFO.developmentStatus}; production-ready: ${PACKAGE_INFO.productionReady ? "YES" : "NO"}`);
 		lines.push("safe metadata only; use a section below or the direct commands");
 		ctx.ui.notify(lines.join("\n"), "info");
 	};

@@ -188,8 +188,8 @@ Deliverables:
 - release artifact and independent external review;
 - staged dogfooding while Codex or another external harness remains a rescue path.
 
-Implementation evidence: local `0.1.0-rc.1` Pi package manifest, strict allowlist, artifact checksum/manifest, unpacked source-independent entrypoint check, isolated install/upgrade/rollback/rescue procedures, compatibility matrix, release checklist, dogfood log, package version Diagnostics, and external-review bundle are present. Final exact test/check counts and isolated Pi results must be recorded from the clean-run handoff.
+Implementation evidence: local `0.1.0-rc.1` Pi package manifest, strict allowlist, artifact checksum/manifest, fresh-build and stale-`dist` replacement, unpacked source-independent entrypoint check, checksum-derived directory-source install procedure, isolated install/upgrade/rollback/rescue harness, compatibility matrix, release checklist, dogfood log, package version Diagnostics, and deterministic self-contained review-bundle verifier are present. Final exact test/check counts and isolated Pi results must be recorded from the clean-run R2 handoff.
 
-Open gates: independent external review, authorized real-route smoke, human keyboard smoke when available, and Planner acceptance. A local RC is not a public release; npm publish, GitHub release, tags, remotes, and live configuration require separate authorization.
+Open gates: new independent clean-context external Review #2, authorized real-route smoke, human keyboard smoke when available, and Planner acceptance. A local RC is not a public release; npm publish, GitHub release, tags, remotes, and live configuration require separate authorization.
 
 Exit gate: clean install, upgrade, rollback, package verification, manual acceptance, and authorized publication gates pass. Creating a GitHub repository, remote, tag, or release requires separate authorization.

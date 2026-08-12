@@ -696,11 +696,14 @@ npm dependencies or lifecycle hooks. `package-info` exposes version, release
 status, Pi compatibility, and schema versions from package metadata so an
 installed artifact does not shell out to Git.
 
-The release workflow writes its tarball, checksum, manifest, unpacked files,
-and review bundle outside the source checkout. It verifies the unpacked
-entrypoint without the checkout and rejects secrets, local paths, `.git`,
-runtime databases, sessions, and development dependencies. Install, upgrade,
-rollback, and rescue use isolated Pi settings/runtime roots. A rescue harness
-can remove or disable the package and restore a prior pinned artifact without
-loading the extension. A local RC is not a public release, and no live route
-or publication is implied.
+The release workflow writes its immutable tarball, checksum, manifest,
+artifact-derived extracted directory, machine-readable upgrade/rollback
+evidence, and self-contained review bundle outside the source checkout. It
+verifies the unpacked entrypoint without the checkout and rejects secrets,
+local paths, `.git`, runtime databases, sessions, and development
+dependencies. Pi `0.84.1` installs the checksum-verified extracted directory;
+it does not load a `.tgz` directly. Install, upgrade, rollback, and rescue use
+isolated Pi settings/runtime roots. A rescue harness can remove or disable the
+package and restore a named M10 compatibility baseline without loading the
+extension. A local RC is not a public release, and no live route or publication
+is implied.

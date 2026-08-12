@@ -258,22 +258,23 @@ M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun 
 M11 packages the compiled Pi extension as local release candidate
 `0.1.0-rc.1` using Pi's `pi-package` manifest and explicit
 `dist/host/pi-extension.js` entrypoint. The allowlist contains compiled
-JavaScript/declarations and README only; runtime databases, sessions, source
-checkout paths, `.git`, dependencies, and secrets are excluded. Pi remains a
-peer dependency and the package has no runtime npm dependencies. The candidate
-workflow emits an artifact checksum, sorted file list, machine-readable
-manifest, unpacked-entrypoint verification, compatibility matrix, checklist,
-dogfood log, and an independent-review bundle marked
-`EXTERNAL_REVIEW_PENDING` until a separate reviewer records a result.
+JavaScript/declarations, README, and the small operator guide; runtime
+databases, sessions, source checkout paths, `.git`, dependencies, and secrets
+are excluded. Pi remains a peer dependency and the package has no runtime npm
+dependencies. The candidate workflow removes ignored `dist/`, performs a
+fresh build, emits an immutable `.tgz` plus checksum, copies an exact
+artifact-derived `directory-source/`, and verifies the unpacked entrypoint,
+privacy boundary, source-map policy, and file records.
 
-Diagnostics exposes package version/release status, Pi compatibility, and
-Config/Mission/Analytics schema versions without requiring Git or a source
-checkout. Isolated Pi install/list, clean-start Control Center/Diagnostics,
-upgrade from a represented M10 package, rollback, and rescue procedures
-passed in temporary HOME/settings/runtime roots; Config, Mission, and
-Analytics database hashes were unchanged across upgrade and rollback. No
-real-route smoke was authorized or performed. M10 remains the last
-Planner-accepted milestone.
+Pi `0.84.1` does not support installing a local `.tgz` directly. The supported
+RC workflow is checksum verification, fresh extraction, and `pi install
+<directory-source> --no-approve` in isolated roots; the source checkout is
+never installed. `run-release-verification.mjs` records actual check/test
+evidence, Pi startup/Diagnostics/all-twelve-section results, remove/reinstall,
+M10 compatibility-baseline upgrade, rollback, state hashes, and rescue in a
+self-contained review bundle. M11-R2 verification is in progress; no real
+route smoke was authorized or performed. M10 remains the last Planner-accepted
+milestone.
 
 ## Accepted evidence history
 

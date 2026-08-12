@@ -807,13 +807,13 @@ A milestone is complete only when every required case through that milestone pas
 ### RELEASE-03 — Isolated Pi install and Control Center
 
 - **Level:** P, Pi `0.84.1`, fake gateway
-- **Action:** install the artifact with temporary `HOME`/`PI_CODING_AGENT_DIR`/session/config roots, list it, start clean, and open `/orchestrator`.
-- **Pass:** package is discovered, Diagnostics exposes the candidate version, dashboard/Control Center loads, and no live user settings change.
+- **Action:** verify the artifact SHA-256, extract the exact `.tgz` into a fresh temporary `package/` directory, install that directory with `pi install <package-dir> --no-approve` under temporary `HOME`/`PI_CODING_AGENT_DIR`/session/config roots, list it, start clean, and open `/orchestrator`. Direct `pi install <artifact>.tgz` is an explicitly unsupported negative case on Pi `0.84.1`.
+- **Pass:** the checksum-derived directory source is discovered, Diagnostics exposes the candidate version, dashboard/Control Center loads all twelve sections, source checkout is absent, removal/reinstall works, and no live user settings change occurs.
 
 ### RELEASE-04 — Upgrade, rollback, and rescue
 
 - **Level:** I/P, temporary roots
-- **Action:** represent the accepted M10 package, upgrade to the candidate, inspect Config/Mission/Analytics/Trust state, remove/restore the prior package, and execute the extension-independent rescue procedure.
+- **Action:** generate the explicitly named M10 compatibility baseline artifact/directory, record Config/Mission/Analytics/Trust hashes, install the checksum-derived M11 directory, record hashes again, remove it, reinstall the baseline directory, and execute the extension-independent rescue procedure. Preserve machine-readable commands and results in the review bundle.
 - **Pass:** no M11 schema mutation or data loss, rollback is explicit and tested, and a broken extension can be disabled/restored without loading itself.
 
 ### RELEASE-05 — Review, compatibility, and dogfood records
