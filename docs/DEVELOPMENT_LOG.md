@@ -65,7 +65,7 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 - **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
 - **Starting HEAD:** `e01456ed21be345b33176ae49fec365a534e7554`
-- **Accepted/final HEAD:** implementation commit recorded after verification; Planner acceptance remains pending
+- **Implementation HEAD:** `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` (implementation commit); Planner acceptance remains pending
 - **Commit:** `feat(routing): add health-aware fallback engine`
 - **Purpose:** Add a pure ordered routing preview/decision boundary, explicit infrastructure failure actions, and reload-safe runtime route health without starting execution workers.
 - **Major outcomes:** ConfigV1 remains schema version 1; pool array order remains canonical priority; `none`/`prefer`/`require` diversity is explicit; bounded retry/fallback chains stop conservatively for cancellation, invalid request, protocol, and unknown failures; 429 is rate-limited unless explicit quota evidence exists; `HealthStore` persists only sanitized runtime state in atomic `health.json`; health never mutates ConfigStore, history, or export; Routing & Fallback and Health & Quotas host flows plus direct status/settings/health commands are wired through Pi `0.84.1`.

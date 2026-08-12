@@ -13,6 +13,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | Development phase | M4 implemented; Planner acceptance pending |
 | Last accepted milestone | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor |
 | Accepted M3 commit | `e2efde838d84197f1fbe289e3e8ded090bdd2d87` |
+| M4 implementation commit | `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` (not accepted) |
 | Configuration schema | Version 1 |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -138,6 +139,7 @@ M3 is accepted by STATE-3. M4 implementation is present but awaits Planner accep
 - M1: `b451408a57306cdb0c0cd9d4b41f76edd92c9395` — `feat(core): add configuration foundation` — ACCEPTED / PASS; `41/41` tests, typecheck, and aggregate check passed.
 - M2: `43f810cc9c6fbda50abd69b94d5f8aad1597756a` — `feat(pi): add selective 9Router model manager` — ACCEPTED / PASS; evidence recorded above.
 - M3: `e2efde838d84197f1fbe289e3e8ded090bdd2d87` — `feat(pools): add execution pool manager` — ACCEPTED / PASS; `70/70` tests, typecheck/build, and actual Pi/fake-gateway pool mutation/reload evidence passed.
+- M4 implementation: `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` — `feat(routing): add health-aware fallback engine` — IMPLEMENTED BUT NOT ACCEPTED; `86/86` tests and isolated Pi/fake-gateway routing/health evidence passed.
 
 ## Assumptions agents must not make
 
