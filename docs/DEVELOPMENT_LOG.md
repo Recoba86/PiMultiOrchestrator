@@ -76,20 +76,21 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Live environment impact:** Pi configuration unchanged; 9Router unchanged; no credentials or Keychain access; fake localhost only; no paid calls.
 - **Next authorized milestone at this handoff:** M5 — Routed Subagent Execution. Subsequent M5 implementation and acceptance state are recorded below.
 
-**Correction to the prior M3 handoff:** the attached M4 mission subsequently authorized this implementation. STATE-4 now records M4 as accepted; M3 remains accepted. M5 was later authorized and its implementation is recorded below as not yet accepted.
+**Correction to the prior M3 handoff:** the attached M4 mission subsequently authorized this implementation. STATE-4 now records M4 as accepted; M3 remains accepted. M5 was later authorized and its implementation and STATE-5 acceptance are recorded below.
 
 ## M5 — Routed Subagent Execution
 
-- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Status:** ACCEPTED / PASS
 - **Starting HEAD:** `e184858c0632881ef2acde33738ce0a08183e168`
 - **Implementation commit:** `80b00a65da0a922633d9809b8520983f90038118` — `feat(agents): add routed subagent execution`.
+- **Accepted evidence HEAD:** `c2e431aaf3384fc73acb2e7cd6201aa406d5266f`
 - **Purpose:** Execute one bounded role/pool/task through M4-selected routes using isolated Pi SDK child sessions.
 - **Major outcomes:** Added `src/core/workers` with exact route/model resolution, fresh in-memory child sessions, disabled Pi retries, per-pool tool allowlists, bounded one-shot `submit_agent_result`, tool-side-effect observation, timeout/cancellation cleanup, M4 retry/fallback/health callbacks, mutation-safe fallback, cwd serialization, parent-only `delegate_agent`, and `/subagent-run`.
-- **Tests/evidence:** `97/97` tests PASS; typecheck, build, aggregate check, fake 9Router, and isolated Pi `0.84.1` parent→child evidence pass. The parent uses the exact route/model, the child exposes read/submit tools without delegate recursion, and temporary Pi/config/session roots are isolated.
+- **Tests/evidence:** `97/97` tests PASS; typecheck, build, aggregate check, fake 9Router, and isolated Pi `0.84.1` parent→child evidence pass. The parent uses the exact route/model, the child exposes read/submit tools without delegate recursion, and temporary Pi/config/session roots are isolated. Built-in child tool execution, pool-specific allowlists, mutation-safe fallback, timeout/cancellation cleanup, HealthStore feedback, and M2/M3/M4 regressions passed.
 - **Important decisions:** ConfigV1 remains version 1; M4 remains routing authority; role does not select model; child sessions do not inherit parent history/extensions/context; implementation mutation blocks automatic fallback; no child run state is persisted.
 - **Deferred work:** M6 Context Broker/canonical mission state, Boss scheduling, parallel workers, worktree isolation, quality review, analytics, and live-provider proof.
 - **Live environment impact:** Pi configuration unchanged; 9Router unchanged; credentials/Keychain unchanged; fake localhost only; paid calls `0`.
-- **Next authorized milestone:** M6 only after Planner accepts M5. Do not start M6.
+- **Next authorized milestone:** M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation. M6 is next planned and not started. Do not start M6.
 
 ## Future milestone entry template
 

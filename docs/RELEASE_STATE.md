@@ -8,9 +8,9 @@ This file records releasable product state. It does not promote development prog
 
 | Field | State |
 |---|---|
-| Latest accepted development milestone | M4 — Routing + Health + Infrastructure Fallback Engine |
-| Accepted development commit | `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` |
-| Accepted evidence HEAD | `f5e25e21bbebe7995a9cc050efea3ed20d94f18c` |
+| Latest accepted development milestone | M5 — Routed Subagent Execution |
+| Accepted development commit | `80b00a65da0a922633d9809b8520983f90038118` |
+| Accepted evidence HEAD | `c2e431aaf3384fc73acb2e7cd6201aa406d5266f` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
@@ -20,7 +20,7 @@ This file records releasable product state. It does not promote development prog
 | Installable production release | NONE |
 | Production-ready | NO |
 | Release rollback target | NONE; no release exists |
-| Accepted development recovery reference | M4 implementation commit `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697`; evidence HEAD `f5e25e21bbebe7995a9cc050efea3ed20d94f18c` |
+| Accepted development recovery reference | M5 implementation commit `80b00a65da0a922633d9809b8520983f90038118`; evidence HEAD `c2e431aaf3384fc73acb2e7cd6201aa406d5266f` |
 
 Milestone acceptance does not itself create a product release.
 
@@ -29,13 +29,13 @@ Milestone acceptance does not itself create a product release.
 | Evidence | Current result |
 |---|---|
 | Configuration schema | Version 1 |
-| Deterministic and fake integration suite | `86/86 PASS` |
+| Deterministic and fake integration suite | `97/97 PASS` |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
 | Tested Node.js version | `22.23.0`; package requires `>=22.19.0` |
 | Fake gateway integration | PASS |
-| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, and health reset |
+| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, and parent→child execution |
 | Real live 9Router catalog | NOT VERIFIED — credential-gated probe was skipped |
 | Real paid inference | NOT PERFORMED |
 
@@ -45,7 +45,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Workers, Boss execution, durable mission state, quality escalation, analytics, hardening, cost/budget-aware routing, and packaging milestones remain incomplete.
+- Boss runtime, durable mission state, Context Broker, quality escalation, analytics, hardening, cost/budget-aware routing, and packaging milestones remain incomplete. M5 routed child execution is accepted; M6 is next planned and not started.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record
