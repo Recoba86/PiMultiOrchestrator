@@ -8,9 +8,9 @@ This file records releasable product state. It does not promote development prog
 
 | Field | State |
 |---|---|
-| Latest accepted development milestone | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation |
-| Accepted development commit | `62282c1618f395b032e359005d018721e2b36868` |
-| Accepted evidence HEAD | `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298` |
+| Latest accepted development milestone | M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation |
+| Accepted development commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
+| Accepted evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
@@ -20,7 +20,7 @@ This file records releasable product state. It does not promote development prog
 | Installable production release | NONE |
 | Production-ready | NO |
 | Release rollback target | NONE; no release exists |
-| Accepted development recovery reference | M6 implementation commit `62282c1618f395b032e359005d018721e2b36868`; evidence HEAD `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298` |
+| Accepted development recovery reference | M7 implementation commit `db82ac141094db749835a0cc7f1f79dc780005e4`; evidence HEAD `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
 
 Milestone acceptance does not itself create a product release.
 
@@ -30,7 +30,7 @@ Milestone acceptance does not itself create a product release.
 |---|---|
 | Configuration schema | Version 1 |
 | M6 accepted deterministic/fake baseline | `111/111 PASS` |
-| M7 development verification suite | `121/121 PASS`; typecheck/build/check PASS; Pi/fake quality-loop proof PASS |
+| M7 accepted verification suite | `121/121 PASS`; typecheck/build/check PASS; Pi/fake quality-loop proof PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -46,7 +46,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, M7 planner acceptance, analytics, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M6 MissionStore/ContextBroker remains accepted development state; M7 implementation commit `db82ac141094db749835a0cc7f1f79dc780005e4` still awaits STATE-7 acceptance. No stable release is implied.
+- Boss runtime, analytics, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M7 is accepted development state; no stable release is implied.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

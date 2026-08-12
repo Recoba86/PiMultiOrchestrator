@@ -108,16 +108,17 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 ## M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation
 
-- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Status:** ACCEPTED / PASS
 - **Starting HEAD:** `e4014730caf709b2ae2ceae4823583c14c810c1e`
-- **Implementation/final HEAD:** `db82ac141094db749835a0cc7f1f79dc780005e4` — `feat(quality): add verification gates and bounded review loop`; this entry is the implementation handoff, not STATE-7 acceptance.
+- **Implementation commit:** `db82ac141094db749835a0cc7f1f79dc780005e4` — `feat(quality): add verification gates and bounded review loop`.
+- **Accepted evidence HEAD:** `d15dccfd3415e7c705600526a6ef7d634d8c90c5` — `docs(m7): record implementation evidence`; accepted by STATE-7.
 - **Purpose:** Add a durable, bounded quality-control boundary above M5 execution and M6 mission state without conflating quality judgment with M4 infrastructure health or canonical evidence.
 - **Major outcomes:** Mission DB schema 1→2 migration; durable verification runs, quality decisions/status, mechanical provenance, escalations, interrupted-verification recovery, reviewer diversity, deterministic QualityGate semantics, caller-supplied `submit_verification_result` through M5, explicit quality host commands/history, and bounded verification→repair→re-review orchestration.
 - **Tests/evidence:** `121/121` tests PASS; typecheck/build/check PASS; real Pi `0.84.1` + fake gateway `[P][fixture-v1]` reviewer reject→routed repair→re-review pass and MissionStore reopen lineage PASS; paid calls `0`.
-- **Important decisions:** Config schema remains version 1; MissionStore quality schema is version 2; quality rejection never updates M4 health or triggers infrastructure fallback; reviewer/repair claims remain non-canonical until explicit M6 evidence admission; quality PASS is not Planner acceptance or mission completion.
-- **Deferred work:** Boss/planner runtime, analytics, parallel/worktree orchestration, live-provider validation, and release work remain deferred. Do not start M8.
+- **Important decisions:** Config schema remains version 1; MissionStore quality schema is version 2; quality is separate from execution completion and M4 infrastructure health; quality rejection never updates M4 health or triggers infrastructure fallback; reviewer infrastructure failure still uses M4 health/fallback; reviewer/repair claims remain non-canonical until explicit M6 evidence admission; the quality loop is bounded and preserves immutable historical decisions; quality PASS alone is not Planner acceptance or mission completion.
+- **Deferred work:** Boss/planner runtime, analytics, parallel/worktree orchestration, live-provider validation, and release work remain deferred. M8 is next planned and not started.
 - **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network were used.
-- **Acceptance boundary:** STATE-7 Planner acceptance is required before this milestone is marked accepted.
+- **Acceptance boundary:** STATE-7 records M7 Planner acceptance; M8 must not start.
 
 ## Future milestone entry template
 

@@ -10,10 +10,10 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M7 implemented; planner acceptance pending |
-| Last accepted milestone | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation |
-| Accepted M6 implementation commit | `62282c1618f395b032e359005d018721e2b36868` |
-| Accepted M6 evidence HEAD | `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298` |
+| Development phase | M7 accepted; M8 next planned / not started |
+| Last accepted milestone | M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation |
+| Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
+| Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
 | Configuration schema | Version 1 |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -29,8 +29,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M4 — Routing + Health + Infrastructure Fallback Engine | ACCEPTED / PASS |
 | M5 — Routed Subagent Execution | ACCEPTED / PASS |
 | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation | ACCEPTED / PASS |
-| M7 — Quality Gates, Review, and Escalation | IMPLEMENTED BUT NOT ACCEPTED |
-| M8 — Analytics and Recommendations | NEXT PLANNED / NOT STARTED |
+| M7 — Quality Gates, Review, and Escalation | ACCEPTED / PASS |
+| M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | NEXT PLANNED / NOT STARTED |
 
 ## Stable / accepted capabilities
 
@@ -79,7 +79,7 @@ M4 does not implement actual child/subagent execution, Boss runtime, Task Packet
 
 ## M5 accepted capabilities
 
-M5 adds direct Pi `0.84.1` SDK child-session execution with exact M4-selected route/model pinning, fresh isolated in-memory sessions, no automatic parent-history copy, and parent-only `delegate_agent` plus `/subagent-run`. Child recursion is prevented. Investigation, Implementation, and Verification use explicit profiles: Investigation and Verification have no edit/write tools; Implementation may use edit/write/bash. Each child receives one bounded `submit_agent_result`; missing or invalid results are not accepted. Tool calls are observed, potential mutations are detected, and safe infrastructure retry/fallback is available before mutation. Read-only fallback is supported; edit/write/bash failure stops automatic fallback, with bash treated conservatively. External cancellation aborts without fallback, timeout handling is bounded, cleanup is deterministic, HealthStore receives success/failure feedback, and mutating runs serialize per cwd. The actual Pi parent → delegate tool → routed child proof passed. Boss/planner runtime, automatic role generation, parallel subagents, worktree isolation, quality/reviewer loops, analytics, and auto-tuning remain deferred; M6 mission/context capabilities are recorded below.
+M5 adds direct Pi `0.84.1` SDK child-session execution with exact M4-selected route/model pinning, fresh isolated in-memory sessions, no automatic parent-history copy, and parent-only `delegate_agent` plus `/subagent-run`. Child recursion is prevented. Investigation, Implementation, and Verification use explicit profiles: Investigation and Verification have no edit/write tools; Implementation may use edit/write/bash. Each child receives one bounded `submit_agent_result`; missing or invalid results are not accepted. Tool calls are observed, potential mutations are detected, and safe infrastructure retry/fallback is available before mutation. Read-only fallback is supported; edit/write/bash failure stops automatic fallback, with bash treated conservatively. External cancellation aborts without fallback, timeout handling is bounded, cleanup is deterministic, HealthStore receives success/failure feedback, and mutating runs serialize per cwd. The actual Pi parent → delegate tool → routed child proof passed. Boss/planner runtime, automatic role generation, parallel subagents, worktree isolation, analytics, and auto-tuning remain deferred; M6 mission/context and M7 quality capabilities are recorded below.
 
 ## M6 accepted capabilities
 
@@ -87,9 +87,9 @@ M6 adds durable Canonical Mission State in a separate versioned SQLite MissionSt
 
 M6 does not implement Boss/planner runtime, automatic decomposition or scheduling, parallel workers, worktree isolation, analytics, or auto-tuning. M7 quality state and reviewer/repair boundary are recorded below.
 
-## M7 implementation pending planner acceptance
+## M7 accepted capabilities
 
-M7 adds a separate MissionStore schema v2 quality layer with transactional v1→v2 migration, durable verification runs, immutable quality decisions/history, task quality status separate from execution and M4 health, bounded `submit_verification_result`, conservative mechanical checks, deterministic QualityGate evaluation, reviewer route diversity, escalation records, interrupted-verification recovery, and explicit bounded repair/re-review through the existing M4→M5 executor boundary. Mission Control exposes quality status/history and confirmation-gated Verify/Re-verify/quality-loop actions; quality rejection never records an infrastructure failure or silently promotes canonical evidence.
+M7 adds a separate MissionStore schema v2 quality layer with transactional v1→v2 migration, durable verification runs, immutable QualityDecision history, task quality status separate from execution and M4 infrastructure health, bounded structured reviewer results, criterion-level mechanical evidence/provenance, deterministic QualityGate `PASS`/`REJECT`/`BLOCKED` outcomes, reviewer route-diversity preference, and durable `QualityEscalationRequest` records. Verification Pool reviewers execute through M4→M5; quality rejection does not penalize implementation-route health, while reviewer infrastructure failure still uses M4 health/fallback. The bounded repair/re-review loop applies implementation-route exclusion where required, enforces a maximum round count, preserves round/packet provenance and immutable history, and survives MissionStore reopen/restart. Re-verification creates new immutable history rather than rewriting prior decisions. Mission Control exposes quality-status UI/RPC, history, and confirmation-gated Verify/Re-verify/quality-loop actions; quality results remain non-canonical until explicit M6 evidence admission. Quality PASS alone is not Planner/product milestone acceptance.
 
 | M7 implementation evidence | Result |
 |---|---|
@@ -97,7 +97,7 @@ M7 adds a separate MissionStore schema v2 quality layer with transactional v1→
 | Typecheck and build | PASS |
 | Mission DB v1→v2 fixture migration and reopen | PASS |
 | Actual Pi/fake quality reviewer loop | `[P][fixture-v1] PASS` — reviewer reject → routed repair → re-review pass; durable lineage reopened |
-| Planner acceptance / STATE-7 | PENDING |
+| Planner acceptance / STATE-7 | ACCEPTED / PASS |
 | Paid calls / live environment changes | `0` / NONE |
 
 | M6 accepted evidence | Result |
@@ -164,17 +164,21 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ### Deferred capabilities
 
-- Boss/planner runtime and automatic role generation;
-- automatic task decomposition and scheduling;
-- Reviewer quality loops and automated quality gates;
-- parallel subagents and worktree isolation;
-- analytics collection, storage, dashboard, and auto-tuning;
+- Boss/planner runtime;
+- automatic broad mission decomposition and task scheduling;
+- general role generation;
+- parallel workers and worktree isolation/fan-out;
+- analytics collection and dashboard;
+- model performance statistics and token/cost accounting;
+- Quality/Value scoring and auto-tuning recommendations;
+- automatic pool reordering and budget-aware routing;
+- public release tooling;
 - cross-process configuration locking; and
 - Keychain credential adapter.
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6. M7 is implemented but planner acceptance is pending. Do not start M8.
+M6 is accepted by STATE-6 and M7 is accepted by STATE-7. M8 is next planned and not started. Do not start M8.
 
 ## Accepted evidence history
 
@@ -187,13 +191,13 @@ M6 is accepted by STATE-6. M7 is implemented but planner acceptance is pending. 
 
 - M6: `62282c1618f395b032e359005d018721e2b36868` — `feat(missions): add canonical mission state and context broker` — ACCEPTED / PASS by STATE-6; evidence HEAD `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298`, `111/111` tests, typecheck/build/check, and isolated Pi `0.84.1` mission flow passed.
 
-- M7 implementation: `db82ac141094db749835a0cc7f1f79dc780005e4` — IMPLEMENTED BUT NOT ACCEPTED; Mission DB v1→v2 migration, durable quality records/status, structured reviewer protocol, deterministic gate, bounded escalation/repair/re-review, host quality commands, focused tests, and actual Pi/fake reviewer reject→repair→re-review evidence are present. STATE-7 planner acceptance remains pending.
+- M7: `db82ac141094db749835a0cc7f1f79dc780005e4` — ACCEPTED / PASS by STATE-7; evidence HEAD `d15dccfd3415e7c705600526a6ef7d634d8c90c5`, `121/121` tests, typecheck/build/check, and actual Pi/fake reviewer reject→repair→re-review lineage passed.
 
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M7 is planner-accepted or that Boss, analytics, or parallel-work orchestration is implemented.
+- Do not assume M8 has started; M7 acceptance does not imply Boss/planner, analytics, or parallel-work orchestration is implemented.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

@@ -106,7 +106,7 @@ Exit gate: PASS — MissionStore/ContextBroker deterministic suites, restart/reo
 
 ## M7 — Quality gates, review, and escalation
 
-Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+Status: ACCEPTED / PASS.
 
 Deliverables:
 
@@ -117,9 +117,11 @@ Deliverables:
 - explicit Verify/Re-verify and confirmation-gated bounded quality-loop host actions; and
 - quality rejection kept separate from M4 health/fallback and canonical evidence admission.
 
-Exit gate: PASS for implementation evidence — `121/121` tests, typecheck/build/check, and actual Pi `0.84.1` + fake-gateway reviewer reject→routed repair→re-review pass with durable lineage. Planner STATE-7 acceptance remains pending; M8 must not start.
+Exit gate: PASS — `121/121` tests, typecheck/build/check, and actual Pi `0.84.1` + fake-gateway reviewer reject→routed repair→re-review pass with durable lineage. STATE-7 records Planner acceptance; M8 is next planned and not started.
 
-## M8 — Analytics and recommendations
+## M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations
+
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 
