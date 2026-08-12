@@ -125,8 +125,8 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
 - **Starting HEAD:** `95844baf25810215a0fa134f6888d33f065c25c0`
 - **Implementation:** separate local AnalyticsStore schema v1, bounded idempotent metadata events, Pi usage/latency fields, summaries, cost provenance, pool-specific recommendations, `/analytics`, and `/recommendations`.
-- **Evidence:** analytics focused suite `7/7 PASS`; provider host focused suite `15/15 PASS`; worker focused suite `11/11 PASS`; `npm run typecheck` and `npm run build` PASS; aggregate `npm test` reached `120/129 PASS` with 9 sandbox-only loopback `listen EPERM` failures. Full fake-Pi telemetry and mission/quality join proof are pending a loopback-capable verifier.
-- **Decisions:** ConfigV1 remains version 1; analytics is separate from ConfigStore, MissionStore, and HealthStore; disabled collection keeps history and rejects new rows; unknown cost is not zero; recommendation generation does not mutate configuration and Apply uses PoolManager.
+- **Evidence:** corrective deterministic M8 suites `38/38 PASS`; `npm run typecheck` and `npm run build` PASS; sandbox aggregate `npm test` reached `124/133 PASS` with 9 loopback `listen EPERM` failures. Updated fake-Pi assertions and full mission/quality telemetry still require a loopback-capable verifier.
+- **Decisions:** analytics remains separate from MissionStore and HealthStore; ConfigV1 imports migrate sequentially to ConfigV2 reference billing profiles; disabled collection keeps history and rejects new rows; unknown cost is not zero; recommendation generation does not mutate configuration and Apply uses PoolManager with stale protection.
 - **Live impact:** no live Pi/provider configuration, credentials, Keychain, paid calls, or external network used.
 - **Next:** Planner acceptance of M8; do not start M9.
 

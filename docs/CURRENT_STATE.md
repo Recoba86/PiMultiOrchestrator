@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M8 implemented; awaiting Planner acceptance |
+| Development phase | M8 implementation corrected; awaiting Planner acceptance |
 | Last accepted milestone | M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -180,7 +180,7 @@ M6 is accepted by STATE-6 and M7 is accepted by STATE-7. M8 is implemented but n
 
 ## M8 implementation snapshot
 
-M8 adds a separate local `analytics.sqlite` schema v1 with bounded, idempotent, metadata-only events. The host records bounded routed run/attempt/fallback observations and worker usage/latency fields without prompts, transcripts, tool arguments, source, headers, or secrets. `/analytics` exposes basic time-window summaries; `/recommendations` exposes deterministic sample-gated pool recommendations and explicit details/apply/ignore actions. ConfigV1 remains version 1 and analytics remains disabled by default. Current evidence is analytics `7/7`, provider `15/15`, worker `11/11`, typecheck/build PASS; mission-linked quality/fallback Pi proof and complete provider usage provenance remain pending Planner acceptance.
+M8 adds a separate local `analytics.sqlite` schema v1 with bounded, idempotent, metadata-only events, persistent ConfigV2 reference billing profiles migrated from ConfigV1, and nine `/analytics` drill-down views. The host records bounded routed run/attempt/fallback observations and worker usage/latency fields without prompts, transcripts, tool arguments, source, headers, or secrets. `/recommendations` exposes deterministic sample-gated pool recommendations and explicit details/apply/ignore actions. Analytics remains disabled by default and unknown cost is never treated as zero. Corrective evidence: deterministic M8 suites `38/38`, typecheck/build PASS; the full sandbox run is `124/133` with 9 loopback `listen EPERM` failures, so updated actual Pi assertions require a loopback-capable rerun before Planner acceptance.
 
 ## Accepted evidence history
 
@@ -195,7 +195,7 @@ M8 adds a separate local `analytics.sqlite` schema v1 with bounded, idempotent, 
 
 - M7: `db82ac141094db749835a0cc7f1f79dc780005e4` — ACCEPTED / PASS by STATE-7; evidence HEAD `d15dccfd3415e7c705600526a6ef7d634d8c90c5`, `121/121` tests, typecheck/build/check, and actual Pi/fake reviewer reject→repair→re-review lineage passed.
 
-- M8: implementation is present in `src/core/analytics` and host commands; focused analytics/provider tests pass, but Planner acceptance and full fake-Pi telemetry evidence remain pending.
+- M8: corrective implementation is present in analytics, billing, host, and fake-gateway tests; Planner acceptance and loopback-capable full Pi telemetry evidence remain pending.
 
 ## Assumptions agents must not make
 

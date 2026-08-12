@@ -131,7 +131,7 @@ Deliverables:
 - explicit Apply/Ignore/Details actions with no silent mutation.
 - local `analytics.sqlite` schema v1 with idempotent privacy-minimal events, Pi usage/latency capture, `/analytics`, and `/recommendations`.
 
-Exit gate: focused analytics `7/7`, provider `15/15`, worker `11/11`, typecheck/build pass; full aggregate `npm test` is `120/129` with 9 sandbox-only loopback `listen EPERM` failures. Full Pi/fake telemetry, mission/quality joins, currency/pricing coverage, stale Apply checks, and Planner acceptance remain pending.
+Exit gate: corrective deterministic M8 suites `38/38`, typecheck/build pass, persistent ConfigV1→V2 billing migration, recommendation Apply/Ignore/stale coverage, and nine analytics drill-down views. The current sandbox aggregate is `124/133` with 9 loopback `listen EPERM` failures; rerun the complete suite on a loopback-capable verifier before Planner acceptance. M8 remains IMPLEMENTED BUT NOT ACCEPTED.
 
 ## M9 — Full TUI control center
 
