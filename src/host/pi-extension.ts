@@ -75,6 +75,7 @@ import {
 	type AnalyticsStoreAdapter,
 } from "../core/analytics/index.js";
 import { TrustStore, PathSafetyPolicy, SecretSanitizer, getCapabilityMatrix } from "../core/security/index.js";
+import { PACKAGE_INFO } from "../core/package-info.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -1189,7 +1190,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const showDiagnostics = async (ctx: ExtensionCommandContext): Promise<void> => {
-		const lines = ["Diagnostics", "safe operational metadata only", "provider quota remaining: UNKNOWN"];
+		const lines = ["Diagnostics", "safe operational metadata only", `package: ${PACKAGE_INFO.name}@${PACKAGE_INFO.version} (${PACKAGE_INFO.releaseStatus})`, `Pi compatibility: ${PACKAGE_INFO.piCompatibility}`, `schemas: config=${PACKAGE_INFO.configSchema}, mission=${PACKAGE_INFO.missionSchema}, analytics=${PACKAGE_INFO.analyticsSchema}`, "provider quota remaining: UNKNOWN"];
 		try {
 			const status = await manager.loadStatus();
 			lines.push(`9Router: ${safeStatusLine(status)}`);

@@ -1,13 +1,13 @@
 {
   "name": "pi-multi-orchestrator",
-  "version": "0.0.0-development",
-  "description": "Selective 9Router model and execution-pool configuration manager for Pi",
+  "version": "0.1.0-rc.1",
+  "description": "Pi control center for bounded 9Router model, pool, mission, quality, analytics, and safety workflows",
   "type": "module",
-  "private": true,
+  "keywords": ["pi-package"],
   "files": [
-    "dist",
-    "README.md",
-    "docs"
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md"
   ],
   "exports": {
     "./config": {
@@ -59,19 +59,23 @@
       "import": "./dist/host/pi-extension.js"
     }
   },
+  "pi": {
+    "extensions": ["./dist/host/pi-extension.js"]
+  },
   "scripts": {
     "clean": "node -e \"const fs=require('node:fs'); for (const path of ['dist','dist-test']) fs.rmSync(path,{recursive:true,force:true})\"",
     "clean:test": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "npm run clean:test && tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "release:candidate": "node scripts/release-candidate.mjs"
   },
   "engines": {
     "node": ">=22.19.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.1"
+    "@earendil-works/pi-coding-agent": ">=0.84.1 <0.85.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.1",
