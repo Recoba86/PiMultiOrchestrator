@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M5 accepted; M6 next planned / not started |
+| Development phase | M6 implemented; awaiting Planner acceptance |
 | Last accepted milestone | M5 — Routed Subagent Execution |
 | Accepted M5 implementation commit | `80b00a65da0a922633d9809b8520983f90038118` |
 | Accepted M5 evidence HEAD | `c2e431aaf3384fc73acb2e7cd6201aa406d5266f` |
@@ -28,7 +28,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor | ACCEPTED / PASS |
 | M4 — Routing + Health + Infrastructure Fallback Engine | ACCEPTED / PASS |
 | M5 — Routed Subagent Execution | ACCEPTED / PASS |
-| M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation | NEXT PLANNED / NOT STARTED |
+| M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation | IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE |
 
 ## Stable / accepted capabilities
 
@@ -78,6 +78,20 @@ M4 does not implement actual child/subagent execution, Boss runtime, Task Packet
 ## M5 accepted capabilities
 
 M5 adds direct Pi `0.84.1` SDK child-session execution with exact M4-selected route/model pinning, fresh isolated in-memory sessions, no automatic parent-history copy, and parent-only `delegate_agent` plus `/subagent-run`. Child recursion is prevented. Investigation, Implementation, and Verification use explicit profiles: Investigation and Verification have no edit/write tools; Implementation may use edit/write/bash. Each child receives one bounded `submit_agent_result`; missing or invalid results are not accepted. Tool calls are observed, potential mutations are detected, and safe infrastructure retry/fallback is available before mutation. Read-only fallback is supported; edit/write/bash failure stops automatic fallback, with bash treated conservatively. External cancellation aborts without fallback, timeout handling is bounded, cleanup is deterministic, HealthStore receives success/failure feedback, and mutating runs serialize per cwd. The actual Pi parent → delegate tool → routed child proof passed. Context Broker, Canonical Mission State, Task Packets, Boss/planner runtime, automatic role generation, parallel subagents, worktree isolation, quality/reviewer loops, analytics, and auto-tuning remain deferred.
+
+## M6 implementation (acceptance pending)
+
+M6 adds a separate versioned SQLite MissionStore using Node `node:sqlite`, transactional mission revisions, tasks/attempts, proposed evidence with explicit accept/reject promotion, canonical provenance, event journal, checkpoints, lease recovery, and corruption/integrity checks. The deterministic Context Broker admits accepted canonical items only by default and produces immutable, bounded, SHA-256 TaskPacketV1 values with revision lineage and omitted-item counts. Mission Control exposes `/missions`, Context & Mission Settings, packet/task inspection and evidence/checkpoint actions; Pi session entries remain pointers only. M5 remains the execution authority; no worker result is canonical truth and operational completion is not quality acceptance. M6 is implemented but not Planner-accepted.
+
+| M6 implementation evidence | Result |
+|---|---|
+| Context Broker focused tests | `6/6 PASS` |
+| MissionStore focused tests | `5/5 PASS` |
+| Host/provider focused tests | `14/14 PASS` |
+| Full deterministic/fake/actual-Pi regression suite | `111/111 PASS` |
+| Typecheck and build | PASS |
+| Dedicated Pi/fake mission task execution, evidence admission, and reopen/resume flow | `[P][fixture-v1] PASS` — real Pi 0.84.1, fake SSE/tool flow, proposed→accepted evidence, reopened MissionStore |
+| Paid calls / live environment changes | `0` / NONE |
 
 | M5 accepted evidence | Result |
 |---|---|
@@ -129,8 +143,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ### Deferred capabilities
 
-- Context Broker and Canonical Mission State runtime;
-- Task Packets and checkpoint/resume;
+- M6 Planner acceptance;
 - Boss/planner runtime, automatic role generation, and quality escalation;
 - parallel subagents and worktree isolation;
 - quality/reviewer loops;
@@ -140,7 +153,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M5 is accepted by STATE-5. M6 is next planned and not started. Do not start M6.
+M5 is accepted by STATE-5. M6 implementation is complete but acceptance is pending. Do not start M7.
 
 ## Accepted evidence history
 
@@ -151,11 +164,13 @@ M5 is accepted by STATE-5. M6 is next planned and not started. Do not start M6.
 - M4: `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` — `feat(routing): add health-aware fallback engine` — ACCEPTED / PASS; evidence HEAD `f5e25e21bbebe7995a9cc050efea3ed20d94f18c`, `86/86` tests, and isolated Pi/fake-gateway routing/health evidence passed.
 - M5: `80b00a65da0a922633d9809b8520983f90038118` — `feat(agents): add routed subagent execution` — ACCEPTED / PASS by STATE-5; evidence HEAD `c2e431aaf3384fc73acb2e7cd6201aa406d5266f`, `97/97` tests, typecheck/build/check, and isolated Pi `0.84.1` parent→child evidence passed.
 
+- M6: implementation work is present in the current worktree; Planner acceptance and the final implementation/documentation commit are pending. M6 evidence must not be treated as accepted or release evidence.
+
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M6 has started; it is next planned and not started.
+- Do not assume M6 is Planner-accepted or runtime-operational; its implementation is awaiting acceptance evidence.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

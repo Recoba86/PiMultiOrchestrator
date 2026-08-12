@@ -155,3 +155,15 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Rationale:** Direct SDK control gives deterministic model/tool/session isolation without copying parent history or loading the orchestrator recursively. M4 remains the sole retry/fallback authority.
 - **Alternatives:** Reuse parent history, load the full extension in children, allow Pi's hidden retries, or use the shipped process example as a second execution path.
 - **Consequences:** Child output is a bounded in-memory handoff, not canonical mission state. `edit`, `write`, and `bash` conservatively block automatic fallback; implementation runs serialize by cwd. Worktrees, Context Broker, Boss scheduling, and durable child state remain deferred.
+
+## ADR-023 — M6 separates canonical mission state from config and Pi sessions
+
+- **Decision:** Store mission revisions, tasks, attempts, evidence, canonical items, checkpoints, leases, and the event journal in an injected-root SQLite MissionStore using the supported Node `node:sqlite` adapter. Keep ConfigV1 JSON and HealthStore unchanged; Pi session entries contain only mission pointers/status.
+- **Rationale:** Mission state needs transactions, revision CAS, foreign keys, recovery, and indexed event history. It is not human-editable configuration and must survive Pi reload without becoming hidden conversation state.
+- **Consequences:** The MissionStore schema is versioned independently; corrupt databases fail typed without silent replacement; no raw SQL escapes the adapter; cross-process scheduling and analytics remain deferred.
+
+## ADR-024 — M6 admits worker evidence explicitly and packets accepted state only
+
+- **Decision:** Every structured M5 worker result enters MissionStore as proposed evidence. Only explicit operator acceptance may create/update a canonical item and advance the mission revision. ContextBroker defaults to accepted canonical items and emits immutable, bounded, digest-linked TaskPacketV1 values.
+- **Rationale:** Execution completion is not quality verification, and proposed/rejected findings must not silently steer later work. Packet lineage and omission reporting make context deterministic and inspectable without persisting transcripts.
+- **Consequences:** M7 owns reviewer/quality acceptance; M6 provides no Boss planning, automatic evidence admission, parallel scheduling, or transcript resume.

@@ -25,6 +25,7 @@ import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/nine
 import type { StableId } from "../src/core/config/types.js";
 import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
 import type { SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
+import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/types.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -141,6 +142,7 @@ interface PiFixture {
 	readonly unregisters: string[];
 	readonly registerCalls: string[];
 	readonly tools: Map<string, unknown>;
+	readonly entries: Array<{ customType: string; data: unknown }>;
 }
 
 function piFixture(): PiFixture {
@@ -149,6 +151,7 @@ function piFixture(): PiFixture {
 	const unregisters: string[] = [];
 	const registerCalls: string[] = [];
 	const tools = new Map<string, unknown>();
+	const entries: Array<{ customType: string; data: unknown }> = [];
 	const pi = {
 		registerProvider(name: string, config: ProviderConfig): void {
 			registerCalls.push(name);
@@ -164,8 +167,46 @@ function piFixture(): PiFixture {
 		registerTool(tool: { name: string }): void {
 			tools.set(tool.name, tool);
 		},
+		appendEntry(customType: string, data: unknown): void {
+			entries.push({ customType, data });
+		},
 	} as unknown as ExtensionAPI;
-	return { pi, providers, commands, unregisters, registerCalls, tools };
+	return { pi, providers, commands, unregisters, registerCalls, tools, entries };
+}
+
+function missionFixture(): { store: MissionStoreAdapter; mission: MissionRecord; transitions: Array<{ id: string; status: string }> } {
+	const mission: MissionRecord = {
+		missionId: "mission-1" as MissionRecord["missionId"],
+		revision: 1,
+		status: "planned",
+		goal: "Fixture mission",
+		title: "Fixture mission",
+		objective: "Fixture mission",
+		constraints: [],
+		acceptanceCriteria: ["tests pass"],
+		repository: { cwd: "/tmp/fixture" },
+		plan: undefined,
+		approvedDecisions: [],
+		validatedFindings: [],
+		completedWork: [],
+		currentChangeState: undefined,
+		testReviewEvidence: [],
+		unresolvedIssues: [],
+		nextSteps: [],
+		createdAt: "2026-01-01T00:00:00.000Z",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+	};
+	const transitions: Array<{ id: string; status: string }> = [];
+	const store = {
+		getMission: (id: string) => id === mission.missionId ? mission : undefined,
+		listMissions: () => [mission],
+		listTasks: () => [],
+		transitionMission: (id: string, status: MissionRecord["status"]) => {
+			transitions.push({ id, status });
+			return { ...mission, status, revision: mission.revision + 1, updatedAt: "2026-01-01T00:00:01.000Z" };
+		},
+	} as unknown as MissionStoreAdapter;
+	return { store, mission, transitions };
 }
 
 describe("Pi 9Router host adapter", () => {
@@ -222,7 +263,7 @@ describe("Pi 9Router host adapter", () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: fixture });
 		host.registerCommands();
-		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "subagent-run"]);
+		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "subagent-run", "missions", "mission-packet"]);
 
 		const notifications: string[] = [];
 		let prompts = 0;
@@ -271,6 +312,54 @@ describe("Pi 9Router host adapter", () => {
 		host.registerCommands();
 		assert.ok(pi.tools.has("delegate_agent"));
 		assert.ok(pi.commands.has("subagent-run"));
+	});
+
+	it("[U][fixture-pi-0.84.1] exposes canonical missions and stores only a pointer/status entry", async () => {
+		const fixture = missionFixture();
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: fixture.store });
+		host.registerCommands();
+		assert.ok(pi.commands.has("missions"));
+		const notifications: string[] = [];
+		await pi.commands.get("missions")!.handler("", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[0] ?? "", /mission: mission-1/);
+
+		await pi.commands.get("missions")!.handler("mission-1", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async () => "Start mission",
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.deepEqual(fixture.transitions, [{ id: "mission-1", status: "running" }]);
+		assert.deepEqual(pi.entries, [{ customType: "pi-multi-orchestrator:mission", data: { missionId: "mission-1", status: "running", revision: 2 } }]);
+	});
+
+	it("[U][fixture-pi-0.84.1] opens Context & Mission Settings from the control center", async () => {
+		const fixture = missionFixture();
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: fixture.store });
+		host.registerCommands();
+		const titles: string[] = [];
+		const selections = ["Context & Mission Settings", "Back"];
+		await pi.commands.get("orchestrator")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			ui: {
+				select: async (title: string) => {
+					titles.push(title);
+					return selections.shift();
+				},
+				notify: () => {},
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.deepEqual(titles, ["Pi Multi-Orchestrator", "Context & Mission Settings"]);
 	});
 
 	it("[U][fixture-pi-0.84.1] opens all three pool sections from orchestrator", async () => {

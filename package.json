@@ -34,6 +34,14 @@
       "types": "./dist/core/workers/index.d.ts",
       "import": "./dist/core/workers/index.js"
     },
+    "./missions": {
+      "types": "./dist/core/mission/index.d.ts",
+      "import": "./dist/core/mission/index.js"
+    },
+    "./context": {
+      "types": "./dist/core/context/index.d.ts",
+      "import": "./dist/core/context/index.js"
+    },
     "./pi": {
       "types": "./dist/host/pi-extension.d.ts",
       "import": "./dist/host/pi-extension.js"

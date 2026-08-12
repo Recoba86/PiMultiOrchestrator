@@ -4,9 +4,9 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-M0 through M5 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface. M3 adds configuration-only management for the ordered Investigation, Implementation, and Verification pools. M4 adds pure routing preview/eligibility, bounded infrastructure fallback decisions, and separate runtime health state. M5 adds a foreground routed subagent executor using fresh in-memory Pi SDK child sessions, exact M4 route/model pinning, strict per-pool tools, bounded structured results, cancellation, and mutation-safe fallback.
+M0 through M5 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface. M3 adds configuration-only management for the ordered Investigation, Implementation, and Verification pools. M4 adds pure routing preview/eligibility, bounded infrastructure fallback decisions, and separate runtime health state. M5 adds a foreground routed subagent executor using fresh in-memory Pi SDK child sessions, exact M4 route/model pinning, strict per-pool tools, bounded structured results, cancellation, and mutation-safe fallback. M6 is implemented but awaiting Planner acceptance: it adds a separate SQLite MissionStore, accepted-only Context Broker, immutable TaskPacketV1, evidence admission, checkpoints, recovery, and `/missions` controls.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. There is no Boss runtime, Context Broker, canonical mission state, SQLite runtime state, analytics collection, cost/budget-aware routing, or full M9 control center.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. There is no Boss runtime, quality/reviewer loop, analytics collection, cost/budget-aware routing, or full M9 control center. M6 is not yet accepted; its fake-gateway/real-Pi mission-flow proof is implementation evidence pending Planner acceptance.
 
 The implementation contract is split across:
 
@@ -58,7 +58,7 @@ PI_MULTI_ORCH_CONFIG_ROOT=/path/to/isolated/root \
   pi --no-extensions -e ./dist/host/pi-extension.js
 ```
 
-The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. M3 adds `/pool-models [investigation|implementation|verification]` and `/pool-status`; the same three pool editors are available from `/orchestrator`. M4 adds `/routing-status [pool]`, `/route-health [filter]`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`. M5 adds parent-only `delegate_agent` and foreground `/subagent-run`; role and pool are explicit, while M4 selects the exact route/model. Pool edits change validated configuration only and never select a route or launch a subagent. Routing status is a non-mutating preview; health reset changes only runtime health. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key. Other URL paths are rejected.
+The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. M3 adds `/pool-models [investigation|implementation|verification]` and `/pool-status`; the same three pool editors are available from `/orchestrator`. M4 adds `/routing-status [pool]`, `/route-health [filter]`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`. M5 adds parent-only `delegate_agent` and foreground `/subagent-run`; role and pool are explicit, while M4 selects the exact route/model. M6 adds `/missions` and `/mission-packet <mission-id> <task-id>` plus Context & Mission Settings in `/orchestrator`. Pool edits change validated configuration only and never select a route or launch a subagent. Routing status is a non-mutating preview; health reset changes only runtime health. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key. Other URL paths are rejected.
 
 ## Scope boundary
 
@@ -71,4 +71,4 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M5 did not modify any live environment. M5 is the latest accepted milestone. M6 is next planned and not started. See [Roadmap](docs/ROADMAP.md).
+M1 through M6 implementation work did not modify any live environment. M5 is the latest accepted milestone. M6 is implemented but awaiting Planner acceptance; do not start M7. See [Roadmap](docs/ROADMAP.md).

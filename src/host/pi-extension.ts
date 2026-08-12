@@ -48,6 +48,17 @@ import {
 	type RouteAttemptAdapter,
 } from "../core/workers/index.js";
 import type { FailureClassification, RoutingRequest } from "../core/routing/index.js";
+import type {
+	EvidenceRecord,
+	MissionCreateInput,
+	MissionId,
+	MissionRecord,
+	MissionStatus,
+	MissionStoreAdapter,
+} from "../core/mission/types.js";
+import { createMissionStore } from "../core/mission/index.js";
+import { executeMissionTask } from "../core/mission/index.js";
+import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -108,6 +119,9 @@ export interface PiHostOptions {
 	readonly poolManager?: PoolManagerContract;
 	readonly configStore?: ConfigStore;
 	readonly healthStore?: HealthStore;
+	/** Optional canonical mission store. The host never mirrors canonical state in Pi history. */
+	readonly missionStore?: MissionStoreAdapter;
+	readonly contextBroker?: ContextBroker;
 	readonly providerId?: string;
 	readonly subagentExecutor?: SubagentExecutor;
 }
@@ -123,6 +137,8 @@ export interface PiHost {
 	readonly manager: PiManagerContract;
 	readonly poolManager: PoolManagerContract;
 	readonly healthStore?: HealthStore;
+	readonly missionStore?: MissionStoreAdapter;
+	readonly contextBroker?: ContextBroker;
 	reconcile(): Promise<ReconcileResult>;
 	registerCommands(): void;
 	dispose(): void;
@@ -846,6 +862,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			"Verification Pool",
 			"Routing & Fallback",
 			"Health & Quotas",
+			"Context & Mission Settings",
 			"Refresh 9Router catalog",
 			"9Router status",
 			"Pool status",
@@ -870,6 +887,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				return;
 			case "Health & Quotas":
 				await showRouteHealth(ctx);
+				return;
+			case "Context & Mission Settings":
+				await openMissionControl(ctx);
 				return;
 			case "Refresh 9Router catalog":
 				await refreshAndReconcile(ctx);
@@ -1166,6 +1186,391 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
+	const missionStatusLabel = (mission: MissionRecord): string =>
+		`${mission.missionId} [${mission.status}] rev ${mission.revision} — ${mission.goal}`;
+
+	const appendMissionPointer = (mission: MissionRecord): void => {
+		// The session entry is only a pointer/status hint. Canonical state remains in
+		// MissionStore and is never copied into Pi's LLM context.
+		if (typeof (pi as unknown as { appendEntry?: unknown }).appendEntry !== "function") return;
+		pi.appendEntry("pi-multi-orchestrator:mission", {
+			missionId: mission.missionId,
+			status: mission.status,
+			revision: mission.revision,
+		});
+	};
+
+	const missionStoreUnavailable = (ctx: ExtensionContext | ExtensionCommandContext): void => {
+		ctx.ui.notify("Mission control is unavailable until the runtime mission store is configured", "error");
+	};
+	const showMissionPacket = async (ctx: ExtensionCommandContext, missionId: string, taskId: string): Promise<void> => {
+		const store = options.missionStore;
+		const broker = options.contextBroker;
+		if (!store || !broker) { ctx.ui.notify("Mission packet generation is unavailable", "error"); return; }
+		try {
+			const task = store.getTask(taskId);
+			if (!task || String(task.missionId) !== missionId) { ctx.ui.notify("Task was not found for this mission", "error"); return; }
+			const revision = store.getMission(missionId)?.revision;
+			const packet = broker.buildPacket({ missionId, taskId, ...(revision === undefined ? {} : { sourceMissionRevision: revision }) });
+			store.saveTaskPacket(taskId, packet, task.revision);
+			ctx.ui.notify(renderTaskPacketPrompt(packet), "info");
+		} catch (error) { notifyError(ctx, "Mission packet failed", error); }
+	};
+
+	const createMissionTask = async (ctx: ExtensionCommandContext, mission: MissionRecord): Promise<void> => {
+		const store = options.missionStore;
+		if (!store) { missionStoreUnavailable(ctx); return; }
+		if (ctx.mode !== "tui" && !ctx.hasUI) { ctx.ui.notify("Task creation requires TUI or RPC UI mode", "error"); return; }
+		if (!requireIdle(ctx, "mission task")) return;
+		const roleId = (await ctx.ui.input("Role ID", "implementer"))?.trim();
+		if (!roleId) return;
+		const pool = await ctx.ui.select("Execution pool", [...POOL_IDS, "Back"]);
+		if (!pool || pool === "Back" || !isPoolId(pool)) return;
+		const executionClass = await ctx.ui.select("Execution class", ["investigation", "implementation", "verification", "Back"]);
+		if (!executionClass || executionClass === "Back") return;
+		const objective = (await ctx.ui.input("Task objective", "Describe the bounded task"))?.trim();
+		if (!objective) return;
+		const criteriaText = await ctx.ui.input("Acceptance criteria (optional; separate with ;)", "focused test passes");
+		try {
+			const task = store.createTask({
+				missionId: mission.missionId,
+				roleId,
+				poolId: pool,
+				executionClass: executionClass as "investigation" | "implementation" | "verification",
+				objective,
+				...(criteriaText?.trim() ? { acceptanceCriteria: criteriaText.split(";").map((value) => value.trim()).filter(Boolean) } : {}),
+			});
+			ctx.ui.notify(`Task created: ${task.taskId}`, "info");
+		} catch (error) { notifyError(ctx, "Task creation failed", error); }
+	};
+
+	const showMissionTask = async (ctx: ExtensionCommandContext, mission: MissionRecord, task: import("../core/mission/types.js").TaskRecord): Promise<void> => {
+		const store = options.missionStore;
+		if (!store) { missionStoreUnavailable(ctx); return; }
+		const details = [
+			`task: ${task.taskId}`,
+			`status: ${task.status}`,
+			`role: ${task.roleId}`,
+			`pool: ${task.poolId ?? "unassigned"}`,
+			`execution class: ${task.executionClass}`,
+			`objective: ${task.objective}`,
+			`acceptance criteria: ${task.acceptanceCriteria.length}`,
+			`packet revision: ${task.packetRevision}`,
+		].join("\n");
+		if (ctx.mode !== "tui" && !ctx.hasUI) { ctx.ui.notify(details, "info"); return; }
+		const actions = ["Inspect", "Build packet", ...(subagentExecutor && options.contextBroker ? ["Run task"] : []), "Back"];
+		const action = await ctx.ui.select(details, actions);
+		if (!action || action === "Back") return;
+		if (action === "Inspect") { ctx.ui.notify(details, "info"); return; }
+		if (action === "Build packet") { await showMissionPacket(ctx, String(mission.missionId), String(task.taskId)); return; }
+		if (action !== "Run task" || !subagentExecutor || !options.contextBroker) return;
+		if (!requireIdle(ctx, "mission task")) return;
+		if (task.executionClass === "implementation" && !(await ctx.ui.confirm("Run implementation task?", "The child may modify the current working tree."))) return;
+		try {
+			const result = await executeMissionTask({ store, contextBroker: options.contextBroker, executor: subagentExecutor, missionId: mission.missionId, taskId: task.taskId, cwd: ctx.cwd });
+			ctx.ui.notify(`Task ${task.taskId} finished: ${result.run.terminalStatus}; evidence ${result.evidence?.status ?? "none"}`, "info");
+		} catch (error) { notifyError(ctx, "Task execution failed", error); }
+	};
+
+	const listMissionTasks = async (ctx: ExtensionCommandContext, mission: MissionRecord): Promise<void> => {
+		const store = options.missionStore;
+		if (!store) { missionStoreUnavailable(ctx); return; }
+		const tasks = [...store.listTasks(mission.missionId)];
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify(tasks.length === 0 ? "No tasks recorded" : tasks.map((task) => `${task.taskId} [${task.status}] ${task.objective}`).join("\n"), "info");
+			return;
+		}
+		const labels = tasks.map((task) => `${task.taskId} [${task.status}] — ${task.objective}`);
+		while (true) {
+			const selected = await ctx.ui.select(`Tasks for ${mission.missionId}`, [...labels, "Create task", "Back"]);
+			if (!selected || selected === "Back") return;
+			if (selected === "Create task") { await createMissionTask(ctx, mission); return; }
+			const index = labels.indexOf(selected);
+			if (index >= 0 && tasks[index]) await showMissionTask(ctx, mission, tasks[index]!);
+			return;
+		}
+	};
+
+	const evidenceLabel = (evidence: EvidenceRecord): string =>
+		`${evidence.evidenceId} [${evidence.status}] ${evidence.kind}`;
+
+	const missionEvidence = (store: MissionStoreAdapter, missionId: string): readonly EvidenceRecord[] => {
+		const list = (store as MissionStoreAdapter & { readonly listEvidence?: (id: string) => readonly EvidenceRecord[] }).listEvidence;
+		return typeof list === "function" ? list.call(store, missionId) : [];
+	};
+	const missionCheckpoints = (store: MissionStoreAdapter, missionId: string): readonly unknown[] => {
+		const list = (store as MissionStoreAdapter & { readonly listCheckpoints?: (id: string) => readonly unknown[] }).listCheckpoints;
+		return typeof list === "function" ? list.call(store, missionId) : [];
+	};
+	const missionEvents = (store: MissionStoreAdapter, missionId: string): readonly unknown[] => {
+		const list = (store as MissionStoreAdapter & { readonly listEvents?: (id: string) => readonly unknown[] }).listEvents;
+		return typeof list === "function" ? list.call(store, missionId) : [];
+	};
+
+	const evidenceDetails = (evidence: EvidenceRecord): string => {
+		const content = JSON.stringify(evidence.content);
+		return [
+			`evidence: ${evidence.evidenceId}`,
+			`status: ${evidence.status}`,
+			`kind: ${evidence.kind}`,
+			`task: ${evidence.taskId ?? "unknown"}`,
+			`attempt/run: ${evidence.attemptId ?? "unknown"} / ${evidence.runId ?? "unknown"}`,
+			`route/model: ${evidence.routeId ?? "unknown"} / ${evidence.remoteModelId ?? "unknown"}`,
+			`role/class: ${evidence.roleId ?? "unknown"} / ${evidence.executionClass ?? "unknown"}`,
+			`packet revision: ${evidence.packetRevision ?? "unknown"}`,
+			`source revision: ${evidence.sourceRevision ?? "unknown"}`,
+			`admitted: ${evidence.admittedAt}`,
+			`reviewed: ${evidence.reviewedAt ?? "not reviewed"}`,
+			`content: ${content.length > 2_000 ? `${content.slice(0, 2_000)}…` : content}`,
+			...(evidence.rejectionReason ? [`reason: ${evidence.rejectionReason}`] : []),
+		].join("\n");
+	};
+
+	const showMissionEvidence = async (ctx: ExtensionCommandContext, mission: MissionRecord): Promise<void> => {
+		const store = options.missionStore;
+		if (!store) { missionStoreUnavailable(ctx); return; }
+		const evidence = [...missionEvidence(store, String(mission.missionId))];
+		if (typeof (store as MissionStoreAdapter & { readonly listEvidence?: unknown }).listEvidence !== "function") {
+			ctx.ui.notify("Evidence review is unavailable for this mission store", "error");
+			return;
+		}
+		if (evidence.length === 0) { ctx.ui.notify("No evidence recorded", "warning"); return; }
+		const labels = evidence.map(evidenceLabel);
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify(evidence.map(evidenceDetails).join("\n\n"), "info");
+			return;
+		}
+		while (true) {
+			const selected = await ctx.ui.select(`Evidence for ${mission.missionId}`, [...labels, "Back"]);
+			if (!selected || selected === "Back") return;
+			const index = labels.indexOf(selected);
+			const record = index >= 0 ? evidence[index] : undefined;
+			if (!record) return;
+			const actions = record.status === "proposed" ? ["Inspect", "Accept", "Reject", "Back"] : ["Inspect", "Back"];
+			const action = await ctx.ui.select(evidenceDetails(record), actions);
+			if (!action || action === "Back") return;
+			if (action === "Inspect") { ctx.ui.notify(evidenceDetails(record), "info"); continue; }
+			if (!requireIdle(ctx, "evidence review")) continue;
+			try {
+				if (action === "Accept") {
+					const target = await ctx.ui.select("Canonical target", ["validatedFindings", "completedWork", "testReviewEvidence", "approvedDecisions", "Back"]);
+					if (!target || target === "Back") continue;
+					const currentMissionRevision = store.getMission(mission.missionId)?.revision;
+					const accepted = store.promoteEvidence(record.evidenceId, {
+						actor: "user",
+						...(currentMissionRevision === undefined ? {} : { expectedRevision: currentMissionRevision }),
+						target: target as "validatedFindings" | "completedWork" | "testReviewEvidence" | "approvedDecisions",
+					});
+					if (typeof (store as MissionStoreAdapter & { readonly recordCheckpoint?: unknown }).recordCheckpoint === "function") store.recordCheckpoint(mission.missionId, "evidence-promoted");
+					ctx.ui.notify(`Evidence ${accepted.evidenceId} accepted`, "info");
+					return;
+				}
+				const reason = await ctx.ui.input("Rejection reason", "Not sufficiently verified");
+				if (!reason?.trim()) continue;
+				const rejected = store.rejectEvidence(record.evidenceId, reason.trim(), "user");
+				if (typeof (store as MissionStoreAdapter & { readonly recordCheckpoint?: unknown }).recordCheckpoint === "function") store.recordCheckpoint(mission.missionId, "status-changed");
+				ctx.ui.notify(`Evidence ${rejected.evidenceId} rejected`, "info");
+				return;
+			} catch (error) {
+				notifyError(ctx, "Evidence review failed", error);
+			}
+		}
+	};
+
+	const showMission = async (ctx: ExtensionCommandContext, mission: MissionRecord): Promise<void> => {
+		const store = options.missionStore;
+		if (!store) {
+			missionStoreUnavailable(ctx);
+			return;
+		}
+		const details = [
+			`mission: ${mission.missionId}`,
+			`status: ${mission.status}`,
+			`revision: ${mission.revision}`,
+			`goal: ${mission.goal}`,
+			`repository: ${mission.repository.cwd ?? "unknown"}${mission.repository.revision ? ` @ ${mission.repository.revision}` : ""}`,
+			`acceptance criteria: ${mission.acceptanceCriteria.length}`,
+			`validated findings: ${mission.validatedFindings.length}`,
+			`completed work: ${mission.completedWork.length}`,
+			`next steps: ${mission.nextSteps.length}`,
+			`tasks: ${store.listTasks(mission.missionId).length}`,
+			`evidence: ${missionEvidence(store, String(mission.missionId)).length}`,
+			`checkpoints: ${missionCheckpoints(store, String(mission.missionId)).length}`,
+			`events: ${missionEvents(store, String(mission.missionId)).length}`,
+		].join("\n");
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify(details, "info");
+			return;
+		}
+		const actions = [
+			"Inspect", "Tasks", "Evidence", "Checkpoint",
+			...(mission.status === "paused" ? ["Resume mission"] : []),
+			...(mission.status === "active" || mission.status === "running" ? ["Pause mission"] : []),
+			"Start mission", "Awaiting review", "Complete", "Block", "Cancel", "Back",
+		];
+		const action = await ctx.ui.select(details, actions);
+		if (!action || action === "Back") return;
+		if (action === "Tasks") { await listMissionTasks(ctx, mission); return; }
+		if (action === "Evidence") { await showMissionEvidence(ctx, mission); return; }
+		if (action === "Checkpoint") {
+			if (!requireIdle(ctx, "mission checkpoint")) return;
+			if (typeof (store as MissionStoreAdapter & { readonly recordCheckpoint?: unknown }).recordCheckpoint !== "function") { ctx.ui.notify("Checkpointing is unavailable for this mission store", "error"); return; }
+			try {
+				const checkpoint = store.recordCheckpoint(mission.missionId, "manual");
+				ctx.ui.notify(`Checkpoint ${checkpoint.checkpointId} recorded at revision ${checkpoint.revision}`, "info");
+			} catch (error) { notifyError(ctx, "Checkpoint failed", error); }
+			return;
+		}
+		if (action === "Inspect") {
+			if (action === "Inspect") ctx.ui.notify(details, "info");
+			return;
+		}
+		if (!requireIdle(ctx, "mission state")) return;
+		const target: MissionStatus | undefined = action === "Start mission" || action === "Resume mission"
+			? "running"
+			: action === "Pause mission"
+				? "paused"
+			: action === "Awaiting review"
+				? "awaiting-review"
+				: action === "Complete"
+					? "completed"
+					: action === "Block"
+						? "blocked"
+						: action === "Cancel"
+							? "cancelled"
+							: undefined;
+		if (!target) return;
+		try {
+			const updated = await Promise.resolve(store.transitionMission(mission.missionId, target, { actor: "user", expectedRevision: mission.revision }));
+			appendMissionPointer(updated);
+			ctx.ui.notify(`Mission ${updated.missionId} is now ${updated.status}`, "info");
+		} catch (error) {
+			notifyError(ctx, "Mission transition failed", error);
+		}
+	};
+
+	const createMission = async (ctx: ExtensionCommandContext): Promise<void> => {
+		const store = options.missionStore;
+		if (!store) {
+			missionStoreUnavailable(ctx);
+			return;
+		}
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("Mission creation requires TUI or RPC UI mode", "error");
+			return;
+		}
+		if (!requireIdle(ctx, "mission state")) return;
+		const goal = await ctx.ui.input("Mission goal", "Describe the bounded mission");
+		if (!goal?.trim()) return;
+		const criteriaText = await ctx.ui.input("Acceptance criteria (optional; separate with ;)", "tests pass; review complete");
+		const input: MissionCreateInput = {
+			goal: goal.trim(),
+			...(criteriaText?.trim() ? { acceptanceCriteria: criteriaText.split(";").map((value) => value.trim()).filter(Boolean) } : {}),
+			repository: { cwd: ctx.cwd },
+			actor: "user",
+			status: "draft",
+		};
+		try {
+			const mission = await Promise.resolve(store.createMission(input));
+			appendMissionPointer(mission);
+			ctx.ui.notify(`Mission created: ${mission.missionId}`, "info");
+		} catch (error) {
+			notifyError(ctx, "Mission creation failed", error);
+		}
+	};
+
+	const listMissionRecords = async (ctx: ExtensionCommandContext, requested?: string): Promise<void> => {
+		const store = options.missionStore;
+		if (!store) {
+			missionStoreUnavailable(ctx);
+			return;
+		}
+		try {
+			const requestedId = requested?.trim();
+			const records = requestedId
+				? [await Promise.resolve(store.getMission(requestedId as MissionId))].filter((value): value is MissionRecord => value !== undefined)
+				: [...await Promise.resolve(store.listMissions())];
+			if (records.length === 0) {
+				ctx.ui.notify(requestedId ? `Mission '${requestedId}' was not found` : "No missions recorded", "warning");
+				return;
+			}
+			if (requestedId || (ctx.mode !== "tui" && !ctx.hasUI)) {
+				if (records[0]) await showMission(ctx, records[0]);
+				return;
+			}
+			const options = records.map(missionStatusLabel);
+			while (true) {
+				const selected = await ctx.ui.select("Missions", [...options, "Create mission", "Back"]);
+				if (!selected || selected === "Back") return;
+				if (selected === "Create mission") {
+					await createMission(ctx);
+					continue;
+				}
+				const index = options.indexOf(selected);
+				if (index < 0 || !records[index]) return;
+				await showMission(ctx, records[index]!);
+				return;
+			}
+		} catch (error) {
+			notifyError(ctx, "Mission list failed", error);
+		}
+	};
+
+	const showContextMissionSettings = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (!configStore) {
+			ctx.ui.notify("Context settings are unavailable until the configuration store is configured", "error");
+			return;
+		}
+		try {
+			const loaded = await configStore.load();
+			const config = loaded.snapshot?.config;
+			if (!config) {
+				ctx.ui.notify("Context settings unavailable: configuration is not valid", "error");
+				return;
+			}
+			const profile = config.operationalProfiles[config.activeOperationalProfileId];
+			const details = [
+				`active operational profile: ${profile?.displayName ?? config.activeOperationalProfileId}`,
+				`context budget class: ${profile?.contextBudgetClass ?? "unknown"}`,
+				`max task packet bytes: ${config.safety.maxTaskPacketBytes}`,
+				`max agents/concurrency: ${profile?.maxAgents ?? "unknown"}/${profile?.maxConcurrency ?? "unknown"}`,
+				`required gates: ${config.quality.requiredGates.join(", ") || "none"}`,
+			].join("\n");
+			if (ctx.mode !== "tui" && !ctx.hasUI) {
+				ctx.ui.notify(details, "info");
+				return;
+			}
+			const action = await ctx.ui.select("Context & Mission Settings", ["Inspect", "Change packet limit", "Back"]);
+			if (action === "Inspect") ctx.ui.notify(details, "info");
+			if (action !== "Change packet limit") return;
+			if (!requireIdle(ctx, "context settings")) return;
+			const raw = await ctx.ui.input("Maximum Task Packet bytes", String(config.safety.maxTaskPacketBytes));
+			const value = Number.parseInt(raw?.trim() ?? "", 10);
+			if (!Number.isInteger(value) || value < 1_024 || value > 16_777_216) {
+				ctx.ui.notify("Packet limit must be between 1024 and 16777216 bytes", "error");
+				return;
+			}
+			await configStore.update((draft) => { draft.safety.maxTaskPacketBytes = value; });
+			ctx.ui.notify("Context settings saved", "info");
+		} catch (error) {
+			notifyError(ctx, "Context settings failed", error);
+		}
+	};
+
+	const openMissionControl = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("Context & Mission Settings requires TUI or RPC UI mode", "error");
+			return;
+		}
+		while (true) {
+			const action = await ctx.ui.select("Context & Mission Settings", ["Missions", "Create mission", "Context settings", "Back"]);
+			if (!action || action === "Back") return;
+			if (action === "Missions") await listMissionRecords(ctx);
+			else if (action === "Create mission") await createMission(ctx);
+			else if (action === "Context settings") await showContextMissionSettings(ctx);
+		}
+	};
+
 	const registerCommands = (): void => {
 		registerSubagentTool();
 		pi.registerCommand("orchestrator", {
@@ -1204,20 +1609,34 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			description: "Edit the configured routing and fallback policy",
 			handler: async (_args, ctx) => openRoutingSettings(ctx),
 		});
-		pi.registerCommand("subagent-run", {
-			description: "Run one routed foreground subagent",
-			handler: async (_args, ctx) => openSubagentRunner(ctx),
+			pi.registerCommand("subagent-run", {
+				description: "Run one routed foreground subagent",
+				handler: async (_args, ctx) => openSubagentRunner(ctx),
+			});
+		pi.registerCommand("missions", {
+				description: "Inspect or create canonical missions (optional mission id)",
+				handler: async (args, ctx) => listMissionRecords(ctx, args),
+		});
+		pi.registerCommand("mission-packet", {
+			description: "Generate and inspect an immutable mission task packet",
+			handler: async (args, ctx) => {
+				const [missionId, taskId] = args.trim().split(/\s+/, 2);
+				if (!missionId || !taskId) { ctx.ui.notify("Usage: /mission-packet <mission-id> <task-id>", "error"); return; }
+				await showMissionPacket(ctx, missionId, taskId);
+			},
 		});
 	};
 
 	const dispose = (): void => {
 		lifetime.abort();
 		pi.unregisterProvider(providerId);
+		const close = (options.missionStore as { readonly close?: unknown } | undefined)?.close;
+		if (typeof close === "function") close.call(options.missionStore);
 		registeredFingerprint = undefined;
 		reconciled = true;
 	};
 
-	return { manager, poolManager, ...(healthStore ? { healthStore } : {}), reconcile, registerCommands, dispose };
+		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
@@ -1227,6 +1646,17 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	const manager = createNineRouterManager(root, configStore) as PiManagerContract;
 	const poolManager = createPoolManager(root, configStore);
 	const healthStore = new HealthStore({ root });
+	let missionStore: MissionStoreAdapter | undefined;
+	let contextBroker: ContextBroker | undefined;
+	try {
+		missionStore = createMissionStore({ root });
+		missionStore.recoverInterrupted();
+		contextBroker = new ContextBroker(missionStoreContextRepository(missionStore), { maxChars: 32_768 });
+	} catch {
+		// Preserve a corrupt/unopenable mission DB; keep the non-mission host usable.
+		missionStore = undefined;
+		contextBroker = undefined;
+	}
 	let subagentExecutor: SubagentExecutor | undefined;
 	try {
 		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore);
@@ -1234,7 +1664,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 		// Keep the M2/M3/M4 host available when no configured route can yet be resolved.
 		subagentExecutor = undefined;
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(subagentExecutor ? { subagentExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(missionStore ? { missionStore } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

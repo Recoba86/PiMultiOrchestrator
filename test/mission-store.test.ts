@@ -1,0 +1,104 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { describe, it } from "node:test";
+
+import {
+	createMissionStore,
+	executeMissionTask,
+	MissionClosedError,
+	MissionConflictError,
+	MissionCorruptError,
+	MissionValidationError,
+	MissionUnauthorizedError,
+} from "../src/core/mission/index.js";
+import { ContextBroker, missionStoreContextRepository } from "../src/core/context/index.js";
+import type { SubagentRunResult } from "../src/core/workers/index.js";
+
+async function withStore<T>(run: (root: string) => T | Promise<T>): Promise<T> {
+	const root = await mkdtemp(join(tmpdir(), "pi-mission-"));
+	try {
+		return await run(root);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+}
+
+describe("SQLite mission store", () => {
+	it("persists mission revisions, tasks, attempts, evidence, and checkpoints", async () => withStore((root) => {
+		let id = 0;
+		const store = createMissionStore({ root, id: () => String(++id) });
+		const created = store.createMission({ missionId: "m1", goal: "ship", acceptanceCriteria: ["tests"] });
+		const planned = store.transitionMission("m1", "planned", { expectedRevision: created.revision });
+		assert.equal(planned.status, "planned");
+		const task = store.createTask({ missionId: "m1", roleId: "investigator", executionClass: "investigation", objective: "inspect" });
+		assert.equal(store.startTask(task.taskId).status, "running");
+		const attempt = store.createAttempt({ taskId: task.taskId, routeId: "route-a", remoteModelId: "model-a", leaseOwner: "worker" });
+		assert.equal(store.finishAttempt(attempt.attemptId, "succeeded", { result: { ok: true } }).status, "succeeded");
+		const evidence = store.admitEvidence({ missionId: "m1", taskId: task.taskId, attemptId: attempt.attemptId, kind: "finding", content: { file: "x" } });
+		assert.equal(store.promoteEvidence(evidence.evidenceId).status, "accepted");
+		const checkpoint = store.recordCheckpoint("m1");
+		assert.equal(checkpoint.revision, store.getMission("m1")?.revision);
+		assert.equal(store.listEvidence("m1", "accepted").length, 1);
+		assert.ok(store.listEvents("m1").length >= 5);
+		store.close();
+	}));
+
+	it("uses compare-and-swap and protects completion from workers", async () => withStore((root) => {
+		const store = createMissionStore({ root });
+		const mission = store.createMission({ missionId: "m1", goal: "ship" });
+		assert.throws(() => store.createTask({ missionId: "m1", roleId: "worker", executionClass: "implementation", poolId: "unknown", objective: "invalid" }), (error: unknown) => error instanceof MissionValidationError && error.issues[0]?.path === "poolId");
+		assert.throws(() => store.updateMission("m1", { goal: "stale" }, { expectedRevision: 99 }), MissionConflictError);
+		const review = store.transitionMission("m1", "planned", { expectedRevision: mission.revision });
+		assert.throws(() => store.transitionMission("m1", "completed", { actor: "worker", expectedRevision: review.revision }), MissionUnauthorizedError);
+		const stale = store.admitEvidence({ missionId: "m1", sourceRevision: mission.revision, kind: "finding", content: { old: true } });
+		assert.throws(() => store.promoteEvidence(stale.evidenceId), MissionConflictError);
+		assert.equal(store.listEvidence("m1", "stale").length, 1);
+		store.close();
+	}));
+
+	it("recovers expired attempts and rejects corrupted JSON", async () => withStore((root) => {
+		let now = new Date("2026-01-01T00:00:00.000Z");
+		const store = createMissionStore({ root, clock: () => now });
+		store.createMission({ missionId: "m1", goal: "ship" });
+		const task = store.createTask({ missionId: "m1", roleId: "worker", executionClass: "verification", objective: "check" });
+		const attempt = store.createAttempt({ taskId: task.taskId, leaseOwner: "worker", leaseTtlMs: 10 });
+		now = new Date("2026-01-01T00:00:00.100Z");
+		assert.equal(store.recoverInterrupted({ now })[0]?.status, "interrupted");
+		store.integrityCheck();
+		store.close();
+		const raw = new DatabaseSync(join(root, "mission.sqlite"));
+		raw.prepare("UPDATE missions SET constraints_json=? WHERE mission_id=?").run("{", "m1");
+		raw.close();
+		assert.throws(() => createMissionStore({ root }), MissionCorruptError);
+	}));
+
+	it("rolls back a faulted transaction and enforces closed state", async () => withStore((root) => {
+		const store = createMissionStore({ root, hooks: { fault: (point) => { if (point === "after-event") throw new Error("fault"); } } });
+		assert.throws(() => store.createMission({ missionId: "m1", goal: "ship" }));
+		assert.equal(store.getMission("m1"), undefined);
+		store.close();
+		assert.throws(() => store.listMissions(), MissionClosedError);
+	}));
+
+	it("routes one task through M5-shaped execution and admits only proposed evidence", async () => withStore(async (root) => {
+		const store = createMissionStore({ root });
+		store.createMission({ missionId: "m1", goal: "ship", repository: { cwd: root } });
+		const task = store.createTask({ missionId: "m1", taskId: "t1", roleId: "implementer", executionClass: "implementation", poolId: "implementation", objective: "inspect", acceptanceCriteria: ["tests pass"] });
+		const packetBroker = new ContextBroker(missionStoreContextRepository(store));
+		const run: SubagentRunResult = {
+			protocolVersion: 1, runId: "run-1", roleId: "implementer", poolId: "implementation", terminalStatus: "completed",
+			finalRouteId: "route-a" as never, finalRemoteModelId: "remote-a", fallbackCount: 0, potentialMutationObserved: false,
+			summary: "done", structuredResult: { protocolVersion: 1, status: "completed", summary: "done", evidence: ["read"], filesChanged: [], tests: [], risks: [], questions: [] },
+			attempts: [{ attemptId: "worker-attempt", routeId: "route-a" as never, remoteModelId: "remote-a", retryIndex: 0, startedAt: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:01.000Z", outcome: "completed", toolNamesUsed: ["read"], toolObservations: [], potentialMutationObserved: false, sessionTerminalState: "idle", structuredResult: { protocolVersion: 1, status: "completed", summary: "done", evidence: ["read"], filesChanged: [], tests: [], risks: [], questions: [] } }],
+		};
+		const result = await executeMissionTask({ store, contextBroker: packetBroker, executor: { run: async () => run }, missionId: "m1", taskId: task.taskId });
+		assert.equal(result.evidence?.status, "proposed");
+		assert.equal(store.listCanonicalItems("m1").length, 0);
+		assert.equal(store.getTask("t1")?.status, "execution_completed");
+		assert.equal(store.getTask("t1")?.packetRevision, 1);
+		assert.ok(store.listCheckpoints("m1").some((checkpoint) => checkpoint.kind === "task-ended"));
+	}));
+});

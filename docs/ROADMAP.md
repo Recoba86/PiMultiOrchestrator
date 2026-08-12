@@ -92,17 +92,17 @@ Exit gate: PASS — `97/97` tests, typecheck, build, aggregate check, fake-gatew
 
 ## M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
 
 Deliverables:
 
-- mission lifecycle, transactional checkpoints, lease/recovery, and resume;
-- runtime-state storage proof of concept, including `node:sqlite` portability under supported Pi launch modes;
-- role-specific Task Packets with explicit size/content limits;
-- evidence validation and promotion into canonical state;
-- Pi session entry containing only the mission pointer and status, not duplicated full state.
+- mission lifecycle, transactional revisions, checkpoints, lease/recovery, and resume primitives;
+- a separate versioned Node `node:sqlite` MissionStore with bound SQL, foreign keys, busy timeout, and corruption checks;
+- deterministic accepted-only Context Broker and immutable role/pool TaskPacketV1 with explicit size/content limits;
+- proposed worker evidence with explicit acceptance/rejection and canonical provenance;
+- `/missions`, Context & Mission Settings, and packet inspection while Pi session entries contain only mission pointers/status.
 
-Exit gate: restart/resume, stale lease, context isolation, rejected evidence, checkpoint atomicity, and session-switch tests pass.
+Exit gate: MissionStore/ContextBroker deterministic suites, restart/reopen and interrupted recovery, stale lease, context isolation, rejected/proposed evidence, checkpoint atomicity, packet lineage/digest, M2–M5 regressions, and the actual Pi/fake mission task/evidence/reopen flow pass in the implementation worktree (`111/111`, typecheck/build); Planner acceptance remains required before M6 is accepted.
 
 ## M7 — Quality gates, review, and escalation
 

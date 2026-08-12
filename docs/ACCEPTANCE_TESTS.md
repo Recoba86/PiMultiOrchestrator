@@ -639,7 +639,39 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** run concurrent Implementation requests in one cwd; cancel and timeout child sessions.
 - **Pass:** mutating runs serialize; sessions abort, unsubscribe, and dispose deterministically; no child files/session history are left outside the requested cwd; no worktree fan-out or background worker is created.
 
-## 13. Real integration gates
+## 13. M6 canonical mission state and context broker
+
+### MISSION-01 — SQLite MissionStore and revision safety
+
+- **Level:** U/I, fixture-v1, Node `22.23.0`
+- **Action:** create/reopen a mission, create a canonical three-pool task, start/finish an attempt, mutate with a stale expected revision, and inject a transaction fault.
+- **Pass:** durable revisioned rows survive reopen; stale writes are typed conflicts; rollback leaves prior state; `node:sqlite` uses foreign keys/busy timeout/prepared statements; ConfigStore, HealthStore, and Pi session history remain separate.
+
+### MISSION-02 — Evidence admission and canonical provenance
+
+- **Level:** U/I, fixture-v1
+- **Action:** ingest a worker result, inspect the queue, reject one item, accept another into a canonical item, and inspect events/checkpoint.
+- **Pass:** worker evidence starts `proposed`; proposed/rejected evidence is not canonical context; explicit acceptance atomically advances revision, preserves evidence history, records canonical provenance and journal/checkpoint metadata; no worker direct-write path exists.
+
+### MISSION-03 — Deterministic bounded TaskPacketV1
+
+- **Level:** U/I, fixture-v1
+- **Action:** build packets with accepted, proposed, rejected, stale, scoped, tagged, oversized, and reordered canonical items.
+- **Pass:** accepted-only default, explicit filters, deterministic order, bounded chars/items, omitted count/IDs, immutable packet, SHA-256 digest, source mission revision, and no transcript/secret content. Packet-to-M5 adaptation preserves exact role/pool/task context.
+
+### MISSION-04 — Checkpoint and interrupted recovery
+
+- **Level:** I, fixture-v1
+- **Action:** create checkpoint, close/reopen the same runtime root, expire a running lease, and recover.
+- **Pass:** checkpoints/events/tasks persist; running becomes interrupted with mutation-risk metadata; no child is auto-rerun and no parent transcript is required for resume; corrupt DB fails typed and is not replaced with an empty database.
+
+### MISSION-05 — Mission Control and packet inspection
+
+- **Level:** U/P, fixture-v1, Pi `0.84.1`
+- **Action:** open `/missions`, `/mission-packet`, and Context & Mission Settings through the native command/RPC surface; inspect evidence and record a checkpoint from Mission Control where the store supports those operations.
+- **Pass:** mission create/list/open/status, task/packet inspection, evidence review actions, checkpointing, and settings are available; session history contains only safe mission pointers/status; no JSON/SQLite editing is exposed to the operator.
+
+## 14. Real integration gates
 
 ### PI-01 — Extension lifecycle smoke
 

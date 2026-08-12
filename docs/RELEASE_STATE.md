@@ -29,7 +29,7 @@ Milestone acceptance does not itself create a product release.
 | Evidence | Current result |
 |---|---|
 | Configuration schema | Version 1 |
-| Deterministic and fake integration suite | `97/97 PASS` |
+| Deterministic and fake integration suite | `111/111 PASS` (M6 implementation regression; M5 accepted baseline remains `97/97`) |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -45,7 +45,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, durable mission state, Context Broker, quality escalation, analytics, hardening, cost/budget-aware routing, and packaging milestones remain incomplete. M5 routed child execution is accepted; M6 is next planned and not started.
+- M6 MissionStore/ContextBroker implementation and fake/real-Pi mission-flow evidence are present but not accepted; Planner acceptance, Boss runtime, quality escalation, analytics, hardening, cost/budget-aware routing, and packaging remain incomplete. M5 routed child execution remains the latest accepted milestone.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

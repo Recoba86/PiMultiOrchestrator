@@ -482,7 +482,7 @@ The logical store is SQLite with WAL/transactions and restrictive file permissio
 
 A state-changing transaction writes the new snapshot and corresponding event together. Large source/output content is not copied into the database; bounded evidence or workspace artifact hashes/references are stored.
 
-M6 must prove `node:sqlite` in the supported Node runtime and Pi's standalone/Bun distribution before implementing canonical runtime state. The historical M0 local Node `v22.23.0` probe passed but emitted an experimental warning; it is evidence, not M1 implementation. If a supported standalone host cannot load it, M6 selects one compatible SQLite driver while preserving the logical schema. M1 uses only the JSON configuration store and does not open SQLite.
+M6 proves `node:sqlite` in the supported Node `v22.23.0` runtime and the actual Pi `0.84.1` Node launch path; standalone/Bun is not a supported package target. The probe and MissionStore tests emit only Node's experimental warning. M1 uses only the JSON configuration store and does not open SQLite.
 
 ### 14.3 Recovery
 
@@ -649,10 +649,16 @@ These unknowns do not weaken requirements; the named milestone must prove the im
 | POC-03 | 9Router responses expose authoritative actual route/account after internal combo fallback. | M2/M4 | Treat combo as opaque and label actual route/cost/diversity unknown. |
 | POC-04 | Provider status/headers and Pi events are sufficient to classify quota/rate/auth/timeout across supported transports. | M4 | Use conservative unknown classification and bounded Boss-visible recovery. |
 | POC-05 | Packaged extension can execute an exact-model child, stream tool progress/results, cancel/cleanup it, and avoid recursive orchestrator loading. | M5 | Proven with the Pi 0.84.1 SDK child runner and isolated fake-gateway parent→child test; retain the shipped process pattern as a later portability option. |
-| POC-06 | `node:sqlite` works under all supported Pi launch modes, including standalone/Bun if supported. | M6 | Select one compatible SQLite driver; keep logical schema and tests unchanged. |
+| POC-06 | `node:sqlite` works in the supported Node/Pi launch path. | M6 | Node/Pi path is proven; a future standalone/Bun target would require a separate adapter check. |
 | POC-07 | Custom component listeners/overlays dispose correctly across `/reload`, `/resume`, `/fork`, and shutdown. | M9 | Close the Control Center on lifecycle change and reopen from canonical state. |
 | POC-08 | Approved credential source integrates with a native Pi provider without persisting plaintext in package config/history. | M2 | Proven with an environment reference and synthetic fake key; Pi receives `$ENV_NAME`, while unsupported stores remain unavailable with no literal fallback. |
 | POC-09 | Actual token/cache/cost metadata available per supported 9Router/Pi route. | M8 | Persist null/unknown and avoid fabricated cost/quality comparisons. |
+
+## 21.1 M6 canonical mission state and context boundary
+
+M6 adds a separate, injected-root SQLite `MissionStore` (`mission.sqlite`) behind the mission adapter. It owns mission revisions, tasks/attempts, proposed/accepted/rejected evidence, canonical items, event journal, leases, and checkpoints; it is not ConfigStore, HealthStore, or Pi session history. SQLite writes use prepared statements, foreign keys, bounded JSON, transactions, and integrity checks. Pi session entries contain only a mission pointer/status.
+
+`ContextBroker` reads accepted canonical items only by default, sorts deterministically, applies explicit scope/tag filters and character/item bounds, and emits immutable `TaskPacketV1` values with source revision, included IDs, omitted count, and a SHA-256 digest. Proposed/rejected evidence and transcripts are not normal packet context. M5 remains the execution authority; worker results enter MissionStore as proposed evidence and require explicit operator admission before canonical promotion. M6 does not add Boss planning, quality/reviewer acceptance, parallelism, worktrees, or analytics.
 
 ## 22. Deliberate limits
 

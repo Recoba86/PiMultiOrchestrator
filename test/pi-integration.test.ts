@@ -20,6 +20,8 @@ import {
 	type CatalogCacheV1,
 	type RemoteCatalogEntry,
 } from "../src/core/ninerouter/index.js";
+import { createMissionStore } from "../src/core/mission/index.js";
+import { ContextBroker, missionStoreContextRepository } from "../src/core/context/index.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // `npm test` compiles src/** into dist-test/** and runs this file from there.
@@ -397,7 +399,97 @@ test("[P][fixture-v1] Pi parent delegates to an isolated child with exact model 
 	}, { toolCallFlow: true });
 });
 
-test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configuration", { skip: integrationSkip }, async () => {
+test("[P][fixture-v1] Pi M6 mission task persists packet, proposed evidence, acceptance, and reopen", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const seeded = createMissionStore({ root: orchestratorRoot });
+		seeded.createMission({ missionId: "mission-m6", goal: "Read one bounded fixture file", repository: { cwd: repoRoot } });
+		seeded.createTask({ missionId: "mission-m6", taskId: "task-m6", roleId: "debugger", executionClass: "investigation", poolId: "investigation", objective: "Read package metadata", acceptanceCriteria: ["submit one result"] , status: "ready" });
+		seeded.close();
+
+		const root = await mkdtemp(join(tmpdir(), "pi-m6-run-"));
+		try {
+			const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+			const child = spawn(
+				piCommand,
+				["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--mode", "rpc"],
+				{ cwd: repoRoot, env, stdio: ["pipe", "pipe", "pipe"] },
+			);
+			let stdout = "";
+			let stderr = "";
+			let buffer = "";
+			let taskFinished = false;
+			const send = (value: Record<string, unknown>): void => { child.stdin.write(`${JSON.stringify(value)}\n`); };
+			const result = await new Promise<PiRunResult>((resolvePromise, reject) => {
+				let settled = false;
+				const deadline = setTimeout(() => {
+					child.kill("SIGTERM");
+					setTimeout(() => child.kill("SIGKILL"), 500).unref();
+				}, 30_000);
+				child.stdout.on("data", (chunk: Buffer) => {
+					const text = chunk.toString();
+					stdout += text;
+					buffer += text;
+					let newline = buffer.indexOf("\n");
+					while (newline >= 0) {
+						const line = buffer.slice(0, newline).replace(/\r$/u, "");
+						buffer = buffer.slice(newline + 1);
+						newline = buffer.indexOf("\n");
+						let event: Record<string, unknown>;
+						try { event = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+						if (event.type === "response" && event.command === "get_commands") {
+							send({ type: "prompt", message: "/missions mission-m6", id: "mission-m6" });
+							continue;
+						}
+						if (event.type === "extension_ui_request") {
+							const id = typeof event.id === "string" ? event.id : undefined;
+							const method = event.method;
+							const title = typeof event.title === "string" ? event.title : "";
+							const options = Array.isArray(event.options) ? event.options.filter((value): value is string => typeof value === "string") : [];
+							if (id && method === "select" && title.startsWith("mission: mission-m6")) send({ type: "extension_ui_response", id, value: "Tasks" });
+							else if (id && method === "select" && title.startsWith("Tasks for mission-m6")) send({ type: "extension_ui_response", id, value: options.find((value) => value.startsWith("task-m6 ")) ?? "Back" });
+							else if (id && method === "select" && title.startsWith("task: task-m6")) send({ type: "extension_ui_response", id, value: "Run task" });
+							else if (method === "notify" && typeof event.message === "string" && event.message.includes("Task task-m6 finished")) {
+								taskFinished = true;
+								child.stdin.end();
+							}
+						}
+					}
+				});
+				child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+				child.once("error", (error) => { clearTimeout(deadline); if (!settled) { settled = true; reject(error); } });
+				child.once("close", (code, signal) => { clearTimeout(deadline); if (!settled) { settled = true; resolvePromise({ code, signal, stdout, stderr }); } });
+				send({ type: "get_commands", id: "commands" });
+			});
+			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
+			assert.equal(taskFinished, true, result.stdout);
+			assert.equal(result.stdout.includes(server.token), false);
+			assert.equal(result.stderr.includes(server.token), false);
+			const childRequests = server.chatRequests.filter((request) => request.toolNames?.includes("submit_agent_result"));
+			assert.ok(childRequests.length >= 1, result.stdout);
+			assert.equal(childRequests[0]?.model, selectedRemoteIds[0]);
+			assert.equal(childRequests[0]?.toolNames?.includes("delegate_agent"), false);
+
+			const reopened = createMissionStore({ root: orchestratorRoot });
+			const task = reopened.getTask("task-m6");
+			const proposed = reopened.listEvidence("mission-m6", "proposed");
+			assert.equal(task?.status, "execution_completed");
+			assert.equal(task?.packetRevision, 1);
+			assert.equal(proposed.length, 1);
+			assert.ok(reopened.listCheckpoints("mission-m6").some((checkpoint) => checkpoint.kind === "task-ended"));
+			const accepted = reopened.promoteEvidence(proposed[0]!.evidenceId, { actor: "user" });
+			assert.equal(accepted.status, "accepted");
+			const broker = new ContextBroker(missionStoreContextRepository(reopened));
+			const packet = broker.buildPacket({ missionId: "mission-m6", taskId: "task-m6", sourceMissionRevision: reopened.getMission("mission-m6")!.revision });
+			assert.equal(packet.approvedFindings.length, 1);
+			assert.equal(packet.approvedFindings[0]?.sourceEvidenceId, accepted.evidenceId);
+			reopened.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	}, { toolCallFlow: true });
+});
+
+test("[P][fixture-v1] Pi RPC exposes M2-M6 commands without live configuration", { skip: integrationSkip }, async () => {
 	await withFixture(async (server, orchestratorRoot) => {
 		const root = await mkdtemp(join(tmpdir(), "pi-m2-rpc-"));
 		try {
@@ -414,6 +506,7 @@ test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configurati
 				let settled = false;
 				let statusSent = false;
 				let routingSent = false;
+				let inputClosed = false;
 				let inputBuffer = "";
 				const deadline = setTimeout(() => {
 					child.kill("SIGTERM");
@@ -455,7 +548,10 @@ test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configurati
 								// RPC has no explicit client shutdown request. Ending stdin
 								// after the command response asks Pi to run its graceful
 								// shutdown path and keeps this acceptance test bounded.
-								child.stdin.end();
+									if (!inputClosed) {
+										inputClosed = true;
+										child.stdin.end();
+									}
 							}
 						} catch {
 							// Startup diagnostics are not JSON protocol events.
@@ -484,7 +580,7 @@ test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configurati
 			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
 			const commandResponse = lines.find((event) => event.command === "get_commands");
 			const commands = ((commandResponse?.data as { commands?: { name?: string }[] } | undefined)?.commands ?? []).map((command) => command.name);
-			for (const name of ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings"]) assert.ok(commands.includes(name), `${name}: ${safePiDiagnostic(result, server.token)}`);
+			for (const name of ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "missions", "mission-packet"]) assert.ok(commands.includes(name), `${name}: ${safePiDiagnostic(result, server.token)}`);
 			assert.equal(result.stdout.includes(server.token), false);
 			assert.equal(result.stderr.includes(server.token), false);
 			assert.ok(lines.some((event) => event.type === "extension_ui_request" && event.method === "notify" && typeof event.message === "string" && event.message.includes("Implementation Pool")), result.stdout);

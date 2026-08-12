@@ -1,0 +1,104 @@
+import { packetToSubagentRequest, type TaskPacketV1 } from "../context/index.js";
+import type { SubagentExecutor, SubagentRunResult } from "../workers/index.js";
+import { MissionNotFoundError, MissionValidationError } from "./errors.js";
+import type { AttemptRecord, EvidenceRecord, MissionId, MissionStoreAdapter, TaskRecord } from "./types.js";
+
+export interface MissionTaskExecutionOptions {
+	readonly store: MissionStoreAdapter;
+	readonly contextBroker: { buildPacket(input: { readonly missionId: string; readonly taskId: string; readonly sourceMissionRevision?: number; readonly cwd?: string }): TaskPacketV1 };
+	readonly executor: Pick<SubagentExecutor, "run">;
+	readonly missionId: MissionId | string;
+	readonly taskId: string;
+	readonly cwd?: string;
+	readonly timeoutMs?: number;
+	readonly signal?: AbortSignal;
+}
+
+export interface MissionTaskExecutionResult {
+	readonly task: TaskRecord;
+	readonly packet: TaskPacketV1;
+	readonly attempt: AttemptRecord;
+	readonly run: SubagentRunResult;
+	readonly evidence?: EvidenceRecord;
+}
+
+/**
+ * Runs one manually selected task through the existing M5 executor.  Mission
+ * state records the attempt first; child output is only admitted as proposed
+ * evidence and never updates canonical arrays directly.
+ */
+export async function executeMissionTask(options: MissionTaskExecutionOptions): Promise<MissionTaskExecutionResult> {
+	const missionId = String(options.missionId);
+	const mission = options.store.getMission(missionId);
+	if (!mission) throw new MissionNotFoundError("mission", missionId);
+	const task = options.store.getTask(options.taskId);
+	if (!task || String(task.missionId) !== missionId) throw new MissionNotFoundError("task", options.taskId);
+	if (!["pending", "planned", "ready", "interrupted"].includes(task.status)) {
+		throw new MissionValidationError([{ path: "task.status", message: "task is not runnable" }]);
+	}
+
+	const packet = options.contextBroker.buildPacket({
+		missionId,
+		taskId: options.taskId,
+		sourceMissionRevision: mission.revision,
+		...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+	});
+	const packetTask = options.store.saveTaskPacket(options.taskId, packet, task.revision);
+	const attempt = options.store.createAttempt({ taskId: options.taskId, packetRevision: packetTask.packetRevision });
+	let run: SubagentRunResult;
+	try {
+		run = await options.executor.run(packetToSubagentRequest(packet, options.cwd === undefined && options.timeoutMs === undefined ? {} : {
+			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+			...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+		}), options.signal);
+	} catch (error) {
+		options.store.finishAttempt(attempt.attemptId, "failed", { terminalState: "executor_error", result: { code: "executor_error" } });
+		throw error;
+	}
+
+	const finalAttempt = run.attempts.at(-1);
+	const routedAttempt = finalAttempt && finalAttempt.routeId !== undefined
+		? options.store.updateAttemptProvenance(attempt.attemptId, { routeId: finalAttempt.routeId, remoteModelId: finalAttempt.remoteModelId, packetRevision: packetTask.packetRevision })
+		: attempt;
+	const attemptStatus = run.terminalStatus === "completed"
+		? "succeeded"
+		: run.terminalStatus === "cancelled"
+			? "cancelled"
+			: run.terminalStatus === "timed_out" || run.terminalStatus === "partial_mutation_requires_review"
+				? "interrupted"
+				: "failed";
+	const finishedAttempt = options.store.finishAttempt(routedAttempt.attemptId, attemptStatus, {
+		terminalState: run.terminalStatus,
+		mutationObserved: run.potentialMutationObserved,
+		result: run.structuredResult,
+	});
+	if (run.structuredResult?.status === "blocked") options.store.finishTask(options.taskId, "blocked");
+
+	let evidence: EvidenceRecord | undefined;
+	if (run.structuredResult !== undefined) {
+		evidence = options.store.admitEvidence({
+			missionId,
+			taskId: options.taskId,
+			attemptId: finishedAttempt.attemptId,
+			runId: run.runId,
+			kind: "implementation-result",
+			content: run.structuredResult,
+			sourceRevision: mission.revision,
+			packetRevision: packetTask.packetRevision,
+			...(finalAttempt?.routeId === undefined ? {} : { routeId: finalAttempt.routeId }),
+			...(finalAttempt?.remoteModelId === undefined ? {} : { remoteModelId: finalAttempt.remoteModelId }),
+			roleId: task.roleId,
+			executionClass: task.executionClass,
+			actor: "worker",
+		});
+	}
+	options.store.recordCheckpoint(missionId, "task-ended");
+
+	return {
+		task: options.store.getTask(options.taskId) ?? task,
+		packet,
+		attempt: finishedAttempt,
+		run,
+		...(evidence === undefined ? {} : { evidence }),
+	};
+}

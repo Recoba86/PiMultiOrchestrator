@@ -92,6 +92,20 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Live environment impact:** Pi configuration unchanged; 9Router unchanged; credentials/Keychain unchanged; fake localhost only; paid calls `0`.
 - **Next authorized milestone:** M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation. M6 is next planned and not started. Do not start M6.
 
+## M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Starting HEAD:** `8695bacab826c9829028c2b9fe97c4aa03285b7f`
+- **Implementation commit:** Pending final implementation commit.
+- **Accepted evidence HEAD:** None; Planner acceptance is pending.
+- **Purpose:** Add the durable mission boundary and deterministic context/packet boundary consumed by future quality/reviewer work.
+- **Major outcomes:** Node `node:sqlite` MissionStore with schema metadata, foreign keys, busy timeout, transactional revisions, tasks/attempts, proposed/accepted/rejected evidence, canonical items, event journal, checkpoints, leases, corruption checks, and interrupted-task recovery. ContextBroker emits accepted-only immutable bounded TaskPacketV1 values with deterministic ordering, omission counts, digest, and M5 child-request adaptation. Pi host exposes `/missions`, Context & Mission Settings, packet/task inspection, evidence accept/reject, and manual checkpoint actions while keeping session entries as pointers.
+- **Tests/evidence:** Context Broker focused suite `6/6 PASS`; MissionStore focused suite `5/5 PASS`; provider host suite `14/14 PASS`; escalated canonical aggregate suite `111/111 PASS`; typecheck/build PASS; actual Pi `0.84.1` + fake gateway mission task flow passed packet generation, built-in read, proposed evidence, explicit acceptance, and MissionStore reopen. This remains implementation evidence rather than Planner acceptance evidence.
+- **Important decisions:** Config schema remains version 1; MissionStore schema is separate; worker results remain proposed until explicit admission; accepted canonical state is the only normal packet input; no transcript is persisted; operational completion is not quality acceptance; M7 quality/reviewer/Boss work is deferred.
+- **Deferred work:** Planner acceptance, quality/reviewer loop, Boss planning, parallelism/worktrees, analytics, live-provider validation, and release work.
+- **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network were used.
+- **Next authorized milestone:** M6 acceptance review only. Do not start M7.
+
 ## Future milestone entry template
 
 - **Milestone:**
