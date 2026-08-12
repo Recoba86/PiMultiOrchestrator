@@ -92,7 +92,7 @@ Exit gate: PASS — `97/97` tests, typecheck, build, aggregate check, fake-gatew
 
 ## M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation
 
-Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+Status: ACCEPTED / PASS.
 
 Deliverables:
 
@@ -102,9 +102,11 @@ Deliverables:
 - proposed worker evidence with explicit acceptance/rejection and canonical provenance;
 - `/missions`, Context & Mission Settings, and packet inspection while Pi session entries contain only mission pointers/status.
 
-Exit gate: MissionStore/ContextBroker deterministic suites, restart/reopen and interrupted recovery, stale lease, context isolation, rejected/proposed evidence, checkpoint atomicity, packet lineage/digest, M2–M5 regressions, and the actual Pi/fake mission task/evidence/reopen flow pass in the implementation worktree (`111/111`, typecheck/build); Planner acceptance remains required before M6 is accepted.
+Exit gate: PASS — MissionStore/ContextBroker deterministic suites, restart/reopen and interrupted recovery, stale lease, context isolation, rejected/proposed evidence, checkpoint atomicity, packet lineage/digest, M2–M5 regressions, and the actual Pi/fake mission task/evidence/reopen flow passed (`111/111`, `npm run check`, Node `22.23.0`, Pi `0.84.1`). Accepted implementation commit `62282c1618f395b032e359005d018721e2b36868`; accepted evidence HEAD `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298`.
 
 ## M7 — Quality gates, review, and escalation
+
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 

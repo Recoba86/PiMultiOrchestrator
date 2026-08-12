@@ -4,9 +4,9 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-M0 through M5 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface. M3 adds configuration-only management for the ordered Investigation, Implementation, and Verification pools. M4 adds pure routing preview/eligibility, bounded infrastructure fallback decisions, and separate runtime health state. M5 adds a foreground routed subagent executor using fresh in-memory Pi SDK child sessions, exact M4 route/model pinning, strict per-pool tools, bounded structured results, cancellation, and mutation-safe fallback. M6 is implemented but awaiting Planner acceptance: it adds a separate SQLite MissionStore, accepted-only Context Broker, immutable TaskPacketV1, evidence admission, checkpoints, recovery, and `/missions` controls.
+M0 through M6 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface. M3 adds configuration-only management for the ordered Investigation, Implementation, and Verification pools. M4 adds pure routing preview/eligibility, bounded infrastructure fallback decisions, and separate runtime health state. M5 adds a foreground routed subagent executor using fresh in-memory Pi SDK child sessions, exact M4 route/model pinning, strict per-pool tools, bounded structured results, cancellation, and mutation-safe fallback. M6 adds a separate SQLite MissionStore, accepted-only Context Broker, immutable bounded TaskPacketV1 values, evidence admission, checkpoints, recovery, and `/missions` controls; routed workers consume packet-derived context, but worker evidence is not automatically canonical truth.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. There is no Boss runtime, quality/reviewer loop, analytics collection, cost/budget-aware routing, or full M9 control center. M6 is not yet accepted; its fake-gateway/real-Pi mission-flow proof is implementation evidence pending Planner acceptance.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Boss/planner runtime, Reviewer quality loops and automatic quality gates, analytics collection, cost/budget-aware routing, parallel workers, and full M9 control center remain deferred.
 
 The implementation contract is split across:
 
@@ -71,4 +71,4 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M6 implementation work did not modify any live environment. M5 is the latest accepted milestone. M6 is implemented but awaiting Planner acceptance; do not start M7. See [Roadmap](docs/ROADMAP.md).
+M1 through M6 implementation work did not modify any live environment. M6 is the latest accepted milestone. M7 is next planned and not started; do not start M7. See [Roadmap](docs/ROADMAP.md).

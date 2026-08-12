@@ -90,21 +90,21 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Important decisions:** ConfigV1 remains version 1; M4 remains routing authority; role does not select model; child sessions do not inherit parent history/extensions/context; implementation mutation blocks automatic fallback; no child run state is persisted.
 - **Deferred work:** M6 Context Broker/canonical mission state, Boss scheduling, parallel workers, worktree isolation, quality review, analytics, and live-provider proof.
 - **Live environment impact:** Pi configuration unchanged; 9Router unchanged; credentials/Keychain unchanged; fake localhost only; paid calls `0`.
-- **Next authorized milestone:** M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation. M6 is next planned and not started. Do not start M6.
+- **Next authorized milestone at this handoff:** M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation. M6 was subsequently accepted by STATE-6; M7 is next planned and not started.
 
 ## M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation
 
-- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Status:** ACCEPTED / PASS
 - **Starting HEAD:** `8695bacab826c9829028c2b9fe97c4aa03285b7f`
 - **Implementation commit:** `62282c1618f395b032e359005d018721e2b36868` — `feat(missions): add canonical mission state and context broker`.
-- **Accepted evidence HEAD:** None; implementation evidence was verified at `62282c1618f395b032e359005d018721e2b36868`; Planner acceptance is pending.
+- **Accepted evidence HEAD:** `df8cdfea547f1e0f1a39e8e7f3d48ba2b3124298`
 - **Purpose:** Add the durable mission boundary and deterministic context/packet boundary consumed by future quality/reviewer work.
 - **Major outcomes:** Node `node:sqlite` MissionStore with schema metadata, foreign keys, busy timeout, transactional revisions, tasks/attempts, proposed/accepted/rejected evidence, canonical items, event journal, checkpoints, leases, corruption checks, and interrupted-task recovery. ContextBroker emits accepted-only immutable bounded TaskPacketV1 values with deterministic ordering, omission counts, digest, and M5 child-request adaptation. Pi host exposes `/missions`, Context & Mission Settings, packet/task inspection, evidence accept/reject, and manual checkpoint actions while keeping session entries as pointers.
-- **Tests/evidence:** Context Broker focused suite `6/6 PASS`; MissionStore focused suite `5/5 PASS`; provider host suite `14/14 PASS`; escalated canonical aggregate suite `111/111 PASS`; typecheck/build PASS; actual Pi `0.84.1` + fake gateway mission task flow passed packet generation, built-in read, proposed evidence, explicit acceptance, and MissionStore reopen. This remains implementation evidence rather than Planner acceptance evidence.
+- **Tests/evidence:** Context Broker focused suite `6/6 PASS`; MissionStore focused suite `5/5 PASS`; provider host suite `14/14 PASS`; escalated canonical aggregate suite `111/111 PASS`; `npm run check` PASS; Node `22.23.0` `node:sqlite` PoC PASS; actual Pi `0.84.1` + fake gateway mission task flow passed packet generation, built-in read, proposed evidence, explicit acceptance, future-packet update, restart/resume, interrupted recovery, and MissionStore reopen.
 - **Important decisions:** Config schema remains version 1; MissionStore schema is separate; worker results remain proposed until explicit admission; accepted canonical state is the only normal packet input; no transcript is persisted; operational completion is not quality acceptance; M7 quality/reviewer/Boss work is deferred.
-- **Deferred work:** Planner acceptance, quality/reviewer loop, Boss planning, parallelism/worktrees, analytics, live-provider validation, and release work.
+- **Deferred work:** Boss/planner runtime, automatic decomposition/scheduling, quality/reviewer loop and gates, parallelism/worktrees, analytics, live-provider validation, and release work.
 - **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network were used.
-- **Next authorized milestone:** M6 acceptance review only. Do not start M7.
+- **Next authorized milestone:** M7 — Verification + Quality Gates + Reviewer Loop + Quality Escalation. Next planned; not started. Do not start M7.
 
 ## Future milestone entry template
 
