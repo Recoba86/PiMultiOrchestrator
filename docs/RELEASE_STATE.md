@@ -8,9 +8,9 @@ This file records releasable product state. It does not promote development prog
 
 | Field | State |
 |---|---|
-| Latest accepted development milestone | M9 — Full TUI control center |
-| Accepted development commit | `2032a2b` |
-| Accepted evidence HEAD | `1200d3349506a1d414def0f3c1e044d712711d9d` |
+| Latest accepted development milestone | M10 — Safety and hardening |
+| Accepted development commit | `3a6990d` |
+| Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
@@ -20,7 +20,7 @@ This file records releasable product state. It does not promote development prog
 | Installable production release | NONE |
 | Production-ready | NO |
 | Release rollback target | NONE; no release exists |
-| Accepted development recovery reference | M9 implementation commit `2032a2b`; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d` |
+| Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
 
@@ -34,7 +34,7 @@ Milestone acceptance does not itself create a product release.
 | M8 accepted verification suite | `134/134 PASS`; typecheck/build/check PASS; Pi/fake analytics/fallback/quality/billing/recommendation proof PASS |
 | M8.5 accepted verification suite | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS |
 | M9 accepted verification suite | `146/146 PASS`; Control Center sections/navigation, typecheck/build/check, package dry-run, diff/secret/state validation PASS |
-| M10 implementation verification (pending acceptance) | `3a6990d`; `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
+| M10 accepted verification | `3a6990d`; `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -50,8 +50,8 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M9 remains the latest Planner-accepted development state; M10 hardening is implemented but pending Planner acceptance, and no stable release is implied.
-- Human keyboard-driven TUI smoke remains pending as open validation, but is not an M9 acceptance blocker. M10 automated safety/recovery evidence is `159/159 PASS`; its Planner acceptance remains pending.
+- Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M10 is the latest Planner-accepted development state, and no stable release is implied.
+- Human keyboard-driven TUI smoke remains pending as open validation, but is not an M10 acceptance blocker. M10 automated safety/recovery evidence is `159/159 PASS`.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 - M10's application-level policy is not an OS/kernel sandbox; M11 packaging, release, and dogfooding are next planned and not started.
 

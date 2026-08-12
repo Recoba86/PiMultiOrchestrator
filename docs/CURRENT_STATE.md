@@ -10,8 +10,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 implemented; awaiting Planner acceptance |
-| Last accepted milestone | M9 — Full TUI control center |
+| Development phase | M10 accepted; M11 next planned / not started |
+| Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
 | Accepted M8 implementation commit | `c5f741e65412dc4133e58962c314e2fae82f622e` |
@@ -22,6 +22,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | Accepted M9 evidence HEAD | `1200d3349506a1d414def0f3c1e044d712711d9d` |
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
+| Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -41,7 +42,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | ACCEPTED / PASS |
 | M8.5 — Manual AI Recommendation Analyst | ACCEPTED / PASS |
 | M9 — Full TUI control center | ACCEPTED / PASS |
-| M10 — Safety and hardening | IMPLEMENTED BUT NOT ACCEPTED |
+| M10 — Safety and hardening | ACCEPTED / PASS |
 | M11 — Packaging, release, and dogfooding | NEXT PLANNED / NOT STARTED |
 
 ## Stable / accepted capabilities
@@ -187,7 +188,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6, M7 is accepted by STATE-7, M8 is accepted by STATE-8, M8.5 is accepted by STATE-8.5, and M9 is accepted by STATE-9. M10 is implemented but awaits Planner acceptance. M11 is next planned and not started; do not start M11.
+M6 is accepted by STATE-6, M7 is accepted by STATE-7, M8 is accepted by STATE-8, M8.5 is accepted by STATE-8.5, M9 is accepted by STATE-9, and M10 is accepted by STATE-10. M11 is next planned and not started; do not start M11.
 
 ## M8 implementation snapshot
 
@@ -230,9 +231,9 @@ M9 adds the unified `/orchestrator` Control Center with exactly twelve top-level
 | Planner acceptance / STATE-9 | ACCEPTED / PASS |
 | Paid calls / live environment changes | `0` / NONE |
 
-## M10 implementation snapshot
+## M10 accepted capability snapshot
 
-M10 implements a conservative application-level safety and recovery boundary without claiming an OS sandbox. A separate local TrustStore defaults projects to untrusted and supports explicit trust/revoke; trust is not portable configuration. Central PathSafetyPolicy and CommandSafetyPolicy canonicalize workspace paths, protect credentials and runtime databases, detect symlink/traversal escapes, classify destructive or ambiguous commands, and require review or block before mutation. SecretSanitizer redacts values and sensitive structures, and the capability matrix makes Investigation/Verification read-only while Implementation mutation requires trust.
+M10 implements a conservative application-level safety and recovery boundary without claiming an OS sandbox. A separate local TrustStore defaults projects to untrusted and supports explicit trust/revoke; trust is not portable configuration. Central PathSafetyPolicy and CommandSafetyPolicy canonicalize workspace paths, protect credentials and runtime databases, detect symlink/traversal escapes, classify destructive or ambiguous commands, and require review or block before mutation. Existing M5 tool profiles remain the upper permission bound; the capability matrix makes Investigation/Verification read-only while Implementation mutation requires trust. SecretSanitizer redacts resolved values and sensitive structures before diagnostics/errors or persistence.
 
 Config mutations now use a cross-process lock and reread-under-lock CAS path. Mission leases have owner tokens, expiry/renewal/non-owner checks, and race-safe active-attempt guards. MissionStore and AnalyticsStore provide validated SQLite-native backup/restore and integrity diagnostics; corrupt AnalyticsStore state degrades to diagnostics rather than silently becoming empty data. Fault injection and adversarial policy tests cover crash/recovery, privacy, protected paths, and import/backup boundaries.
 
@@ -245,10 +246,10 @@ Config mutations now use a cross-process lock and reread-under-lock CAS path. Mi
 | Typecheck, build, aggregate check, package dry-run, diff check, secret scan | PASS |
 | Human keyboard-driven TUI smoke | PENDING — no authorized interactive session; automated native/RPC coverage remains PASS |
 | Implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
-| Planner acceptance / STATE-10 | PENDING |
+| Planner acceptance / STATE-10 | ACCEPTED / PASS |
 | Paid calls / live environment changes | `0` / NONE |
 
-M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. M11 is next planned and not started.
+M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. Human keyboard-driven TUI smoke remains open validation and is not an M10 acceptance blocker. M11 is next planned and not started.
 
 ## Accepted evidence history
 
@@ -266,12 +267,13 @@ M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun 
 - M8: `c5f741e` implementation accepted by STATE-8 with evidence HEAD `809394f`; `134/134` and actual Pi/fake analytics evidence passed.
 - M8.5: `28b75be` implementation accepted by STATE-8.5 with evidence HEAD `28b75be`; `141/141`, actual Pi/fake analyst evidence, and manual-only/stale/privacy/explicit-Apply checks passed.
 - M9: `2032a2b` — `feat(tui): add full orchestrator control center` — ACCEPTED / PASS by STATE-9; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`, `146/146`, typecheck/build/check/package/diff/secret/state validation PASS.
+- M10: `3a6990d` — `feat(safety): harden trust permissions and recovery` — ACCEPTED / PASS by STATE-10; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca`, `159/159`, typecheck/build/check/package/diff/secret validation PASS; human keyboard smoke remains pending open validation.
 
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M10 is Planner-accepted; M10 implementation does not imply OS sandboxing, autonomous approval, Boss/planner runtime, scheduled tuning, automatic priority mutation, parallel/worktree orchestration, or release readiness.
+- M10 acceptance does not imply OS sandboxing, autonomous approval, Boss/planner runtime, scheduled tuning, automatic priority mutation, parallel/worktree orchestration, or release readiness.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.
