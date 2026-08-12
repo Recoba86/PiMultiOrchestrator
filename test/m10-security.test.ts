@@ -79,7 +79,9 @@ test("M10 capability matrix preserves read-only Verification and Analyst profile
 	const analyst = rows.find((row) => row.profile === "recommendation-analyst")!;
 	const implementation = rows.find((row) => row.profile === "implementation")!;
 	assert.equal(verification.mutation, false);
-	assert.equal(verification.bash, false);
+	assert.equal(verification.bash, true);
+	assert.equal(verification.tools.includes("edit"), false);
+	assert.equal(verification.tools.includes("write"), false);
 	assert.equal(analyst.mutation, false);
 	assert.equal(analyst.bash, false);
 	assert.equal(implementation.mutation, true);

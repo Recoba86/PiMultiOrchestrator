@@ -16,6 +16,7 @@ import type {
 	AttemptChain,
 } from "../routing/index.js";
 import type { PoolId } from "../pools/index.js";
+import type { WorkerSafetyContext } from "./safety.js";
 
 export const WORKER_PROTOCOL_VERSION = 1 as const;
 
@@ -188,6 +189,7 @@ export interface ChildSessionOptions {
 	readonly toolNames: readonly WorkerToolName[];
 	readonly submitTool: ToolDefinition;
 	readonly resultToolName?: string;
+	readonly safety?: WorkerSafetyContext;
 	readonly signal?: AbortSignal;
 }
 
@@ -215,6 +217,7 @@ export interface WorkerProgressEvent {
 export interface SubagentExecutorOptions {
 	readonly routeAdapter: RouteAttemptAdapter;
 	readonly sessionFactory?: ChildSessionFactory;
+	readonly safety?: WorkerSafetyContext;
 	readonly clock?: () => Date;
 	readonly onProgress?: (event: WorkerProgressEvent) => void;
 	readonly resultProtocolFactory?: (request: SubagentExecutionRequest) => ChildResultProtocol;

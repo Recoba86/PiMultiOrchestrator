@@ -517,6 +517,7 @@ async function createHostSubagentExecutor(
 	configStore: ConfigStore,
 	healthStore: HealthStore | undefined,
 	resultProtocolFactory?: (request: SubagentExecutionRequest) => ChildResultProtocol,
+	trustStore?: TrustStore,
 ): Promise<SubagentExecutor> {
 	const loaded = await configStore.load();
 	const initialPolicy = loaded.snapshot?.config.routing ?? createDefaultConfig().routing;
@@ -591,7 +592,7 @@ async function createHostSubagentExecutor(
 			recordFailure: (routeId: StableId, failure: FailureClassification, at: Date) => healthStore.recordFailure(routeId, failure, { now: at }),
 		} : {}),
 	};
-	return createSubagentExecutor({ routeAdapter, ...(resultProtocolFactory === undefined ? {} : { resultProtocolFactory }) });
+	return createSubagentExecutor({ routeAdapter, ...(trustStore === undefined ? {} : { safety: { trustStore } }), ...(resultProtocolFactory === undefined ? {} : { resultProtocolFactory }) });
 }
 
 /**
@@ -2629,21 +2630,21 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	}
 	let subagentExecutor: SubagentExecutor | undefined;
 	try {
-		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore);
+		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, undefined, trustStore);
 	} catch {
 		// Keep the M2/M3/M4 host available when no configured route can yet be resolved.
 		subagentExecutor = undefined;
 	}
 	let qualityExecutor: SubagentExecutor | undefined;
 	try {
-		qualityExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, () => createVerificationResultProtocol());
+		qualityExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, () => createVerificationResultProtocol(), trustStore);
 	} catch {
 		qualityExecutor = undefined;
 	}
 	let recommendationAnalyst: RecommendationAnalystService | undefined;
 	if (analyticsStore) {
 		let analystExecutor: SubagentExecutor | undefined;
-		try { analystExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => createAnalystResultProtocol(request)); } catch { analystExecutor = undefined; }
+		try { analystExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => createAnalystResultProtocol(request), trustStore); } catch { analystExecutor = undefined; }
 		recommendationAnalyst = createRecommendationAnalyst({
 			store: analyticsStore,
 			routeProvider: async (): Promise<readonly AnalystRoute[]> => {

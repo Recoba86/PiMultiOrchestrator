@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { homedir } from "node:os";
 
 export type TrustState = "trusted" | "untrusted";
 
@@ -25,6 +26,10 @@ const MAX_LABEL = 128;
 
 function canonicalExisting(path: string): string {
 	try { return realpathSync(path); } catch { return resolve(path); }
+}
+
+function expandUserPath(path: string): string {
+	return path === "~" ? homedir() : path.startsWith(`~${sep}`) ? join(homedir(), path.slice(2)) : path;
 }
 
 function safeLabel(label: unknown): string | undefined {
@@ -121,8 +126,11 @@ function inside(root: string, target: string): boolean {
 	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
-function resolveWithExistingAncestor(path: string): string {
-	const absolute = resolve(path);
+function resolveWithExistingAncestor(path: string, seen = new Set<string>()): string {
+	const absolute = resolve(expandUserPath(path));
+	if (seen.has(absolute)) return absolute;
+	seen.add(absolute);
+	try { return realpathSync(absolute); } catch { /* The target may be a new file. */ }
 	const missing: string[] = [];
 	let cursor = absolute;
 	while (true) {
@@ -132,6 +140,12 @@ function resolveWithExistingAncestor(path: string): string {
 		} catch {
 			const parent = dirname(cursor);
 			if (parent === cursor) return absolute;
+			try {
+				if (lstatSync(cursor).isSymbolicLink()) {
+					const target = resolve(parent, readlinkSync(cursor, "utf8"));
+					return resolveWithExistingAncestor(join(target, ...missing.reverse()), seen);
+				}
+			} catch { /* Missing paths and broken links are handled conservatively below. */ }
 			missing.push(cursor.slice(parent.length + 1));
 			cursor = parent;
 		}
@@ -140,8 +154,8 @@ function resolveWithExistingAncestor(path: string): string {
 
 function pathLooksCredential(path: string): boolean {
 	const lower = path.toLowerCase();
-	return lower.split(sep).some((part) => part === ".ssh" || part === ".aws" || part === ".gnupg" || part === ".npmrc" || part === ".env" || part === "auth.json" || part.includes("credential") || part.includes("secret"))
-		|| /(?:^|[._-])(?:id_rsa|id_ed25519|private|key|token|password)(?:$|[._-])/iu.test(lower)
+	return lower.split(sep).some((part) => part === ".ssh" || part === ".aws" || part === ".gnupg" || part === ".npmrc" || part.startsWith(".env") || part === "auth.json" || part.includes("credential") || part.includes("secret") || part === "private-key")
+		|| /(?:^|[._/-])(?:id_rsa|id_ed25519|private[-_]?key|key|token|password)(?:$|[._/-])/iu.test(lower)
 		|| /\.(?:pem|key|p12|pfx)$/iu.test(lower);
 }
 
@@ -170,7 +184,9 @@ export class PathSafetyPolicy {
 		this.protectedPaths = [...new Set([...(options.internalRoots ?? []), ...(options.protectedPaths ?? []), ...defaults].map(canonicalExisting))];
 	}
 
-	canonicalize(path: string): string { return resolveWithExistingAncestor(isAbsolute(path) ? path : join(this.projectRoot, path)); }
+	get isTrusted(): boolean { return this.trusted; }
+
+	canonicalize(path: string): string { const expanded = expandUserPath(path); return resolveWithExistingAncestor(isAbsolute(expanded) ? expanded : join(this.projectRoot, expanded)); }
 
 	check(path: string, operation: "read" | "write" | "execute" = "read"): SafetyResult {
 		const target = this.canonicalize(path);
@@ -218,18 +234,16 @@ export class CommandSafetyPolicy {
 	evaluate(command: string, options: CommandSafetyOptions = {}): CommandSafetyResult {
 		const source = command.trim();
 		if (!source) return commandResult(command, "BLOCK", "empty command", "EMPTY_COMMAND");
-		const lower = source.toLowerCase();
 		if (/(?:^|[;&|])\s*(?:sudo|doas|su)\b|\b(?:sudo|doas|su)\s+/iu.test(source)) return commandResult(command, "BLOCK", "privilege escalation is not allowed", "PRIVILEGE_ESCALATION");
 		if (/\b(?:mkfs(?:\.[a-z0-9]+)?|fdisk|diskutil\s+erase|dd\s+if=|shutdown|reboot)\b/iu.test(source)) return commandResult(command, "BLOCK", "filesystem/device operation is not allowed", "DEVICE_OPERATION");
 		if (/\b(?:chmod|chown|chgrp)\b/iu.test(source) || /(?:ssh-keygen|security\s+(?:add-generic-password|delete-generic-password)|passwd)\b/iu.test(source)) return commandResult(command, "BLOCK", "credential or permission manipulation is not allowed", "CREDENTIAL_OR_PERMISSION");
 		if (/\brm\s+(?:-[^-\s]*r[^\s]*\s+|--recursive\b)|\bfind\b[^\n]*\s-delete\b/iu.test(source)) return commandResult(command, "BLOCK", "recursive destructive deletion is not allowed", "DESTRUCTIVE_DELETE");
 		if (/\bgit\s+(?:reset\s+--hard|clean\s+-[^\n]*f|restore\b|checkout\s+--\b)/iu.test(source)) return commandResult(command, "BLOCK", "destructive Git operation requires explicit recovery tooling", "DESTRUCTIVE_GIT");
 		if (/(?:^|\s)(?:>|>>|<)|\$\(|`|\$[A-Za-z_][A-Za-z0-9_]*|\*\*|\b(?:eval|exec)\b/iu.test(source)) return commandResult(command, "REVIEW_REQUIRED", "shell target cannot be established safely", "AMBIGUOUS_SHELL");
-		if (options.pathPolicy && /(?:^|\s)(?:\.|\/|\.\.)[^\s]*/u.test(source)) {
-			const tokens = source.split(/\s+/u).filter((token) => !token.startsWith("-") && !/^[A-Za-z0-9_./:=@+-]+$/u.test(token) ? true : token.includes("/") || token === "." || token === "..");
+		if (options.pathPolicy) {
+			const tokens = source.split(/\s+/u).filter((token) => !token.startsWith("-")).map((token) => token.replace(/^['"]|['"]$/gu, "")).filter(Boolean);
 			for (const token of tokens) {
-				const path = token.replace(/^['"]|['"]$/gu, "");
-				const pathResult = options.pathPolicy.authorizeExecute(path);
+				const pathResult = options.pathPolicy.authorizeExecute(token);
 				if (pathResult.decision !== "ALLOW") return commandResult(command, pathResult.decision, pathResult.reason, pathResult.code ?? "PATH_POLICY");
 			}
 		}
@@ -287,7 +301,7 @@ export function getCapabilityMatrix(): readonly CapabilityRow[] {
 	return [
 		{ profile: "investigation", tools: ["read", "grep", "find", "ls"], mutation: false, bash: false, trustRequired: false, protectedPathRestrictions: "protected reads denied" },
 		{ profile: "implementation", tools: ["read", "grep", "find", "ls", "edit", "write", "bash"], mutation: true, bash: true, trustRequired: true, protectedPathRestrictions: "trusted root only; internal/credential paths denied" },
-		{ profile: "verification", tools: ["read", "grep", "find", "ls"], mutation: false, bash: false, trustRequired: false, protectedPathRestrictions: "protected reads denied" },
+		{ profile: "verification", tools: ["read", "grep", "find", "ls", "bash"], mutation: false, bash: true, trustRequired: false, protectedPathRestrictions: "read-only; bash remains policy-guarded" },
 		{ profile: "recommendation-analyst", tools: ["submit_recommendation_analysis"], mutation: false, bash: false, trustRequired: false, protectedPathRestrictions: "analytics packet only; no source/transcript/secret" },
 	];
 }

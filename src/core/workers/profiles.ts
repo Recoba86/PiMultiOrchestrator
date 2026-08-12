@@ -8,6 +8,18 @@ export const WORKER_TOOL_PROFILES: Readonly<Record<PoolId, readonly WorkerToolNa
 	verification: ["read", "grep", "find", "ls", "bash"],
 };
 
+export type WorkerProfileId = PoolId | "recommendation-analyst";
+
+const READ_ONLY_TOOLS: readonly WorkerToolName[] = ["read", "grep", "find", "ls"];
+
+export function workerProfileFor(poolId: PoolId, resultToolName?: string): WorkerProfileId {
+	return resultToolName === "submit_recommendation_analysis" ? "recommendation-analyst" : poolId;
+}
+
+export function toolProfileForWorker(profile: WorkerProfileId): readonly WorkerToolName[] {
+	return profile === "recommendation-analyst" ? READ_ONLY_TOOLS : WORKER_TOOL_PROFILES[profile];
+}
+
 export function toolProfileForPool(poolId: PoolId): readonly WorkerToolName[] {
 	return WORKER_TOOL_PROFILES[poolId];
 }

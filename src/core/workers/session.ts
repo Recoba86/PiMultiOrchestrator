@@ -8,6 +8,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import { createSubmitAgentResultTool } from "./result-tool.js";
+import { createWorkerSafetyGuard, workerSafetyBlockMessage } from "./safety.js";
+import { toolProfileForWorker, workerProfileFor } from "./profiles.js";
 import { WorkerError, type ChildSessionFactory, type ChildSessionHandle, type ChildSessionOptions } from "./types.js";
 
 
@@ -56,6 +58,8 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 
 	let created: Awaited<ReturnType<typeof createAgentSession>>;
 	const resultToolName = options.resultToolName ?? options.submitTool.name ?? "submit_agent_result";
+	const profile = workerProfileFor(options.request.poolId, resultToolName);
+	const toolNames = toolProfileForWorker(profile).filter((toolName) => options.toolNames.includes(toolName));
 	try {
 		created = await createAgentSession({
 			cwd: options.cwd,
@@ -65,7 +69,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 			// An empty scope prevents Ctrl+P/model cycling to another route.
 			scopedModels: [],
 			modelRuntime: options.route.modelRuntime,
-			tools: [...options.toolNames, resultToolName],
+			tools: [...toolNames, resultToolName],
 			customTools: [options.submitTool],
 			resourceLoader,
 			sessionManager: SessionManager.inMemory(options.cwd),
@@ -75,16 +79,31 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 		throw new WorkerError("session-create", "Child Pi session could not be created");
 	}
 	const session = created.session;
-	const toolNames = session.getActiveToolNames();
-	const expected = new Set([...options.toolNames, resultToolName]);
-	if (toolNames.length !== expected.size || toolNames.some((name) => !expected.has(name)) || [...expected].some((name) => !toolNames.includes(name)) || toolNames.includes("delegate_agent")) {
+	const activeToolNames = session.getActiveToolNames();
+	const expected = new Set([...toolNames, resultToolName]);
+	if (activeToolNames.length !== expected.size || activeToolNames.some((name) => !expected.has(name)) || [...expected].some((name) => !activeToolNames.includes(name)) || activeToolNames.includes("delegate_agent")) {
 		session.dispose();
 		throw new WorkerError("session-create", "Child session exposed an unexpected tool");
 	}
+	const guard = createWorkerSafetyGuard({
+		projectRoot: options.cwd,
+		profile,
+		requestedTools: toolNames,
+		resultToolName,
+		...(options.safety === undefined ? {} : options.safety),
+	});
+	const previousBeforeToolCall = session.agent.beforeToolCall;
+	session.agent.beforeToolCall = async (context, signal) => {
+		const safety = guard.authorize(context.toolCall.name, context.args);
+		if (safety.decision !== "ALLOW") {
+			return { block: true, reason: workerSafetyBlockMessage(context.toolCall.name, safety), terminate: true };
+		}
+		return previousBeforeToolCall?.(context, signal);
+	};
 	let disposed = false;
 	return {
 		session,
-		toolNames,
+		toolNames: activeToolNames,
 		dispose: () => {
 			if (disposed) return;
 			disposed = true;

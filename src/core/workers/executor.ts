@@ -33,6 +33,7 @@ import {
 	 type ResolvedWorkerRoute,
 	 type ChildResultProtocol,
 } from "./types.js";
+import type { WorkerSafetyContext } from "./safety.js";
 import type { StableId } from "../config/types.js";
 
 let sequence = 0;
@@ -47,6 +48,7 @@ export class SubagentExecutor {
 	private readonly clock: () => Date;
 	private readonly onProgress: ((event: WorkerProgressEvent) => void) | undefined;
 	private readonly resultProtocolFactory: ((request: SubagentExecutionRequest) => ChildResultProtocol) | undefined;
+	private readonly safety: WorkerSafetyContext | undefined;
 
 	constructor(options: SubagentExecutorOptions) {
 		this.routeAdapter = options.routeAdapter;
@@ -54,6 +56,7 @@ export class SubagentExecutor {
 		this.clock = options.clock ?? (() => new Date());
 		this.onProgress = options.onProgress;
 		this.resultProtocolFactory = options.resultProtocolFactory;
+		this.safety = options.safety;
 	}
 
 	run(request: SubagentExecutionRequest, signal?: AbortSignal): Promise<SubagentRunResult> {
@@ -259,10 +262,11 @@ export class SubagentExecutor {
 			handle = await this.sessionFactory.create({
 				cwd: options.request.cwd,
 				route: options.route,
-					request: options.request,
-					toolNames: toolProfileForPool(options.request.poolId),
-					submitTool,
-					resultToolName: resultProtocol.toolName,
+				request: options.request,
+				toolNames: toolProfileForPool(options.request.poolId),
+				submitTool,
+				resultToolName: resultProtocol.toolName,
+				...(this.safety === undefined ? {} : { safety: this.safety }),
 				...(options.signal === undefined ? {} : { signal: options.signal }),
 			});
 			unsubscribe = handle.session.subscribe((event) => {
