@@ -42,7 +42,7 @@ const main = async () => {
 	const packCache = await mkdtemp(`${tmpdir()}/pi-m11-r2-npm-cache-`);
 	const pack = await run("npm", ["pack", "--dry-run", "--ignore-scripts"], { env: { ...process.env, npm_config_cache: packCache } });
 	await rm(packCache, { recursive: true, force: true });
-	const tests = [...check.stdout.matchAll(/# tests (\d+)\s+# pass (\d+)\s+# fail (\d+)/gu)].at(-1);
+	const tests = [...check.stdout.matchAll(/# tests (\d+)\s+# suites \d+\s+# pass (\d+)\s+# fail (\d+)/gu)].at(-1);
 	const evidence = {
 		schemaVersion: 1,
 		status: check.code === 0 && pack.code === 0 ? "PASS" : "FAIL",
@@ -54,7 +54,7 @@ const main = async () => {
 		check: { code: check.code, signal: check.signal, tests: tests ? { total: Number(tests[1]), passed: Number(tests[2]), failed: Number(tests[3]) } : null, stdoutTail: scrub(check.stdout.slice(-4_000)), stderrTail: scrub(check.stderr.slice(-2_000)) },
 		pack: { code: pack.code, signal: pack.signal, stdoutTail: scrub(pack.stdout.slice(-2_000)), stderrTail: scrub(pack.stderr.slice(-2_000)) },
 	};
-	if (evidence.status !== "PASS") fail("npm check or npm pack --dry-run failed; see test-evidence.json");
+	if (evidence.status !== "PASS" || !evidence.check.tests) fail("npm check or npm pack --dry-run failed, or test totals were not captured; see test-evidence.json");
 	const release = await run(process.execPath, ["scripts/release-candidate.mjs", "--output", args.output, ...(args.force ? ["--force"] : [])]);
 	if (release.code !== 0) fail(release.stderr || "release-candidate failed");
 	await mkdir(args.output, { recursive: true });
