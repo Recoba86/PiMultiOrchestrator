@@ -35,7 +35,7 @@ Milestone acceptance does not itself create a product release.
 | M8.5 accepted verification suite | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS |
 | M9 accepted verification suite | `146/146 PASS`; Control Center sections/navigation, typecheck/build/check, package dry-run, diff/secret/state validation PASS |
 | M10 accepted verification | `3a6990d`; `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
-| M11 implementation candidate | `4cebcce`; `0.1.0-rc.1`; prior artifact SHA-256 `b048a0c9a50c2283ffc69f52f728ac8abb3afd8150ab8bfe683a8a46a7c5fab2`; Review #1 found direct `.tgz` installation unsupported on Pi `0.84.1`; R2 remediation replaces it with a checksum-derived directory source and self-contained evidence bundle; acceptance pending |
+| M11-R2 implementation candidate | `4cebcce` plus corrective commits `82fa48b`/`5cdc305`; `0.1.0-rc.1`; fresh artifact SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; `163/163 PASS`; Pi `0.84.1` directory-source install, all-twelve Control Center, upgrade/rollback/rescue, and self-contained bundle PASS; direct `.tgz` remains explicitly unsupported; independent Review #2 and Planner acceptance pending |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -56,6 +56,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 - M10's application-level policy is not an OS/kernel sandbox. M11 package/install/rollback/review/dogfood gates remain pending Planner acceptance; real-route smoke is unauthorized.
 - Pi `0.84.1` must be given the extracted `directory-source/` derived from the verified RC `.tgz`; direct `pi install <artifact>.tgz` is not a supported local workflow. The source checkout is never installed.
+- R2 evidence is generated from clean commit `5cdc305` with `dirty: false`; the review bundle contains the artifact, checksum, directory source, test evidence (`163/163`), Pi evidence, and deterministic verification. It remains external-review evidence, not acceptance or publication.
 
 ## Future release record
 

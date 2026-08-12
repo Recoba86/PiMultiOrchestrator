@@ -3,8 +3,8 @@
 The review bundle is generated outside the checkout from a clean candidate:
 
 ```sh
-node scripts/run-release-verification.mjs --output /tmp/pi-multi-orchestrator-release-final --bundle /tmp/pi-multi-orchestrator-review-final --force
-node scripts/create-review-bundle.mjs --release-dir /tmp/pi-multi-orchestrator-release-final --output /tmp/pi-multi-orchestrator-review-final --force
+node scripts/run-release-verification.mjs --output /tmp/pi-multi-orchestrator-release-r2-final --bundle /tmp/pi-multi-orchestrator-review-r2-final --force
+node scripts/create-review-bundle.mjs --release-dir /tmp/pi-multi-orchestrator-release-r2-final --output /tmp/pi-multi-orchestrator-review-r2-final --force
 ```
 
 It contains copies of the exact release `.tgz`, its SHA-256 file, release

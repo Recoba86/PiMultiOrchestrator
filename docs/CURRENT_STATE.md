@@ -24,7 +24,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | M11 candidate | `0.1.0-rc.1` — local, not public |
-| M11 implementation evidence | `161/161 PASS`; package-specific release suite `2/2 PASS`; typecheck/build/check PASS; clean artifact `b048a0c9a50c2283ffc69f52f728ac8abb3afd8150ab8bfe683a8a46a7c5fab2` |
+| M11-R2 implementation evidence | `163/163 PASS`; release-candidate subtests `4/4 PASS`; typecheck/build/check/package dry-run/diff/secret/state checks PASS; fresh artifact `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005` (103 files, 155072 bytes) |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -272,9 +272,11 @@ RC workflow is checksum verification, fresh extraction, and `pi install
 never installed. `run-release-verification.mjs` records actual check/test
 evidence, Pi startup/Diagnostics/all-twelve-section results, remove/reinstall,
 M10 compatibility-baseline upgrade, rollback, state hashes, and rescue in a
-self-contained review bundle. M11-R2 verification is in progress; no real
-route smoke was authorized or performed. M10 remains the last Planner-accepted
-milestone.
+self-contained review bundle. R2 evidence is complete: the artifact-derived
+directory-source workflow passed on Pi `0.84.1`, with direct `.tgz` installation
+explicitly recorded as unsupported, and the bundle remains
+`EXTERNAL_REVIEW_PENDING`. No real-route smoke was authorized or performed.
+M10 remains the last Planner-accepted milestone.
 
 ## Accepted evidence history
 
@@ -293,7 +295,7 @@ milestone.
 - M8.5: `28b75be` implementation accepted by STATE-8.5 with evidence HEAD `28b75be`; `141/141`, actual Pi/fake analyst evidence, and manual-only/stale/privacy/explicit-Apply checks passed.
 - M9: `2032a2b` — `feat(tui): add full orchestrator control center` — ACCEPTED / PASS by STATE-9; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`, `146/146`, typecheck/build/check/package/diff/secret/state validation PASS.
 - M10: `3a6990d` — `feat(safety): harden trust permissions and recovery` — ACCEPTED / PASS by STATE-10; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca`, `159/159`, typecheck/build/check/package/diff/secret validation PASS; human keyboard smoke remains pending open validation.
-- M11: `4cebcce` — `feat(release): package and validate release candidate`; local `0.1.0-rc.1` candidate; Planner acceptance pending.
+- M11: `4cebcce` implementation plus R2 corrective commits `82fa48b` and `5cdc305`; fresh `0.1.0-rc.1` artifact SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; `163/163` and isolated Pi directory-source/upgrade/rollback/rescue evidence PASS; independent Review #2 and Planner acceptance remain pending.
 
 ## Assumptions agents must not make
 
