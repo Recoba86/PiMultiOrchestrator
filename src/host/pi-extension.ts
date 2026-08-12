@@ -724,8 +724,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const openModels = async (ctx: ExtensionCommandContext, initialFilter?: string): Promise<void> => {
-		if (ctx.mode !== "tui") {
-			ctx.ui.notify("/9router-models requires TUI mode", "error");
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("/9router-models requires TUI or RPC UI mode", "error");
 			return;
 		}
 		const filter = initialFilter?.trim() || undefined;
@@ -1040,26 +1040,237 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		await openPoolSelector(ctx);
 	};
 
-	const openControlCenter = async (ctx: ExtensionCommandContext): Promise<void> => {
-		if (ctx.mode !== "tui") {
-			ctx.ui.notify("/orchestrator requires TUI mode", "error");
+	const controlCenterStatusLabel = (status: unknown): string => {
+		if (!status || typeof status !== "object") return "UNKNOWN";
+		const value = status as Record<string, unknown>;
+		const gateway = value.gateway;
+		const cache = value.cache;
+		const state = typeof value.state === "string" ? value.state.toUpperCase() : "";
+		if (state.includes("LIVE") || state === "REACHABLE") return "LIVE";
+		if (state.includes("STALE")) return "STALE";
+		if (state.includes("CORRUPT") || state.includes("ERROR")) return "ERROR";
+		if (state.includes("EMPTY") || state.includes("MISSING")) return "EMPTY";
+		if (gateway === "reachable" && cache === "fresh") return "LIVE";
+		if (gateway === "reachable" && cache === "stale") return "STALE";
+		if (cache === "stale") return "CACHED/STALE";
+		if (cache === "empty") return "EMPTY";
+		if (cache === "corrupt") return "ERROR/CORRUPT";
+		if (gateway === "unreachable") return "ERROR/UNREACHABLE";
+		return "UNKNOWN";
+	};
+
+	const showControlCenterDashboard = async (ctx: ExtensionCommandContext): Promise<void> => {
+		const lines = ["Pi Multi-Orchestrator — Home", "dashboard: LOADING"];
+		try {
+			const status = await manager.loadStatus();
+			const value = status && typeof status === "object" ? status as Record<string, unknown> : {};
+			const catalog = typeof value.catalogEntries === "number" ? value.catalogEntries : typeof value.catalogCount === "number" ? value.catalogCount : "UNKNOWN";
+			const enabled = typeof value.enabledRoutes === "number" ? value.enabledRoutes : typeof value.enabledCount === "number" ? value.enabledCount : "UNKNOWN";
+			lines[1] = `dashboard: READY | 9Router=${controlCenterStatusLabel(status)} | catalog=${catalog} | enabled=${enabled}`;
+		} catch {
+			lines[1] = "dashboard: ERROR | 9Router=UNKNOWN";
+		}
+		try {
+			const pools = await listPoolViews(ctx);
+			lines.push(`pools: ${pools.map((pool) => `${pool.label}=${pool.entries.length}`).join(" ") || "EMPTY"}`);
+		} catch {
+			lines.push("pools: ERROR");
+		}
+		if (healthStore) {
+			try {
+				const health = await healthStore.list();
+				const unhealthy = Object.values(health).filter((record) => healthStore.status(record) !== "Healthy").length;
+				lines.push(`health: ${unhealthy > 0 ? `UNHEALTHY=${unhealthy}` : "HEALTHY"}`);
+			} catch {
+				lines.push("health: UNKNOWN");
+			}
+		} else {
+			lines.push("health: UNKNOWN");
+		}
+		if (options.missionStore) {
+			try {
+				const active = options.missionStore.listMissions().filter((mission) => ["active", "running", "awaiting-review"].includes(mission.status));
+				lines.push(`missions: ${active.length > 0 ? `${active.length} active` : "EMPTY"}`);
+			} catch {
+				lines.push("missions: UNKNOWN");
+			}
+		} else {
+			lines.push("missions: UNKNOWN");
+		}
+		lines.push(`pending evidence: ${options.missionStore ? "available in Context & Mission Settings" : "UNKNOWN"}`);
+		lines.push(`quality review: ${qualityStore ? "available" : "UNKNOWN"}`);
+		lines.push(`analytics collection: ${analyticsStore ? "available" : "DISABLED/UNKNOWN"}`);
+		if (analytics) {
+			try { lines.push(`recommendations: ${analytics.recommendations().filter((item) => item.status === "proposed").length} proposed`); }
+			catch { lines.push("recommendations: UNKNOWN"); }
+		} else {
+			lines.push("recommendations: UNKNOWN");
+		}
+		if (recommendationAnalyst) {
+			try {
+				const analystStatus = await recommendationAnalyst.getStatus();
+				lines.push(`AI Analyst: ${analystStatus.state} (manual-only)`);
+			} catch { lines.push("AI Analyst: UNKNOWN"); }
+		} else {
+			lines.push("AI Analyst: UNKNOWN");
+		}
+		lines.push("latest warning/error: none observed in this view");
+		lines.push("accepted milestone: M8.5; M9 control center implementation pending Planner acceptance");
+		lines.push("safe metadata only; use a section below or the direct commands");
+		ctx.ui.notify(lines.join("\n"), "info");
+	};
+
+	const showPlannedControlCenterSection = (ctx: ExtensionCommandContext, section: string): void => {
+		ctx.ui.notify(`${section}\nNot implemented yet — planned`, "warning");
+	};
+
+	const showBossProfiles = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (!configStore) {
+			showPlannedControlCenterSection(ctx, "Boss / Orchestrator Profiles");
 			return;
 		}
+		try {
+			const loaded = await configStore.load();
+			const config = loaded.snapshot?.config;
+			if (!config) {
+				ctx.ui.notify("Boss / Orchestrator Profiles\nconfiguration unavailable\nBoss runtime not implemented yet", "warning");
+				return;
+			}
+			const active = config.bossProfiles[config.activeBossProfileId];
+			const profiles = Object.values(config.bossProfiles).map((profile) => `${profile.id}: ${profile.displayName}`);
+			ctx.ui.notify([
+				"Boss / Orchestrator Profiles",
+				`active profile: ${active?.displayName ?? config.activeBossProfileId}`,
+				`profiles: ${profiles.join(", ") || "EMPTY"}`,
+				"Boss runtime not implemented yet",
+				"profile data is configuration only; no autonomous planning or scheduling",
+			].join("\n"), "info");
+		} catch (error) {
+			notifyError(ctx, "Boss profile status failed", error);
+		}
+	};
+
+	const showBudgetQualityProfiles = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (!configStore) {
+			ctx.ui.notify("Budget / Quality Profiles\nconfiguration unavailable\nanalytics and billing state=UNKNOWN", "warning");
+			return;
+		}
+		try {
+			const loaded = await configStore.load();
+			const config = loaded.snapshot?.config;
+			const billing = (config as (typeof config & {
+				readonly billing?: { readonly profiles?: Record<string, { readonly displayName?: string; readonly billingMode?: string; readonly currency?: string; readonly provenance?: string }> };
+			}) | undefined)?.billing;
+			if (!config) {
+				ctx.ui.notify("Budget / Quality Profiles\nconfiguration unavailable", "warning");
+				return;
+			}
+			const profiles = Object.values(billing?.profiles ?? {}).map((profile) => `${profile.displayName ?? "profile"} (${profile.billingMode ?? "unknown"}, ${profile.currency ?? "currency UNKNOWN"}, ${profile.provenance ?? "provenance UNKNOWN"})`);
+			const details = [
+				"Budget / Quality Profiles",
+				`billing/reference profiles: ${profiles.join("; ") || "UNKNOWN (none configured)"}`,
+				`analytics collection: ${config.analytics.enabled ? "ENABLED (metadata-only)" : "DISABLED"}`,
+				`quality gates: ${config.quality.requiredGates.join(", ") || "none"}`,
+				"costs without configured provenance remain UNKNOWN; no automatic budget routing",
+				"Recommendation Analyst settings are available under Statistics & Analytics",
+			].join("\n");
+			ctx.ui.notify(details, "info");
+			if (ctx.mode !== "tui" && !ctx.hasUI) return;
+			const action = await ctx.ui.select("Budget / Quality Profiles", ["Inspect", "Back"]);
+			if (action === "Inspect") ctx.ui.notify(details, "info");
+		} catch (error) {
+			notifyError(ctx, "Budget / quality status failed", error);
+		}
+	};
+
+	const showDiagnostics = async (ctx: ExtensionCommandContext): Promise<void> => {
+		const lines = ["Diagnostics", "safe operational metadata only", "provider quota remaining: UNKNOWN"];
+		try {
+			const status = await manager.loadStatus();
+			lines.push(`9Router: ${safeStatusLine(status)}`);
+		} catch {
+			lines.push("9Router: ERROR/UNAVAILABLE");
+		}
+		if (healthStore) {
+			try {
+				const health = await healthStore.list();
+				const unhealthy = Object.values(health).filter((record) => healthStore.status(record) !== "Healthy").length;
+				lines.push(`observed route health: ${unhealthy === 0 ? "HEALTHY" : `UNHEALTHY=${unhealthy}`}`);
+			} catch {
+				lines.push("observed route health: UNKNOWN");
+			}
+		} else {
+			lines.push("observed route health: UNKNOWN");
+		}
+		lines.push("logs, prompts, tool output, and credentials are not displayed");
+		ctx.ui.notify(lines.join("\n"), "info");
+		if (ctx.mode !== "tui" && !ctx.hasUI) return;
+		const action = await ctx.ui.select("Diagnostics", ["Refresh", "Back"]);
+		if (action === "Refresh") ctx.ui.notify(lines.join("\n"), "info");
+	};
+
+	const showBackupRestore = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (!configStore) {
+			ctx.ui.notify("Backup / Restore\nConfigStore unavailable\nMissionStore and AnalyticsStore backup: Not implemented yet", "warning");
+			return;
+		}
+		try {
+			const [loaded, history] = await Promise.all([configStore.load(), configStore.listHistory()]);
+			const generation = loaded.snapshot?.generation ?? "UNKNOWN";
+			const details = [
+				"Backup / Restore",
+				`active ConfigStore generation: ${generation}`,
+				`history entries: ${history.entries.length}`,
+				"ConfigStore export/import/restore are available here; MissionStore and AnalyticsStore backup: Not implemented yet",
+			].join("\n");
+			ctx.ui.notify(details, "info");
+			if (ctx.mode !== "tui" && !ctx.hasUI) return;
+			const action = await ctx.ui.select("Backup / Restore", ["Export config", "Restore history generation", "Back"]);
+			if (action === "Export config") {
+				const exported = await configStore.export();
+				if (typeof ctx.ui.editor === "function") await ctx.ui.editor("Config export (safe references only)", exported);
+				else ctx.ui.notify(`Config export ready (${exported.length} bytes; secrets are environment references only)`, "info");
+				return;
+			}
+			if (action !== "Restore history generation") return;
+			if (history.entries.length === 0) {
+				ctx.ui.notify("No ConfigStore history entries to restore", "warning");
+				return;
+			}
+			const generationText = await ctx.ui.input("History generation to restore", String(history.entries[0]?.generation ?? ""));
+			const target = Number.parseInt(generationText?.trim() ?? "", 10);
+			if (!Number.isSafeInteger(target)) {
+				ctx.ui.notify("Restore requires a valid history generation", "error");
+				return;
+			}
+			if (!(await ctx.ui.confirm("Restore ConfigStore generation?", String(target)))) return;
+			const current = loaded.snapshot?.generation;
+			const result = await configStore.restore(target, current === undefined ? {} : { expectedGeneration: current });
+			ctx.ui.notify(`ConfigStore restored generation ${target} (active generation ${result.generation})`, "info");
+		} catch (error) {
+			notifyError(ctx, "Backup / restore failed", error);
+		}
+	};
+
+	const openControlCenter = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("/orchestrator requires TUI or RPC UI mode", "error");
+			return;
+		}
+		await showControlCenterDashboard(ctx);
 		const choice = await ctx.ui.select("Pi Multi-Orchestrator", [
 			"Models & 9Router",
 			"Investigation Pool",
 			"Implementation Pool",
 			"Verification Pool",
+			"Boss / Orchestrator Profiles",
 			"Routing & Fallback",
 			"Health & Quotas",
+			"Budget / Quality Profiles",
 			"Context & Mission Settings",
-			"Refresh 9Router catalog",
-			"9Router status",
-			"Pool status",
-			"Connection setup",
 			"Statistics & Analytics",
-			"Recommendations",
-			"Close",
+			"Diagnostics",
+			"Backup / Restore",
 		]);
 		switch (choice) {
 			case "Models & 9Router":
@@ -1074,32 +1285,29 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			case "Verification Pool":
 				await openPoolEditor(ctx, "verification");
 				return;
+			case "Boss / Orchestrator Profiles":
+				await showBossProfiles(ctx);
+				return;
 			case "Routing & Fallback":
 				await showRoutingStatus(ctx);
 				return;
 			case "Health & Quotas":
 				await showRouteHealth(ctx);
 				return;
+			case "Budget / Quality Profiles":
+				await showBudgetQualityProfiles(ctx);
+				return;
 			case "Context & Mission Settings":
 				await openMissionControl(ctx);
-				return;
-			case "Refresh 9Router catalog":
-				await refreshAndReconcile(ctx);
-				return;
-			case "9Router status":
-				await showStatus(ctx);
-				return;
-			case "Pool status":
-				await showPoolStatus(ctx);
-				return;
-			case "Connection setup":
-				await configureConnection(ctx);
 				return;
 			case "Statistics & Analytics":
 				await showAnalytics(ctx);
 				return;
-			case "Recommendations":
-				await showRecommendations(ctx);
+			case "Diagnostics":
+				await showDiagnostics(ctx);
+				return;
+			case "Backup / Restore":
+				await showBackupRestore(ctx);
 				return;
 			default:
 				return;
