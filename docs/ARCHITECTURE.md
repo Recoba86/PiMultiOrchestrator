@@ -686,3 +686,21 @@ M6 adds a separate, injected-root SQLite `MissionStore` (`mission.sqlite`) behin
 - 9Router combos are opaque unless proven otherwise; no duplicate gateway implementation is planned.
 
 These limits reduce code while preserving an upgrade path and do not relax validation, safety, recovery, or acceptance gates.
+
+## 23. M11 package and rescue boundary
+
+M11 packages the compiled host entrypoint through Pi's supported `pi-package`
+manifest. The release candidate uses a strict allowlist (`dist` JavaScript and
+declarations plus README), declares Pi `0.84.x` as a peer, and has no runtime
+npm dependencies or lifecycle hooks. `package-info` exposes version, release
+status, Pi compatibility, and schema versions from package metadata so an
+installed artifact does not shell out to Git.
+
+The release workflow writes its tarball, checksum, manifest, unpacked files,
+and review bundle outside the source checkout. It verifies the unpacked
+entrypoint without the checkout and rejects secrets, local paths, `.git`,
+runtime databases, sessions, and development dependencies. Install, upgrade,
+rollback, and rescue use isolated Pi settings/runtime roots. A rescue harness
+can remove or disable the package and restore a prior pinned artifact without
+loading the extension. A local RC is not a public release, and no live route
+or publication is implied.

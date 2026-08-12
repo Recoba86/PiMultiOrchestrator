@@ -179,7 +179,7 @@ Exit gate: PASS — STATE-10 records Planner acceptance of implementation commit
 
 ## M11 — Packaging, release, and dogfooding
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED.
 
 Deliverables:
 
@@ -187,5 +187,9 @@ Deliverables:
 - compatibility matrix and controlled real-route smoke suite;
 - release artifact and independent external review;
 - staged dogfooding while Codex or another external harness remains a rescue path.
+
+Implementation evidence: local `0.1.0-rc.1` Pi package manifest, strict allowlist, artifact checksum/manifest, unpacked source-independent entrypoint check, isolated install/upgrade/rollback/rescue procedures, compatibility matrix, release checklist, dogfood log, package version Diagnostics, and external-review bundle are present. Final exact test/check counts and isolated Pi results must be recorded from the clean-run handoff.
+
+Open gates: independent external review, authorized real-route smoke, human keyboard smoke when available, and Planner acceptance. A local RC is not a public release; npm publish, GitHub release, tags, remotes, and live configuration require separate authorization.
 
 Exit gate: clean install, upgrade, rollback, package verification, manual acceptance, and authorized publication gates pass. Creating a GitHub repository, remote, tag, or release requires separate authorization.

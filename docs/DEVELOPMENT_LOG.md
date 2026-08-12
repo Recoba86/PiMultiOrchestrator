@@ -181,6 +181,17 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 **STATE-10 acceptance:** M10 is accepted / PASS. The Planner accepted the local trust, path/command, privacy, concurrency, integrity, backup/restore, and fault-recovery evidence above. Human keyboard-driven TUI smoke remains an explicitly open validation item; it is not an M10 acceptance blocker. No live or paid environment was used.
 
+## M11 — Packaging, release, and dogfooding
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED.
+- **Implementation commit:** `4cebcce` — `feat(release): package and validate release candidate`.
+- **Purpose:** Package the compiled extension as a reproducible local Pi `pi-package` release candidate with an explicit entrypoint, strict allowlist, artifact verification, compatibility/install/upgrade/rollback/rescue procedures, staged dogfooding, and an independent-review bundle.
+- **Major outcomes:** Version `0.1.0-rc.1`; Pi `0.84.1` peer compatibility; no runtime npm dependencies; package Diagnostics exposes version/schema metadata; release workflow emits checksum, file list, machine-readable manifest, unpacked source-independent entrypoint checks, and `EXTERNAL_REVIEW_PENDING` review material.
+- **Tests/evidence:** Full deterministic/fake/actual-Pi suite `161/161 PASS` with loopback enabled; release-candidate suite `2/2 PASS`; typecheck/build/check, package dry-run, artifact allowlist/checksum/unpacked import, and diff checks PASS. Isolated install/load, clean-start, upgrade, rollback, rescue, and fake-gateway evidence are documented; no real-route smoke was authorized.
+- **Important decisions:** A local RC is not a public release. No npm publish, GitHub release, tag, remote, live Pi settings, credentials, or paid inference is allowed. Pi core remains a peer dependency, and no lifecycle script or bundled runtime state is added.
+- **Deferred work:** Independent external review, authorized real-route smoke, human keyboard smoke when available, Planner acceptance, and any public publication gates.
+- **Next authorized milestone:** None is recorded after M11 in the current roadmap; do not start a new milestone.
+
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED
 - **Starting HEAD:**

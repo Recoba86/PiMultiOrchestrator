@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M11 next planned / not started |
+| Development phase | M10 accepted; M11 implemented / acceptance pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,6 +23,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
+| M11 candidate | `0.1.0-rc.1` — local, not public |
+| M11 implementation evidence | `161/161 PASS`; package-specific release suite `2/2 PASS`; typecheck/build/check PASS; clean artifact manifest generated after docs commit |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -43,7 +45,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M8.5 — Manual AI Recommendation Analyst | ACCEPTED / PASS |
 | M9 — Full TUI control center | ACCEPTED / PASS |
 | M10 — Safety and hardening | ACCEPTED / PASS |
-| M11 — Packaging, release, and dogfooding | NEXT PLANNED / NOT STARTED |
+| M11 — Packaging, release, and dogfooding | IMPLEMENTED BUT NOT ACCEPTED |
 
 ## Stable / accepted capabilities
 
@@ -183,12 +185,12 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 - parallel workers and worktree isolation/fan-out;
 - autonomous/scheduled tuning and autonomous priority mutation;
 - automatic pool reordering and budget-aware routing;
-- public release tooling;
+- public publication, tag, and GitHub release;
 - Keychain credential adapter.
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6, M7 is accepted by STATE-7, M8 is accepted by STATE-8, M8.5 is accepted by STATE-8.5, M9 is accepted by STATE-9, and M10 is accepted by STATE-10. M11 is next planned and not started; do not start M11.
+M6 is accepted by STATE-6, M7 is accepted by STATE-7, M8 is accepted by STATE-8, M8.5 is accepted by STATE-8.5, M9 is accepted by STATE-9, and M10 is accepted by STATE-10. M11 is implemented but not accepted; Planner review and the release gates below remain open.
 
 ## M8 implementation snapshot
 
@@ -249,7 +251,26 @@ Config mutations now use a cross-process lock and reread-under-lock CAS path. Mi
 | Planner acceptance / STATE-10 | ACCEPTED / PASS |
 | Paid calls / live environment changes | `0` / NONE |
 
-M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. Human keyboard-driven TUI smoke remains open validation and is not an M10 acceptance blocker. M11 is next planned and not started.
+M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. Human keyboard-driven TUI smoke remains open validation and is not an M10 acceptance blocker. M11 is implemented but not accepted and is not production-ready.
+
+## M11 implementation snapshot — acceptance pending
+
+M11 packages the compiled Pi extension as local release candidate
+`0.1.0-rc.1` using Pi's `pi-package` manifest and explicit
+`dist/host/pi-extension.js` entrypoint. The allowlist contains compiled
+JavaScript/declarations and README only; runtime databases, sessions, source
+checkout paths, `.git`, dependencies, and secrets are excluded. Pi remains a
+peer dependency and the package has no runtime npm dependencies. The candidate
+workflow emits an artifact checksum, sorted file list, machine-readable
+manifest, unpacked-entrypoint verification, compatibility matrix, checklist,
+dogfood log, and an independent-review bundle marked
+`EXTERNAL_REVIEW_PENDING` until a separate reviewer records a result.
+
+Diagnostics exposes package version/release status, Pi compatibility, and
+Config/Mission/Analytics schema versions without requiring Git or a source
+checkout. Isolated Pi install, clean-start, upgrade, rollback, and rescue
+procedures use temporary HOME/settings/runtime roots. No real-route smoke was
+authorized or performed. M10 remains the last Planner-accepted milestone.
 
 ## Accepted evidence history
 
@@ -268,6 +289,7 @@ M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun 
 - M8.5: `28b75be` implementation accepted by STATE-8.5 with evidence HEAD `28b75be`; `141/141`, actual Pi/fake analyst evidence, and manual-only/stale/privacy/explicit-Apply checks passed.
 - M9: `2032a2b` — `feat(tui): add full orchestrator control center` — ACCEPTED / PASS by STATE-9; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`, `146/146`, typecheck/build/check/package/diff/secret/state validation PASS.
 - M10: `3a6990d` — `feat(safety): harden trust permissions and recovery` — ACCEPTED / PASS by STATE-10; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca`, `159/159`, typecheck/build/check/package/diff/secret validation PASS; human keyboard smoke remains pending open validation.
+- M11: `4cebcce` — `feat(release): package and validate release candidate`; local `0.1.0-rc.1` candidate; Planner acceptance pending.
 
 ## Assumptions agents must not make
 

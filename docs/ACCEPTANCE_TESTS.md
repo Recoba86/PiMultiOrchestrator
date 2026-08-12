@@ -789,3 +789,35 @@ M10 evidence: `test/m10-security.test.ts` `5/5 PASS`, `test/m10-recovery.test.ts
 ## 17. Release acceptance rule
 
 A milestone is complete only when every required case through that milestone passes at its required level, skipped P/L gates are explicitly named, migrations/rollback pass, and the milestone's Roadmap exit gate is satisfied. A passing fake-provider suite is never a substitute for a required Pi UI or authorized live smoke.
+
+## 18. M11 packaging and release candidate
+
+### RELEASE-01 — Manifest and allowlist
+
+- **Level:** U/I
+- **Action:** build the candidate and inspect `package.json`, `pi` manifest, peer/runtime dependencies, and the generated file list.
+- **Pass:** SemVer `0.1.0-rc.1`, explicit compiled entrypoint, `pi-package` keyword, Pi peer only, no runtime dependency confusion, and no source/runtime-state files.
+
+### RELEASE-02 — Artifact verification and source independence
+
+- **Level:** I
+- **Action:** generate the tarball, SHA-256, machine-readable release manifest, and unpacked import from outside the checkout.
+- **Pass:** checksum, file allowlist, secret/local-path/runtime-DB scan, syntax check, and compiled entrypoint import all pass.
+
+### RELEASE-03 — Isolated Pi install and Control Center
+
+- **Level:** P, Pi `0.84.1`, fake gateway
+- **Action:** install the artifact with temporary `HOME`/`PI_CODING_AGENT_DIR`/session/config roots, list it, start clean, and open `/orchestrator`.
+- **Pass:** package is discovered, Diagnostics exposes the candidate version, dashboard/Control Center loads, and no live user settings change.
+
+### RELEASE-04 — Upgrade, rollback, and rescue
+
+- **Level:** I/P, temporary roots
+- **Action:** represent the accepted M10 package, upgrade to the candidate, inspect Config/Mission/Analytics/Trust state, remove/restore the prior package, and execute the extension-independent rescue procedure.
+- **Pass:** no M11 schema mutation or data loss, rollback is explicit and tested, and a broken extension can be disabled/restored without loading itself.
+
+### RELEASE-05 — Review, compatibility, and dogfood records
+
+- **Level:** U/I
+- **Action:** inspect `COMPATIBILITY.md`, `RELEASE_CHECKLIST.md`, `DOGFOOD_LOG.md`, and the generated review bundle.
+- **Pass:** tested vs untested rows are separated, real-route smoke requires authorization, independent review is marked pending until a separate reviewer acts, and M11 remains implemented but not accepted.

@@ -101,4 +101,8 @@ revoke trust immediately blocks future mutating runs. Config mutations use a
 cross-process lock, MissionStore leases require owner tokens, and analytics
 corruption degrades to diagnostics. These controls are not an OS/kernel
 sandbox. M10 does not add background workers, automatic Apply, autonomous Boss
-planning, parallel worktrees, live-provider access, or release tooling.
+planning, parallel worktrees, or live-provider access. The M11 local release
+candidate is installed only into isolated temporary Pi settings; it is not a
+public release. If the extension fails, remove or disable the candidate and
+restore the prior pinned package, or use an external Codex/harness to inspect
+the repository without importing the extension.
