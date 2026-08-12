@@ -33,6 +33,9 @@ export interface FakeNineRouterOptions {
 	readonly toolCallFlow?: boolean;
 	/** When enabled, exercise reviewer reject -> repair -> reviewer pass. */
 	readonly qualityLoopFlow?: boolean;
+	/** Models that return a bounded infrastructure error before any tool flow. */
+	readonly failModels?: readonly string[];
+	readonly failureStatus?: number;
 }
 
 export interface FakeRequestObservation {
@@ -142,6 +145,8 @@ export class FakeNineRouter {
 	private readonly completionText: string;
 	private readonly toolCallFlow: boolean;
 	private readonly qualityLoopFlow: boolean;
+	private readonly failModels: ReadonlySet<string>;
+	private readonly failureStatus: number;
 	private qualityReviewCount = 0;
 	private portNumber: number | undefined;
 
@@ -153,6 +158,8 @@ export class FakeNineRouter {
 		this.completionText = options.completionText ?? DEFAULT_COMPLETION;
 		this.toolCallFlow = options.toolCallFlow ?? false;
 		this.qualityLoopFlow = options.qualityLoopFlow ?? false;
+		this.failModels = new Set(options.failModels ?? []);
+		this.failureStatus = options.failureStatus ?? 429;
 		this.server = createServer((req, res) => {
 			void this.handle(req, res);
 		});
@@ -301,6 +308,10 @@ export class FakeNineRouter {
 			return;
 		}
 		const model = typeof body.model === "string" ? body.model : "unknown-model";
+		if (this.failModels.has(model)) {
+			sendError(res, this.failureStatus, "fixture-route-failure");
+			return;
+		}
 		if (this.toolCallFlow) {
 			const tools = Array.isArray(body.tools) ? body.tools.flatMap((tool) => {
 				if (!tool || typeof tool !== "object") return [];
@@ -408,7 +419,7 @@ export class FakeNineRouter {
 			choices: [{ index: 0, delta: { role: "assistant", tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: args } }] }, finish_reason: null }],
 		};
 		res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-		res.write(`data: ${JSON.stringify({ id: "fake-tool-call", object: "chat.completion.chunk", model, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] })}\n\n`);
+		res.write(`data: ${JSON.stringify({ id: "fake-tool-call", object: "chat.completion.chunk", model, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })}\n\n`);
 		res.end("data: [DONE]\n\n");
 	}
 }

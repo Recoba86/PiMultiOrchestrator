@@ -22,6 +22,7 @@ import {
 } from "../src/core/ninerouter/index.js";
 import { createMissionStore } from "../src/core/mission/index.js";
 import { ContextBroker, missionStoreContextRepository } from "../src/core/context/index.js";
+import { AnalyticsQueryService, SQLiteAnalyticsStore } from "../src/core/analytics/index.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // `npm test` compiles src/** into dist-test/** and runs this file from there.
@@ -106,8 +107,10 @@ function cacheEntry(model: FakeModel): RemoteCatalogEntry {
 	};
 }
 
-async function seedConfig(root: string, baseUrl: string, models: readonly FakeModel[]): Promise<void> {
+async function seedConfig(root: string, baseUrl: string, models: readonly FakeModel[], options: { readonly analyticsEnabled?: boolean; readonly fallbackEnabled?: boolean } = {}): Promise<void> {
 	const config = createDefaultConfig();
+	config.analytics.enabled = options.analyticsEnabled === true;
+	config.routing.fallback.enabled = options.fallbackEnabled === true;
 	const gatewayId = configGatewayId;
 	const routeIds: StableId[] = [];
 	config.gateways[gatewayId] = {
@@ -220,7 +223,7 @@ function parseJsonLines(value: string): Record<string, unknown>[] {
 		});
 }
 
-async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly qualityLoopFlow?: boolean } = {}): Promise<T> {
+async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly qualityLoopFlow?: boolean; readonly analyticsEnabled?: boolean; readonly fallbackEnabled?: boolean; readonly failModels?: readonly string[] } = {}): Promise<T> {
 	const server = new FakeNineRouter({ models: sourceModels, ...options });
 	const root = await mkdtemp(join(tmpdir(), "pi-m2-integration-"));
 	const agentRoot = join(root, "agent");
@@ -230,7 +233,7 @@ async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Pro
 	await mkdir(sessionsRoot, { recursive: true, mode: 0o700 });
 	try {
 		await server.start();
-		await seedConfig(orchestratorRoot, server.baseUrl, sourceModels);
+		await seedConfig(orchestratorRoot, server.baseUrl, sourceModels, options);
 		return await run(server, orchestratorRoot);
 	} finally {
 		await server.close();
@@ -466,8 +469,9 @@ test("[P][fixture-v1] Pi M6 mission task persists packet, proposed evidence, acc
 			assert.equal(result.stderr.includes(server.token), false);
 			const childRequests = server.chatRequests.filter((request) => request.toolNames?.includes("submit_agent_result"));
 			assert.ok(childRequests.length >= 1, result.stdout);
-			assert.equal(childRequests[0]?.model, selectedRemoteIds[0]);
-			assert.equal(childRequests[0]?.toolNames?.includes("delegate_agent"), false);
+			assert.equal(childRequests.some((request) => request.model === selectedRemoteIds[0]), true);
+			assert.equal(childRequests.at(-1)?.model, selectedRemoteIds[1]);
+			assert.equal(childRequests.every((request) => request.toolNames?.includes("delegate_agent") === false), true);
 
 			const reopened = createMissionStore({ root: orchestratorRoot });
 			const task = reopened.getTask("task-m6");
@@ -483,10 +487,18 @@ test("[P][fixture-v1] Pi M6 mission task persists packet, proposed evidence, acc
 			assert.equal(packet.approvedFindings.length, 1);
 			assert.equal(packet.approvedFindings[0]?.sourceEvidenceId, accepted.evidenceId);
 			reopened.close();
+			const analyticsStore = new SQLiteAnalyticsStore({ root: orchestratorRoot, enabled: true });
+			const analytics = new AnalyticsQueryService(analyticsStore);
+			const summary = analytics.overview();
+			assert.ok(summary.attempts >= 1, JSON.stringify(summary));
+			assert.ok((summary.tokens.total ?? 0) > 0, JSON.stringify(summary));
+			assert.ok(summary.fallbacks >= 1, JSON.stringify(summary));
+			assert.equal(summary.byMission?.["mission-m6"]?.runs, summary.attempts);
+			analyticsStore.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
-	}, { toolCallFlow: true });
+	}, { toolCallFlow: true, analyticsEnabled: true, fallbackEnabled: true, failModels: [selectedRemoteIds[0]!] });
 });
 
 test("[P][fixture-v1] Pi M7 quality loop persists reject, repair, and re-verification lineage", { skip: integrationSkip }, async () => {
@@ -572,10 +584,16 @@ test("[P][fixture-v1] Pi M7 quality loop persists reject, repair, and re-verific
 			assert.equal(reopened.listQualityEscalations("mission-m7", "task-m7").length, 1);
 			assert.equal(reopened.getTask("task-m7")?.status, "execution_completed");
 			reopened.close();
+			const analyticsStore = new SQLiteAnalyticsStore({ root: orchestratorRoot, enabled: true });
+			const summary = new AnalyticsQueryService(analyticsStore).overview();
+			assert.equal(summary.qualityRejects, 1, JSON.stringify(summary));
+			assert.equal(summary.qualityPasses, 1, JSON.stringify(summary));
+			assert.ok(summary.byMission?.["mission-m7"], JSON.stringify(summary));
+			analyticsStore.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
-	}, { toolCallFlow: true, qualityLoopFlow: true });
+	}, { toolCallFlow: true, qualityLoopFlow: true, analyticsEnabled: true });
 });
 
 test("[P][fixture-v1] Pi RPC exposes M2-M6 commands without live configuration", { skip: integrationSkip }, async () => {

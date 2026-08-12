@@ -1,4 +1,5 @@
 export * from "./defaults.js";
+export * from "./current-store.js";
 export * from "./errors.js";
 export * from "./history.js";
 export * from "./migrations.js";

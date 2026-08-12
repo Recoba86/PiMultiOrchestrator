@@ -1,6 +1,6 @@
 import { ConfigMigrationError, ConfigVersionError } from "./errors.js";
-import { CURRENT_SCHEMA_VERSION, validateConfig } from "./schema.js";
-import type { ConfigV1 } from "./types.js";
+import { CURRENT_CONFIG_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, validateConfig, validateConfigV2 } from "./schema.js";
+import type { ConfigV1, ConfigV2 } from "./types.js";
 
 export { CURRENT_SCHEMA_VERSION } from "./schema.js";
 
@@ -102,4 +102,20 @@ export function createMigrationRegistry(options: MigrationRegistryOptions = {}):
 
 export function migrateConfig(value: unknown, registry = defaultMigrationRegistry): ConfigV1 {
   return registry.migrate(value) as ConfigV1;
+}
+
+/** Deterministic V1 -> V2 migration.  No billing assumptions are introduced. */
+export function migrateConfigV1ToV2(value: unknown): ConfigV2 {
+  const source = validateConfig(value);
+  return validateConfigV2({ ...structuredClone(source), schemaVersion: CURRENT_CONFIG_SCHEMA_VERSION, billing: { profiles: {} } });
+}
+
+export const currentMigrationRegistry = new MigrationRegistry({
+  currentVersion: CURRENT_CONFIG_SCHEMA_VERSION,
+  steps: [{ fromVersion: CURRENT_SCHEMA_VERSION, toVersion: CURRENT_CONFIG_SCHEMA_VERSION, migrate: migrateConfigV1ToV2 }],
+  validateFinal: validateConfigV2,
+});
+
+export function migrateConfigToCurrent(value: unknown): ConfigV2 {
+  return currentMigrationRegistry.migrate(value) as ConfigV2;
 }

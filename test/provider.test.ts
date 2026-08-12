@@ -27,6 +27,7 @@ import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/ind
 import type { SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
 import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/types.js";
 import type { QualityPersistence, TaskQualityStatus, VerificationRunRecord } from "../src/core/quality/types.js";
+import { summarize, type AnalyticsEventV1, type AnalyticsRecommendation, type AnalyticsStoreAdapter } from "../src/core/analytics/index.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -240,6 +241,26 @@ function qualityFixture(): {
 		listQualityEscalations: () => [],
 	} as unknown as QualityPersistence;
 	return { store, status, runs, confirmations };
+}
+
+function analyticsFixture(): AnalyticsStoreAdapter {
+	const events: AnalyticsEventV1[] = [
+		{ eventId: "run-1", occurredAt: "2026-08-10T00:00:00.000Z", eventType: "run", runId: "run-1", missionId: "mission-1", roleId: "investigator", poolId: "implementation", routeId: "route-a", remoteModelId: "remote-a", outcome: "success", durationMs: 125, tokenUsage: { inputTokens: 12, outputTokens: 8, cacheReadTokens: 3, totalTokens: 23, provenance: "observed" } },
+		{ eventId: "attempt-1", occurredAt: "2026-08-10T00:00:01.000Z", eventType: "attempt", runId: "run-1", poolId: "implementation", routeId: "route-a", outcome: "success", durationMs: 125, tokenUsage: { inputTokens: 12, outputTokens: 8, cacheReadTokens: 3, totalTokens: 23, provenance: "observed" } },
+		{ eventId: "fallback-1", occurredAt: "2026-08-10T00:00:02.000Z", eventType: "fallback", poolId: "implementation", fallbackFromRouteId: "route-a", fallbackToRouteId: "route-b", failureClass: "rate_limited", outcome: "fallback" },
+		{ eventId: "quality-1", occurredAt: "2026-08-10T00:00:03.000Z", eventType: "quality", missionId: "mission-1", poolId: "implementation", routeId: "route-a", qualityOutcome: "pass", firstPass: true, repairRound: 0 },
+	];
+	const recommendations: AnalyticsRecommendation[] = [{ recommendationId: "rec-fixture", poolId: "implementation", proposedRouteId: "route-a", baselineRouteId: "route-b", sampleSize: 10, score: 0.9, formulaVersion: "quality-v1", evidence: ["9/10 successful runs"], limitations: ["fixture only"], proposedDiff: { baselineOrder: ["route-b", "route-a"] }, status: "proposed" }];
+	const list = (range?: { readonly from?: string; readonly to?: string }): readonly AnalyticsEventV1[] => events.filter((event) => (!range?.from || event.occurredAt >= range.from) && (!range?.to || event.occurredAt <= range.to));
+	return {
+		enabled: true,
+		append: (event) => { events.push(event); return true; },
+		list,
+		summary: (range) => summarize(list(range), range),
+		saveRecommendation: (recommendation) => { recommendations.push(recommendation); },
+		listRecommendations: () => recommendations,
+		updateRecommendationStatus: () => true,
+	};
 }
 
 describe("Pi 9Router host adapter", () => {
@@ -570,6 +591,52 @@ describe("Pi 9Router host adapter", () => {
 		assert.match(notifications[0] ?? "", /2 routes/);
 		assert.match(notifications[0] ?? "", /pool-disabled/);
 		assert.match(notifications[0] ?? "", /No routes assigned\./);
+	});
+
+	it("[U][fixture-pi-0.84.1] drills analytics sections through native menus and ranges", async () => {
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), analyticsStore: analyticsFixture() });
+		host.registerCommands();
+		const notifications: string[] = [];
+		await pi.commands.get("analytics")!.handler("all Pools", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[0] ?? "", /Statistics & Analytics — Pools/);
+		assert.match(notifications[0] ?? "", /implementation: runs=1/);
+		await pi.commands.get("analytics")!.handler("custom 2026-08-09T00:00:00.000Z 2026-08-11T00:00:00.000Z Cost", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[1] ?? "", /Statistics & Analytics — Cost/);
+		assert.match(notifications[1] ?? "", /unknown cost events=/);
+		await pi.commands.get("analytics")!.handler("all Recommendations", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[2] ?? "", /rec-fixture: pool=implementation route=route-a/);
+		await pi.commands.get("recommendations")!.handler("details rec-fixture", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.match(notifications[3] ?? "", /rec-fixture/);
+		const titles: string[] = [];
+		const selections = ["Last 7 days", "Routes"];
+		await pi.commands.get("analytics")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			ui: {
+				select: async (title: string) => { titles.push(title); return selections.shift(); },
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.deepEqual(titles, ["Analytics time window", "Statistics & Analytics"]);
+		assert.match(notifications[4] ?? "", /Routes\/models/);
+		assert.match(notifications[4] ?? "", /model provenance: route-a=remote-a/);
 	});
 
 	it("[I][fixture-v1] previews routing and resets persisted health without touching config", async () => {

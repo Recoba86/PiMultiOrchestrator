@@ -1,6 +1,10 @@
 import { ConfigValidationError, type ConfigIssue } from "./errors.js";
 import type {
   AnalyticsPolicyV1,
+  BillingPolicyV2,
+  BillingProfileV2,
+  ConfigV2,
+  ProjectOverrideV2,
   BossProfileV1,
   ConfigV1,
   ContextBudgetClass,
@@ -22,9 +26,11 @@ import type {
   SafetyPolicyV1,
   SecretRefV1,
   StoredConfigV1,
+  StoredConfigV2,
 } from "./types.js";
 
 export const CURRENT_SCHEMA_VERSION = 1 as const;
+export const CURRENT_CONFIG_SCHEMA_VERSION = 2 as const;
 export const CURRENT_STORAGE_VERSION = 1 as const;
 
 const STABLE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -34,6 +40,7 @@ const MAX_ID_LENGTH = 64;
 const MAX_LABEL_LENGTH = 160;
 const MAX_REMOTE_MODEL_LENGTH = 256;
 const MAX_ARRAY_LENGTH = 256;
+const CURRENCY = /^[A-Z][A-Z0-9_-]{2,11}$/;
 const EXECUTION_CLASSES = ["investigation", "implementation", "verification"] as const;
 const RESOURCE_CLASSES = ["subscription", "metered-api", "unknown", "other"] as const;
 const COST_PREFERENCES = ["low", "balanced", "quality"] as const;
@@ -394,6 +401,44 @@ const validateAnalytics = (value: unknown, path: string, issues: ConfigIssue[]):
   return value as AnalyticsPolicyV1;
 };
 
+const BILLING_MODES = ["metered_api", "subscription", "free", "unknown"] as const;
+const BILLING_PROVENANCE = ["configured", "provider_reported", "unknown"] as const;
+
+const validateBillingProfile = (value: unknown, path: string, issues: ConfigIssue[]): BillingProfileV2 | undefined => {
+  const object = record(value, path, issues);
+  if (!object) return undefined;
+  ensureKeys(object, ["id", "displayName", "billingMode", "provenance", "currency", "inputMicrosPerMillion", "outputMicrosPerMillion", "cacheReadMicrosPerMillion", "cacheWriteMicrosPerMillion", "label"], path, issues);
+  stableId(object.id, fieldPath(path, "id"), issues);
+  validateLabel(object.displayName, fieldPath(path, "displayName"), issues);
+  enumValue(object.billingMode, fieldPath(path, "billingMode"), issues, BILLING_MODES);
+  enumValue(object.provenance, fieldPath(path, "provenance"), issues, BILLING_PROVENANCE);
+  if ("currency" in object) stringValue(object.currency, fieldPath(path, "currency"), issues, { maxLength: 12, pattern: CURRENCY });
+  for (const key of ["inputMicrosPerMillion", "outputMicrosPerMillion", "cacheReadMicrosPerMillion", "cacheWriteMicrosPerMillion"] as const) {
+    if (!(key in object)) continue;
+    const valueAtKey = object[key];
+    if (typeof valueAtKey !== "number" || !Number.isSafeInteger(valueAtKey) || valueAtKey < 0) issue(issues, "range", fieldPath(path, key), "Reference price must be a non-negative safe integer in micros per million tokens");
+  }
+  if ("label" in object) validateLabel(object.label, fieldPath(path, "label"), issues);
+  return value as BillingProfileV2;
+};
+
+const validateBilling = (value: unknown, path: string, issues: ConfigIssue[]): BillingPolicyV2 | undefined => {
+  const object = record(value, path, issues);
+  if (!object) return undefined;
+  ensureKeys(object, ["profiles", "activeProfileId"], path, issues);
+  const profiles = record(object.profiles, fieldPath(path, "profiles"), issues);
+  if (profiles) {
+    for (const [key, profile] of Object.entries(profiles)) {
+      stableId(key, `${path}.profiles{id}`, issues);
+      validateBillingProfile(profile, `${path}.profiles{${key}}`, issues);
+      if (isRecord(profile) && profile.id !== key) issue(issues, "id-mismatch", `${path}.profiles{${key}}.id`, "Map key and entry ID must match");
+    }
+  }
+  if ("activeProfileId" in object) stableId(object.activeProfileId, fieldPath(path, "activeProfileId"), issues);
+  if (typeof object.activeProfileId === "string" && profiles && !Object.prototype.hasOwnProperty.call(profiles, object.activeProfileId)) issue(issues, "missing-reference", fieldPath(path, "activeProfileId"), "Active billing profile does not exist");
+  return value as BillingPolicyV2;
+};
+
 const validateMap = <T>(
   value: unknown,
   path: string,
@@ -503,6 +548,35 @@ export function validateConfig(value: unknown): ConfigV1 {
   return config;
 }
 
+/** Validate the current (V2) configuration shape without weakening V1 checks. */
+export function validateConfigV2(value: unknown): ConfigV2 {
+  const issues: ConfigIssue[] = [];
+  const object = record(value, "$", issues);
+  if (!object) throw new ConfigValidationError(issues);
+  ensureKeys(object, ["schemaVersion", "gateways", "routes", "pools", "roles", "bossProfiles", "activeBossProfileId", "operationalProfiles", "activeOperationalProfileId", "routing", "safety", "quality", "analytics", "billing"], "$", issues);
+  if (object.schemaVersion !== CURRENT_CONFIG_SCHEMA_VERSION) issue(issues, "version", "schemaVersion", "Schema version is unsupported");
+
+  // Reuse the complete V1 structural and semantic validator for the stable
+  // fields.  Only the version and V2 billing field are removed for that pass.
+  const base: Record<string, unknown> = { ...object, schemaVersion: CURRENT_SCHEMA_VERSION };
+  delete base.billing;
+  try {
+    validateConfig(base);
+  } catch (error) {
+    if (error instanceof ConfigValidationError) issues.push(...error.issues);
+    else issue(issues, "config", "$", "Base configuration is invalid");
+  }
+  validateBilling(object.billing, "billing", issues);
+  if (issues.length > 0) throw new ConfigValidationError(issues);
+  return value as ConfigV2;
+}
+
+/** Accept either a legacy V1 config or the current V2 shape. */
+export function validateCurrentConfig(value: unknown): ConfigV1 | ConfigV2 {
+  if (typeof value === "object" && value !== null && !Array.isArray(value) && (value as { schemaVersion?: unknown }).schemaVersion === CURRENT_CONFIG_SCHEMA_VERSION) return validateConfigV2(value);
+  return validateConfig(value);
+}
+
 const validateProjectStructure = (value: unknown, issues: ConfigIssue[]): ProjectOverrideV1 | undefined => {
   const object = record(value, "$", issues);
   if (!object) return undefined;
@@ -538,6 +612,25 @@ export function validateProjectOverride(value: unknown): ProjectOverrideV1 {
   return project;
 }
 
+export function validateProjectOverrideV2(value: unknown): ProjectOverrideV2 {
+  const issues: ConfigIssue[] = [];
+  const object = record(value, "$", issues);
+  if (!object) throw new ConfigValidationError(issues);
+  ensureKeys(object, ["schemaVersion", "gateways", "routes", "pools", "roles", "bossProfiles", "activeBossProfileId", "operationalProfiles", "activeOperationalProfileId", "routing", "safety", "quality", "analytics", "billing"], "$", issues);
+  if (object.schemaVersion !== CURRENT_CONFIG_SCHEMA_VERSION) issue(issues, "version", "schemaVersion", "Schema version is unsupported");
+  const base: Record<string, unknown> = { ...object, schemaVersion: CURRENT_SCHEMA_VERSION };
+  delete base.billing;
+  try {
+    validateProjectOverride(base);
+  } catch (error) {
+    if (error instanceof ConfigValidationError) issues.push(...error.issues);
+    else issue(issues, "config", "$", "Base project override is invalid");
+  }
+  if ("billing" in object) validateBilling(object.billing, "billing", issues);
+  if (issues.length > 0) throw new ConfigValidationError(issues);
+  return value as ProjectOverrideV2;
+}
+
 export function validateStoredConfig(value: unknown): StoredConfigV1 {
   const issues: ConfigIssue[] = [];
   const object = record(value, "$", issues);
@@ -555,6 +648,25 @@ export function validateStoredConfig(value: unknown): StoredConfigV1 {
   }
   if (issues.length > 0) throw new ConfigValidationError(issues);
   return value as StoredConfigV1;
+}
+
+export function validateStoredConfigV2(value: unknown): StoredConfigV2 {
+  const issues: ConfigIssue[] = [];
+  const object = record(value, "$", issues);
+  if (!object) throw new ConfigValidationError(issues);
+  ensureKeys(object, ["storageVersion", "generation", "savedAt", "config"], "$", issues);
+  if (object.storageVersion !== CURRENT_STORAGE_VERSION) issue(issues, "version", "storageVersion", "Storage version is unsupported");
+  boundedInteger(object.generation, "generation", issues, 0, Number.MAX_SAFE_INTEGER);
+  const savedAt = stringValue(object.savedAt, "savedAt", issues, { maxLength: 64 });
+  if (savedAt && Number.isNaN(Date.parse(savedAt))) issue(issues, "date", "savedAt", "Timestamp is invalid");
+  try {
+    validateConfigV2(object.config);
+  } catch (error) {
+    if (error instanceof ConfigValidationError) issues.push(...error.issues.map((entry) => ({ ...entry, path: `config.${entry.path}` })));
+    else issue(issues, "config", "config", "Nested configuration is invalid");
+  }
+  if (issues.length > 0) throw new ConfigValidationError(issues);
+  return value as StoredConfigV2;
 }
 
 export type { ContextBudgetClass, DiversityPreference, QualityGate, ResourceClass };

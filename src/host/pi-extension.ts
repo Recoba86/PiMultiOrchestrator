@@ -61,7 +61,15 @@ import { createMissionStore } from "../core/mission/index.js";
 import { executeMissionTask } from "../core/mission/index.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
-import { AnalyticsQueryService, RecommendationApplicationService, RecommendationEngine, SQLiteAnalyticsStore, type AnalyticsEventV1, type AnalyticsStoreAdapter } from "../core/analytics/index.js";
+import {
+	AnalyticsQueryService,
+	RecommendationApplicationService,
+	RecommendationEngine,
+	SQLiteAnalyticsStore,
+	type AnalyticsEventV1,
+	type AnalyticsRange,
+	type AnalyticsStoreAdapter,
+} from "../core/analytics/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -273,6 +281,86 @@ const emptyPoolManager = (): PoolManagerContract => ({
 	moveRoute: async () => { throw new Error("pool manager unavailable"); },
 	setPoolEntryEnabled: async () => { throw new Error("pool manager unavailable"); },
 });
+
+const ANALYTICS_SECTIONS = [
+	"Overview",
+	"Missions",
+	"Pools",
+	"Routes",
+	"Tokens",
+	"Cost",
+	"Quality",
+	"Fallbacks",
+	"Recommendations",
+] as const;
+
+type AnalyticsSection = (typeof ANALYTICS_SECTIONS)[number];
+
+const ANALYTICS_WINDOWS = ["Last 24 hours", "Last 7 days", "Last 30 days", "All time", "Custom range"] as const;
+
+const unknownMetric = (value: unknown): string => value === undefined || value === null ? "UNKNOWN" : String(value);
+
+const successRate = (successes: number, runs: number): string => runs > 0 ? `${Math.round((successes / runs) * 1000) / 10}%` : "UNKNOWN (no runs)";
+
+const analyticsWindowLabel = (range?: AnalyticsRange): string => {
+	if (!range?.from && !range?.to) return "All time";
+	if (range.from && range.to) return `${range.from} → ${range.to}`;
+	return range.from ? `since ${range.from}` : `through ${range.to}`;
+};
+
+const analyticsSection = (value: string | undefined): AnalyticsSection | undefined => {
+	const normalized = value?.trim().toLocaleLowerCase();
+	return ANALYTICS_SECTIONS.find((section) => section.toLocaleLowerCase() === normalized);
+};
+
+const analyticsWindow = (value: string | undefined): "24h" | "7d" | "30d" | "all" | undefined => {
+	switch (value?.trim().toLocaleLowerCase()) {
+		case "24h":
+		case "last 24 hours":
+			return "24h";
+		case "7d":
+		case "last 7 days":
+			return "7d";
+		case "30d":
+		case "last 30 days":
+			return "30d";
+		case "all":
+		case "all time":
+			return "all";
+		default:
+			return undefined;
+	}
+};
+
+const analyticsRangeForWindow = (window: "24h" | "7d" | "30d" | "all", now = Date.now()): AnalyticsRange | undefined => {
+	if (window === "all") return undefined;
+	const days = window === "24h" ? 1 / 24 : window === "7d" ? 7 : 30;
+	return { from: new Date(now - days * 86_400_000).toISOString() };
+};
+
+const analyticsMapLines = (
+	label: string,
+	buckets: Readonly<Record<string, { readonly runs: number; readonly successes: number; readonly failures: number; readonly fallbacks: number; readonly tokens: number; readonly durationMs: number }>> | undefined,
+): string[] => {
+	const entries = Object.entries(buckets ?? {}).sort(([a], [b]) => a.localeCompare(b));
+	if (entries.length === 0) return [`${label}: UNKNOWN (no identifiers were reported)`];
+	return [
+		`${label}: ${entries.length}`,
+		...entries.map(([id, bucket]) => `${id}: runs=${bucket.runs} success=${bucket.successes} (${successRate(bucket.successes, bucket.runs)}) failures=${bucket.failures} fallbacks=${bucket.fallbacks} tokens=${bucket.tokens} latency-ms=${bucket.durationMs}`),
+	];
+};
+
+const analyticsQualityLines = (
+	label: string,
+	buckets: Readonly<Record<string, { readonly observations: number; readonly passes: number; readonly rejects: number; readonly blocked: number; readonly firstPass: number; readonly repairRounds: number }>> | undefined,
+): string[] => {
+	const entries = Object.entries(buckets ?? {}).sort(([a], [b]) => a.localeCompare(b));
+	if (entries.length === 0) return [`${label}: UNKNOWN (no quality observations were reported)`];
+	return [
+		`${label}: ${entries.length}`,
+		...entries.map(([id, bucket]) => `${id}: observations=${bucket.observations} pass=${bucket.passes} reject=${bucket.rejects} blocked=${bucket.blocked} first-pass=${bucket.firstPass} repair-rounds=${bucket.repairRounds}`),
+	];
+};
 
 /** Normalize the domain CatalogRow shape while allowing focused host fakes to use the compact shape. */
 const normalizeModelEntry = (value: unknown): ModelManagerEntry | undefined => {
@@ -1858,11 +1946,85 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const showAnalytics = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
 		if (!analytics) { ctx.ui.notify("Analytics is disabled or unavailable", "warning"); return; }
-		const parts = (args ?? "").trim().split(/\s+/u).filter(Boolean); const window = parts[0];
-		let range: { readonly from?: string; readonly to?: string } | undefined;
-		if (window === "24h" || window === "7d" || window === "30d") { const days = window === "24h" ? 1 / 24 : window === "7d" ? 7 : 30; range = { from: new Date(Date.now() - days * 86_400_000).toISOString() }; }
-		else if (window === "custom" && parts[1] && parts[2] && !Number.isNaN(Date.parse(parts[1])) && !Number.isNaN(Date.parse(parts[2]))) range = { from: new Date(parts[1]).toISOString(), to: new Date(parts[2]).toISOString() };
-		try { const summary = analytics.overview(range); ctx.ui.notify([`events=${summary.eventCount}`, `runs=${summary.runs}`, `attempts=${summary.attempts}`, `successes=${summary.successes}`, `failures=${summary.failures}`, `fallbacks=${summary.fallbacks}`, `quality pass/reject/blocked=${summary.qualityPasses}/${summary.qualityRejects}/${summary.qualityBlocked}`, `tokens=${summary.tokens.total ?? "unknown"}`, `unknown token attempts=${summary.unknownTokenAttempts}`, `actual cost micros=${summary.actualCostMicros ?? "unknown"}`, `estimated cost micros=${summary.estimatedCostMicros ?? "unknown"}`, `unknown cost events=${summary.unknownCostEvents}`].join("\n"), "info"); } catch (error) { notifyError(ctx, "Analytics failed", error); }
+		try {
+			const raw = (args ?? "").trim();
+			const parts = raw.split(/\s+/u).filter(Boolean);
+			let range: AnalyticsRange | undefined;
+			let section: AnalyticsSection | undefined;
+			let cursor = 0;
+			const requestedWindow = analyticsWindow(parts[0]);
+			if (requestedWindow) {
+				range = analyticsRangeForWindow(requestedWindow);
+				cursor = 1;
+				if (requestedWindow === "all" && parts[1]?.toLocaleLowerCase() === "time") cursor = 2;
+			} else if (parts[0]?.toLocaleLowerCase() === "custom") {
+				if (!parts[1] || !parts[2] || Number.isNaN(Date.parse(parts[1])) || Number.isNaN(Date.parse(parts[2])) || Date.parse(parts[1]) > Date.parse(parts[2])) {
+					ctx.ui.notify("Usage: /analytics custom FROM TO [section]", "error");
+					return;
+				}
+				range = { from: new Date(parts[1]).toISOString(), to: new Date(parts[2]).toISOString() };
+				cursor = 3;
+			}
+			section = analyticsSection(parts[cursor]);
+			if (parts[cursor] && !section) {
+				ctx.ui.notify(`Unknown analytics section '${parts[cursor]}'. Use ${ANALYTICS_SECTIONS.join(", ")}.`, "error");
+				return;
+			}
+			if (!raw && (ctx.mode === "tui" || ctx.hasUI)) {
+				const selectedWindow = await ctx.ui.select("Analytics time window", [...ANALYTICS_WINDOWS, "Back"]);
+				if (!selectedWindow || selectedWindow === "Back") return;
+				if (selectedWindow === "Custom range") {
+					const from = await ctx.ui.input("Custom range start (ISO date)", "2026-01-01T00:00:00.000Z");
+					const to = await ctx.ui.input("Custom range end (ISO date)", new Date().toISOString());
+					if (!from || !to || Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to)) || Date.parse(from) > Date.parse(to)) {
+						ctx.ui.notify("Custom range requires two valid ISO dates", "error");
+						return;
+					}
+					range = { from: new Date(from).toISOString(), to: new Date(to).toISOString() };
+				} else {
+					range = analyticsRangeForWindow(analyticsWindow(selectedWindow) ?? "all");
+				}
+				section = analyticsSection(await ctx.ui.select("Statistics & Analytics", [...ANALYTICS_SECTIONS, "Back"]));
+				if (!section) return;
+			}
+			section ??= "Overview";
+			const summary = analytics.overview(range);
+			const lines = [
+				`Statistics & Analytics — ${section}`,
+				`window: ${analyticsWindowLabel(range)}`,
+				"provenance: metadata-only; provider/Pi fields not reported remain UNKNOWN",
+			];
+			if (section === "Overview") {
+				lines.push(`events=${summary.eventCount}`, `missions=${Object.keys(summary.byMission ?? {}).length}`, `runs=${summary.runs}`, `attempts=${summary.attempts}`, `successes=${summary.successes}`, `failures=${summary.failures}`, `success rate=${successRate(summary.successes, summary.runs)}`, `fallbacks=${summary.fallbacks}`, `quality pass/reject/blocked=${summary.qualityPasses}/${summary.qualityRejects}/${summary.qualityBlocked}`, `duration-ms=${summary.durationMs}`, `unknown token attempts=${summary.unknownTokenAttempts}`, `unknown cost events=${summary.unknownCostEvents}`, "Boss/profile/agent metrics: UNKNOWN (not reported)");
+			} else if (section === "Missions") {
+				lines.push(...analyticsMapLines("Missions", summary.byMission), ...analyticsMapLines("Roles", summary.byRole));
+			} else if (section === "Pools") {
+				lines.push(...analyticsMapLines("Pools", summary.byPool), ...analyticsQualityLines("Quality by pool", summary.qualityByPool));
+			} else if (section === "Routes") {
+				lines.push(...analyticsMapLines("Routes/models", summary.byRoute), ...analyticsQualityLines("Quality by route", summary.qualityByRoute));
+				const models = new Map<string, string>();
+				for (const event of analytics.events(range)) if (event.routeId && event.remoteModelId) models.set(event.routeId, event.remoteModelId);
+				if (models.size > 0) lines.push(`model provenance: ${[...models.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([route, model]) => `${route}=${model}`).join(", ")}`);
+				else lines.push("model provenance: UNKNOWN");
+			} else if (section === "Tokens") {
+				lines.push(`input=${unknownMetric(summary.tokens.input)}`, `output=${unknownMetric(summary.tokens.output)}`, `cache-read=${unknownMetric(summary.tokens.cacheRead)}`, `cache-write=${unknownMetric(summary.tokens.cacheWrite)}`, `reasoning=${unknownMetric(summary.tokens.reasoning)}`, `total=${unknownMetric(summary.tokens.total)}`, `unknown attempts=${summary.unknownTokenAttempts}`, "token provenance: observed/provider-reported/Pi-runtime-reported only");
+			} else if (section === "Cost") {
+				lines.push(`actual micros=${unknownMetric(summary.actualCostMicros)}`, `estimated equivalent micros=${unknownMetric(summary.estimatedCostMicros)}`, `estimated avoided micros=${unknownMetric(summary.avoidedCostMicros)}`, "subscription use=UNKNOWN (billing mode not aggregated)", `unknown cost events=${summary.unknownCostEvents}`, `currencies=${Object.keys(summary.costByCurrency).length > 0 ? JSON.stringify(summary.costByCurrency) : "UNKNOWN"}`, "cost provenance: actual is observed/provider-reported; estimates are labelled");
+			} else if (section === "Quality") {
+				lines.push(`pass=${summary.qualityPasses}`, `reject=${summary.qualityRejects}`, `blocked=${summary.qualityBlocked}`, `first-pass=${summary.firstPassSuccesses}`, `repair-rounds=${summary.repairRounds}`, "tests/escalations: UNKNOWN (not reported by analytics events)", ...analyticsQualityLines("Quality by pool", summary.qualityByPool), ...analyticsQualityLines("Quality by route", summary.qualityByRoute));
+			} else if (section === "Fallbacks") {
+				lines.push(`fallbacks=${summary.fallbacks}`);
+				const transitions = Object.entries(summary.fallbackTransitions ?? {}).sort(([a], [b]) => a.localeCompare(b));
+				if (transitions.length === 0) lines.push("transitions: UNKNOWN (no fallback edge was reported)");
+				else lines.push("transitions:", ...transitions.map(([key, value]) => `${key}: ${value.count}`));
+			} else {
+				const recommendations = analytics.recommendations();
+				lines.push(`saved recommendations=${recommendations.length}`);
+				if (recommendations.length === 0) lines.push("recommendations: UNKNOWN (none saved)");
+				else for (const recommendation of recommendations) lines.push(`${recommendation.recommendationId}: pool=${recommendation.poolId} route=${recommendation.proposedRouteId} sample=${recommendation.sampleSize} score=${recommendation.score} formula=${recommendation.formulaVersion} status=${recommendation.status}`, `  evidence=${recommendation.evidence.join("; ") || "UNKNOWN"}`, `  limitations=${recommendation.limitations.join("; ") || "UNKNOWN"}`, `  actions: details/apply/ignore ${recommendation.recommendationId}`);
+			}
+			ctx.ui.notify(lines.join("\n"), "info");
+		} catch (error) { notifyError(ctx, "Analytics failed", error); }
 	};
 	const showRecommendations = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
 		if (!analytics || !analyticsStore) { ctx.ui.notify("Recommendations are unavailable while analytics is disabled", "warning"); return; }

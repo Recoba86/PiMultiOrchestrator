@@ -5,7 +5,9 @@
  */
 export type StableId = string & { readonly __stableId: unique symbol };
 
+/** Legacy semantic configuration version. */
 export type SchemaVersion = 1;
+export type SchemaVersionV2 = 2;
 export type StorageVersion = 1;
 
 export type ExecutionClass = "investigation" | "implementation" | "verification";
@@ -147,6 +149,31 @@ export interface AnalyticsPolicyV1 {
   mode: "metadata-only";
 }
 
+export type BillingModeV2 = "metered_api" | "subscription" | "free" | "unknown";
+export type BillingProvenanceV2 = "configured" | "provider_reported" | "unknown";
+
+/**
+ * Operator-supplied billing/reference metadata.  Missing values are
+ * intentional unknowns; they must never be interpreted as zero.
+ */
+export interface BillingProfileV2 {
+  id: StableId;
+  displayName: string;
+  billingMode: BillingModeV2;
+  provenance: BillingProvenanceV2;
+  currency?: string;
+  inputMicrosPerMillion?: number;
+  outputMicrosPerMillion?: number;
+  cacheReadMicrosPerMillion?: number;
+  cacheWriteMicrosPerMillion?: number;
+  label?: string;
+}
+
+export interface BillingPolicyV2 {
+  profiles: Record<string, BillingProfileV2>;
+  activeProfileId?: StableId;
+}
+
 /** The semantic user configuration.  Runtime state is deliberately absent. */
 export interface ConfigV1 {
   schemaVersion: SchemaVersion;
@@ -163,6 +190,14 @@ export interface ConfigV1 {
   quality: QualityPolicyV1;
   analytics: AnalyticsPolicyV1;
 }
+
+/** Current configuration shape.  V1 remains supported as an import source. */
+export interface ConfigV2 extends Omit<ConfigV1, "schemaVersion"> {
+  schemaVersion: SchemaVersionV2;
+  billing: BillingPolicyV2;
+}
+
+export type ConfigCurrent = ConfigV2;
 
 /** Trusted project configuration is a patch, not a second runtime state store. */
 export interface SafetyPatchV1 {
@@ -191,8 +226,14 @@ export interface ProjectOverrideV1 {
   analytics?: AnalyticsPolicyV1;
 }
 
+export interface ProjectOverrideV2 extends Omit<ProjectOverrideV1, "schemaVersion"> {
+  schemaVersion: SchemaVersionV2;
+  billing?: BillingPolicyV2;
+}
+
 /** Launch-time overlays use the same patch semantics but are not persisted. */
 export type ConfigPatchV1 = Omit<ProjectOverrideV1, "schemaVersion">;
+export type ConfigPatchV2 = Omit<ProjectOverrideV2, "schemaVersion">;
 
 /** Storage metadata is kept outside semantic ConfigV1 equality. */
 export interface StoredConfigV1 {
@@ -200,4 +241,11 @@ export interface StoredConfigV1 {
   generation: number;
   savedAt: string;
   config: ConfigV1;
+}
+
+export interface StoredConfigV2 {
+  storageVersion: StorageVersion;
+  generation: number;
+  savedAt: string;
+  config: ConfigV2;
 }
