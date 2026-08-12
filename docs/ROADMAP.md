@@ -75,20 +75,20 @@ Deliverables:
 - fake-clock/unit, fake-gateway, and Pi `0.84.1` integration evidence with the M2/M3 regressions intact; and
 - explicit boundary with opaque 9Router account/combo fallback; M4 never executes a model request.
 
-Exit gate: PASS — `86/86` tests, typecheck, build, aggregate check, fake-gateway, and real Pi `0.84.1` routing/health RPC checks passed. M5 remains unopened.
+Exit gate: PASS — `86/86` tests, typecheck, build, aggregate check, fake-gateway, and real Pi `0.84.1` routing/health RPC checks passed. M5 was subsequently authorized and is recorded below as implemented pending acceptance.
 
 ## M5 — Routed Subagent Execution
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
 
 Deliverables:
 
-- isolated child `pi` process executor following Pi's shipped pattern;
-- task-packet input, role-specific tool allowlists, structured result submission, streaming progress, timeout, cancellation, and bounded concurrency;
-- serial-by-default shared-worktree mutation policy;
-- fake `pi` executable integration harness.
+- direct Pi `0.84.1` SDK child sessions with in-memory session/runtime state and exact M4 route/model pinning;
+- explicit role/pool/task request, per-pool tool allowlists, bounded `submit_agent_result`, tool observation, timeout, cancellation, and deterministic cleanup;
+- M4 retry/fallback/health integration with automatic fallback blocked after `edit`, `write`, or `bash`;
+- serial-by-cwd Implementation execution, parent-only `delegate_agent`, `/subagent-run`, and fake-gateway/actual-Pi parent→child proof.
 
-Exit gate: success, malformed result, crash, timeout, cancel, concurrency, output-bound, and tool-policy tests pass without a provider call.
+Exit gate: M5 worker unit tests plus fake/actual Pi tests prove tool boundaries, structured result protocol, exact model selection, safe fallback, mutation stop, cancellation, timeout, isolation, and M2–M4 regressions. M6 remains unopened.
 
 ## M6 — Context Broker and canonical mission state
 

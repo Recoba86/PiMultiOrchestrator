@@ -205,9 +205,9 @@ Builds role-specific Task Packets from an immutable canonical-state generation. 
 
 ### 5.9 `workers`
 
-Owns child `pi` invocation, JSON event parsing, progress, output bounds, structured result submission, timeout, cancellation, cleanup, and concurrency.
+Owns direct Pi SDK child-session invocation, tool visibility, structured result submission, progress, timeout, cancellation, cleanup, and concurrency.
 
-The first implementation uses `node:child_process.spawn` with argv arrays and `shell: false`, matching Pi's installed example. It invokes the current Pi executable rather than assuming a global binary path. Read-only tasks may run concurrently within configured limits. Shared-worktree mutation is serial by default.
+M5 constructs fresh `AgentSession` instances with `SessionManager.inMemory`, an extension/skills/context-free resource loader, an exact M4-selected model, and retry disabled. Investigation, Implementation, and Verification receive distinct allowlists; `edit`, `write`, and `bash` are conservatively treated as potentially mutating. Shared-worktree Implementation runs are serial by normalized cwd, and a mutation prevents automatic cross-route fallback. The shipped child-process example remains a portability reference, not a second executor.
 
 ### 5.10 `analytics`
 
@@ -648,7 +648,7 @@ These unknowns do not weaken requirements; the named milestone must prove the im
 | POC-02 | Deployed 9Router `/v1/models` fields can distinguish model, provider/resource, aliases, and combos. | M2 | Live probe skipped without credentials; exact IDs are preserved, unproven resource fields remain unknown, and rows are never merged by name. |
 | POC-03 | 9Router responses expose authoritative actual route/account after internal combo fallback. | M2/M4 | Treat combo as opaque and label actual route/cost/diversity unknown. |
 | POC-04 | Provider status/headers and Pi events are sufficient to classify quota/rate/auth/timeout across supported transports. | M4 | Use conservative unknown classification and bounded Boss-visible recovery. |
-| POC-05 | Packaged extension can launch the same current Pi executable, stream JSON, terminate its process tree, and avoid recursive orchestrator loading. | M5 | Use a narrowly configured SDK child runner if process invocation is not portable. |
+| POC-05 | Packaged extension can execute an exact-model child, stream tool progress/results, cancel/cleanup it, and avoid recursive orchestrator loading. | M5 | Proven with the Pi 0.84.1 SDK child runner and isolated fake-gateway parent→child test; retain the shipped process pattern as a later portability option. |
 | POC-06 | `node:sqlite` works under all supported Pi launch modes, including standalone/Bun if supported. | M6 | Select one compatible SQLite driver; keep logical schema and tests unchanged. |
 | POC-07 | Custom component listeners/overlays dispose correctly across `/reload`, `/resume`, `/fork`, and shutdown. | M9 | Close the Control Center on lifecycle change and reopen from canonical state. |
 | POC-08 | Approved credential source integrates with a native Pi provider without persisting plaintext in package config/history. | M2 | Proven with an environment reference and synthetic fake key; Pi receives `$ENV_NAME`, while unsupported stores remain unavailable with no literal fallback. |

@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M4 accepted; M5 next planned |
+| Development phase | M5 implemented; Planner acceptance pending |
 | Last accepted milestone | M4 — Routing + Health + Infrastructure Fallback Engine |
 | Accepted M4 implementation commit | `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` |
 | Accepted M4 evidence HEAD | `f5e25e21bbebe7995a9cc050efea3ed20d94f18c` |
@@ -27,7 +27,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC | ACCEPTED / PASS |
 | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor | ACCEPTED / PASS |
 | M4 — Routing + Health + Infrastructure Fallback Engine | ACCEPTED / PASS |
-| M5 — Routed Subagent Execution | NEXT PLANNED / NOT STARTED |
+| M5 — Routed Subagent Execution | IMPLEMENTED BUT NOT ACCEPTED / AWAITING PLANNER ACCEPTANCE |
 
 ## Stable / accepted capabilities
 
@@ -74,11 +74,15 @@ M4 adds the accepted pure, non-executing routing boundary and runtime health sta
 
 M4 does not implement actual child/subagent execution, Boss runtime, Task Packet or Context Broker runtime, canonical mission state, quality review/escalation, analytics, auto-tuning, or full cost/budget-aware routing. It does not persist health in ConfigStore/export/history or reconstruct opaque 9Router account/combo fallback.
 
-| M4 acceptance evidence | Result |
+## M5 implementation (acceptance pending)
+
+M5 adds direct Pi `0.84.1` SDK child sessions with fresh in-memory session state, no inherited extensions/context, exact M4 route/model pinning, Investigation/Implementation/Verification tool allowlists, bounded `submit_agent_result`, tool-side-effect observation, timeout/cancellation cleanup, and M4 retry/fallback/health feedback. Parent-only `delegate_agent` and `/subagent-run` are wired through the existing host. Implementation runs serialize by cwd and potential mutation stops automatic fallback. Boss, Context Broker, canonical mission state, parallel workers, worktrees, quality review, and analytics remain deferred.
+
+| M5 implementation evidence (acceptance pending) | Result |
 |---|---|
-| Deterministic, fake integration, and actual Pi suite | `86/86 PASS` |
+| Full deterministic, fake integration, and actual Pi suite | `97/97 PASS` |
 | Typecheck, build, and aggregate check | PASS |
-| Actual Pi `0.84.1` fake RPC | PASS — routing commands, preview, persisted health reset, M2/M3 regressions |
+| Actual Pi `0.84.1` fake parent→child flow | PASS — exact parent/child model, child read + submit tools, no delegate recursion |
 | Paid calls / live environment changes | `0` / NONE |
 
 | M3 acceptance evidence | Result |
@@ -123,7 +127,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ### Deferred capabilities
 
-- workers/subagents and Boss runtime;
+- Boss runtime and Planner acceptance of M5;
 - Context Broker and Canonical Mission State runtime;
 - quality escalation;
 - analytics collection, storage, dashboard, and auto-tuning;
@@ -132,7 +136,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M4 is accepted by STATE-4. M5 — Routed Subagent Execution is next planned and not started. Do not start M5 from this handoff.
+M4 is accepted by STATE-4. M5 implementation is awaiting Planner acceptance; M4 remains the last accepted milestone. Do not start M6.
 
 ## Accepted evidence history
 
@@ -141,12 +145,15 @@ M4 is accepted by STATE-4. M5 — Routed Subagent Execution is next planned and 
 - M2: `43f810cc9c6fbda50abd69b94d5f8aad1597756a` — `feat(pi): add selective 9Router model manager` — ACCEPTED / PASS; evidence recorded above.
 - M3: `e2efde838d84197f1fbe289e3e8ded090bdd2d87` — `feat(pools): add execution pool manager` — ACCEPTED / PASS; `70/70` tests, typecheck/build, and actual Pi/fake-gateway pool mutation/reload evidence passed.
 - M4: `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` — `feat(routing): add health-aware fallback engine` — ACCEPTED / PASS; evidence HEAD `f5e25e21bbebe7995a9cc050efea3ed20d94f18c`, `86/86` tests, and isolated Pi/fake-gateway routing/health evidence passed.
+- M5 implementation: `80b00a65da0a922633d9809b8520983f90038118` — `feat(agents): add routed subagent execution` — IMPLEMENTED BUT NOT ACCEPTED; `97/97` tests, typecheck/build/check, fake-gateway, and isolated Pi `0.84.1` parent→child evidence passed.
+
+M5 implementation evidence (not accepted): implementation commit `80b00a65da0a922633d9809b8520983f90038118`; the docs-only evidence commit is the final handoff HEAD. `97/97` tests, typecheck, build, aggregate check, and isolated Pi/fake-gateway parent→child evidence passed.
 
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M5 has started merely because M4 is accepted.
+- Do not assume M5 is accepted or runtime-operational merely because its implementation and tests exist.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

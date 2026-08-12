@@ -607,7 +607,39 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** open overview/health/mission views.
 - **Pass:** profile/route, gateway status, pool counts, worker role/model/progress, cooldown/fallback, and review state are visible without reading logs.
 
-## 12. Real integration gates
+## 12. M5 routed subagent execution
+
+### WORK-05 — Child isolation and tool profiles
+
+- **Level:** U/I, fixture-v1
+- **Action:** create fresh children for Investigation, Implementation, and Verification with an exact route/model.
+- **Pass:** session storage is in memory; parent extensions/delegate tool are absent; allowlists are read/grep/find/ls; read/grep/find/ls/bash; and read/grep/find/ls/bash respectively.
+
+### WORK-06 — Structured result protocol
+
+- **Level:** U/I, fixture-v1
+- **Action:** submit one bounded `submit_agent_result`, omit it, submit twice, and attempt post-submit mutation.
+- **Pass:** one valid result completes; missing/invalid is `invalid_child_result`; duplicate/post-submit activity is a protocol violation; no infrastructure health penalty or automatic fallback is inferred.
+
+### WORK-07 — M4 fallback and mutation safety
+
+- **Level:** I, fixture-v1
+- **Action:** exercise provider failure before tools, read-only failure, quota/rate failure, edit/write/bash followed by timeout/failure, cancellation, and exact route changes.
+- **Pass:** M4 alone decides retry/fallback; safe pre-tool/read-only failures may fall back; potential mutation returns `partial_mutation_requires_review` and never starts the next route; cancellation stops without fallback/health penalty; every child uses the exact selected remote ID.
+
+### WORK-08 — Parent delegation and Pi proof
+
+- **Level:** P, fixture-v1, Pi `0.84.1`
+- **Action:** invoke parent `delegate_agent` and `/subagent-run` against the fake gateway with isolated Pi/config/session roots.
+- **Pass:** role/pool/task are explicit, no model parameter is exposed, child reads and submits a bounded result, delegate recursion is absent, progress/result is concise, no parent history or live path is used, and M2–M4 provider/pool/routing regressions remain green.
+
+### WORK-09 — Shared-worktree and cleanup boundary
+
+- **Level:** U/I, fixture-v1
+- **Action:** run concurrent Implementation requests in one cwd; cancel and timeout child sessions.
+- **Pass:** mutating runs serialize; sessions abort, unsubscribe, and dispose deterministically; no child files/session history are left outside the requested cwd; no worktree fan-out or background worker is created.
+
+## 13. Real integration gates
 
 ### PI-01 — Extension lifecycle smoke
 
@@ -634,6 +666,6 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** invoke one selected route with a minimal non-sensitive prompt through Pi provider bridge.
 - **Pass:** model/route selection, cancellation, usage/failure metadata, and gateway behavior are recorded; exact live evidence is labeled; cost/quota is bounded by the authorization.
 
-## 13. Release acceptance rule
+## 14. Release acceptance rule
 
 A milestone is complete only when every required case through that milestone passes at its required level, skipped P/L gates are explicitly named, migrations/rollback pass, and the milestone's Roadmap exit gate is satisfied. A passing fake-provider suite is never a substitute for a required Pi UI or authorized live smoke.

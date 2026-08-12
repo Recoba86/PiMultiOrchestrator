@@ -148,3 +148,10 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Rationale:** Deterministic selection preserves user order and makes failures explainable without pretending to know provider internals. 429 is rate-limited unless explicit structured quota evidence exists.
 - **Alternatives:** Random/score-based routing, family-name heuristics, unbounded fallback, or reconstructing 9Router's internal account/combo attempts.
 - **Consequences:** The router is a preview/decision boundary only. 9Router remains responsible for opaque internal fallback; quality outcomes belong to later quality gates and do not poison infrastructure health.
+
+## ADR-022 — M5 uses fresh direct SDK child sessions
+
+- **Decision:** M5 creates a fresh Pi `0.84.1` `AgentSession` per route attempt with `SessionManager.inMemory`, an empty resource boundary, the exact M4-selected model, and retries disabled. The parent alone exposes `delegate_agent`; children receive only the pool allowlist plus one bounded `submit_agent_result` tool.
+- **Rationale:** Direct SDK control gives deterministic model/tool/session isolation without copying parent history or loading the orchestrator recursively. M4 remains the sole retry/fallback authority.
+- **Alternatives:** Reuse parent history, load the full extension in children, allow Pi's hidden retries, or use the shipped process example as a second execution path.
+- **Consequences:** Child output is a bounded in-memory handoff, not canonical mission state. `edit`, `write`, and `bash` conservatively block automatic fallback; implementation runs serialize by cwd. Worktrees, Context Broker, Boss scheduling, and durable child state remain deferred.
