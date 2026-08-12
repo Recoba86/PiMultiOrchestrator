@@ -149,7 +149,7 @@ Evidence: `141/141` full tests, analyst/provider focused suites, typecheck/build
 
 ## M9 — Full TUI control center
 
-Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+Status: ACCEPTED / PASS by STATE-9.
 
 Deliverables:
 
@@ -157,9 +157,9 @@ Deliverables:
 - keyboard-accessible navigation, progress, error, stale-data, confirmation, and empty states;
 - live mission/agent/route/review visibility without log inspection.
 
-Implementation evidence: exact twelve-section/dashboard and RPC/native selector suite `5/5 PASS`; existing provider suite `17/17 PASS`; full suite `146/146 PASS`; `npm run check`, typecheck, build, and diff check PASS. Human keyboard-driven TUI smoke remains pending because no authorized interactive keyboard session was available; automated RPC/native selector coverage passed. M9 does not add Boss runtime, autonomous scheduling, background work, or automatic priority mutation.
+Acceptance evidence: exact twelve-section/dashboard and RPC/native selector suite `5/5 PASS`; existing provider suite `17/17 PASS`; full suite `146/146 PASS`; `npm run check`, typecheck, build, package dry-run, diff check, secret scan, and project-state consistency PASS. Human keyboard-driven TUI smoke remains pending because no authorized interactive keyboard session was available; this is open validation and not an M9 acceptance blocker. M9 does not add Boss runtime, autonomous scheduling, background work, or automatic priority mutation.
 
-Exit gate: Planner acceptance of the implementation evidence plus an explicitly controlled human Pi TUI smoke checklist. M9 implementation commit: `2032a2b` (`feat(tui): add full orchestrator control center`).
+Exit gate: PASS — STATE-9 records Planner acceptance of implementation commit `2032a2b` with evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`; human keyboard smoke remains a separately open validation item.
 
 ## M10 — Safety and hardening
 

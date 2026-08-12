@@ -130,9 +130,9 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Evidence:** `npm test` and `npm run check` `134/134 PASS`; typecheck/build PASS; actual Pi 0.84.1 fake-gateway mission analytics, token provenance/UNKNOWN handling, fallback, quality reject→repair→re-verification, billing migration/persistence, nine detail views, and recommendation controls PASS; paid/live calls `0`.
 - **Decisions:** analytics remains separate from MissionStore and HealthStore; ConfigV1 imports migrate sequentially to ConfigV2 reference billing profiles; disabled collection keeps history and rejects new rows; unknown cost is not zero; recommendation generation does not mutate configuration and Apply uses PoolManager with stale protection.
 - **Live impact:** no live Pi/provider configuration, credentials, Keychain, paid calls, or external network used.
-- **Next:** This historical entry predates STATE-8.5; M9 remains not started.
+- **Next at that historical handoff:** M9 was the next milestone; STATE-9 later records its acceptance.
 
-**STATE-8 correction (historical):** M8 is accepted / PASS. At that handoff the analyst milestone and M9 were not started, and AI-assisted recommendation analysis remained deferred; the M8.5 implementation entry below records the later change without changing STATE-8 acceptance.
+**STATE-8 correction (historical):** M8 is accepted / PASS. At that handoff the analyst milestone and M9 were deferred, and AI-assisted recommendation analysis remained deferred; later entries record their implementation and acceptance without changing STATE-8 acceptance.
 
 ## M8.5 — Manual AI Recommendation Analyst
 
@@ -146,24 +146,24 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Decisions:** deterministic metrics remain authoritative; analyst output is advisory and may disagree; route failures use existing M4/M5 behavior without breaking deterministic recommendations; explicit Apply remains RecommendationApplicationService → PoolManager → ConfigStore; previous analyses remain auditable and stale when fingerprints change.
 - **Deferred work:** Boss/planner runtime, scheduled/autonomous tuning, M9, live-provider validation, and release work.
 - **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network used.
-- **Next:** M9 planned/not started.
+- **Next at that historical handoff:** M9 was the next milestone; STATE-9 later records its acceptance.
 
 **STATE-8.5 acceptance:** M8.5 is accepted / PASS. The analyst remains optional, manual-only, advisory, Verification-Pool-bound, and unable to mutate deterministic facts or Apply recommendations automatically.
 
 ## M9 — Full TUI control center
 
-- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+- **Status:** ACCEPTED / PASS by STATE-9.
 - **Starting HEAD:** `20f1854fcc5f0901652ce8ada9918605f912b4a3`.
 - **Implementation commit:** `2032a2b` — `feat(tui): add full orchestrator control center`.
 - **Purpose:** Unify the accepted M2–M8.5 capabilities behind one keyboard-accessible Pi Control Center without reimplementing domain engines.
 - **Major outcomes:** Exact twelve top-level sections in the required order; dashboard-first safe metadata; native TUI/RPC selector navigation; textual loading, error, stale, empty, busy, and deferred states; accepted Models, Pools, Routing, Health, Context/Mission, Analytics, Recommendation Analyst, Budget/Quality, Diagnostics, and ConfigStore backup/history views; direct command compatibility; Boss runtime remains explicitly unimplemented.
-- **Tests/evidence:** Focused M9 suite `5/5 PASS`; provider suite `17/17 PASS`; full deterministic/fake/actual-Pi regression suite `146/146 PASS`; `npm run check`, typecheck, build, and diff check PASS. Human keyboard-driven TUI smoke is pending because no authorized interactive keyboard session was available; RPC/native selector coverage passed.
+- **Tests/evidence:** Focused M9 suite `5/5 PASS`; provider suite `17/17 PASS`; full deterministic/fake/actual-Pi regression suite `146/146 PASS`; `npm run check`, typecheck, build, package dry-run, diff check, secret scan, and project-state consistency PASS. Human keyboard-driven TUI smoke is pending because no authorized interactive keyboard session was available; this remains open validation, not an M9 acceptance blocker. RPC/native selector coverage passed.
 - **Important decisions:** The twelve top-level labels are fixed; nested actions reuse existing services; dashboard and diagnostics expose safe metadata only; Backup/Restore uses ConfigStore export/history/restore while MissionStore/AnalyticsStore backup remains explicitly unavailable; M9 adds no autonomous Boss, background worker, or automatic priority mutation.
-- **Deferred work:** Planner acceptance of M9, human keyboard TUI smoke, Boss/planner runtime, autonomous scheduling/tuning, hardening, packaging, and live-provider validation.
+- **Deferred work:** Human keyboard TUI smoke, Boss/planner runtime, autonomous scheduling/tuning, M10 safety/hardening, packaging, and live-provider validation.
 - **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network used.
-- **Next authorized milestone:** M10 — Safety and hardening, planned/not started. Do not start M10 until M9 is accepted.
+- **Next authorized milestone:** M10 — Safety and hardening, planned/not started. Do not start M10.
 
-**M9 current-state correction:** the historical M8.5 handoff above recorded M9 as planned/not started at that time. The current repository now contains M9 implementation commit `2032a2b`; M9 remains implemented but not Planner-accepted, and M10 is still not started.
+**STATE-9 acceptance:** M9 is accepted / PASS. Accepted implementation commit is `2032a2b`; accepted evidence HEAD is `1200d3349506a1d414def0f3c1e044d712711d9d`. The human keyboard-driven TUI smoke remains pending as an explicitly open validation item; no live or paid environment was used.
 
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED

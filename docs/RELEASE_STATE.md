@@ -8,9 +8,9 @@ This file records releasable product state. It does not promote development prog
 
 | Field | State |
 |---|---|
-| Latest accepted development milestone | M8.5 — Manual AI Recommendation Analyst |
-| Accepted development commit | `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1` |
-| Accepted evidence HEAD | `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1` |
+| Latest accepted development milestone | M9 — Full TUI control center |
+| Accepted development commit | `2032a2b` |
+| Accepted evidence HEAD | `1200d3349506a1d414def0f3c1e044d712711d9d` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
@@ -20,7 +20,7 @@ This file records releasable product state. It does not promote development prog
 | Installable production release | NONE |
 | Production-ready | NO |
 | Release rollback target | NONE; no release exists |
-| Accepted development recovery reference | M8.5 implementation commit `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1`; evidence HEAD `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1` |
+| Accepted development recovery reference | M9 implementation commit `2032a2b`; evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d` |
 
 Milestone acceptance does not itself create a product release.
 
@@ -33,12 +33,13 @@ Milestone acceptance does not itself create a product release.
 | M7 accepted verification suite | `121/121 PASS`; typecheck/build/check PASS; Pi/fake quality-loop proof PASS |
 | M8 accepted verification suite | `134/134 PASS`; typecheck/build/check PASS; Pi/fake analytics/fallback/quality/billing/recommendation proof PASS |
 | M8.5 accepted verification suite | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS |
+| M9 accepted verification suite | `146/146 PASS`; Control Center sections/navigation, typecheck/build/check, package dry-run, diff/secret/state validation PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
 | Tested Node.js version | `22.23.0`; package requires `>=22.19.0` |
 | Fake gateway integration | PASS |
-| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, parent→child execution, mission→analytics telemetry, token provenance, fallback, quality reject→repair→re-review, and recommendation controls |
+| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, parent→child execution, mission→analytics telemetry, token provenance, fallback, quality reject→repair→re-review, recommendation controls, and native/RPC Control Center coverage |
 | Real live 9Router catalog | NOT VERIFIED — credential-gated probe was skipped |
 | Real paid inference | NOT PERFORMED |
 
@@ -48,8 +49,8 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, scheduled/autonomous tuning, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M8.5 is the latest accepted development state; no stable release is implied.
-- M9 Control Center implementation exists at `2032a2b` but is not Planner-accepted; human keyboard TUI smoke remains pending. M8.5 remains the latest accepted development state.
+- Boss runtime, scheduled/autonomous tuning, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M9 is the latest accepted development state; no stable release is implied.
+- Human keyboard-driven TUI smoke remains pending as open validation, but is not an M9 acceptance blocker. M10 safety/hardening is next planned and not started.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record
