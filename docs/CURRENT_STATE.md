@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M3 accepted; M4 next planned |
+| Development phase | M4 implemented; Planner acceptance pending |
 | Last accepted milestone | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor |
 | Accepted M3 commit | `e2efde838d84197f1fbe289e3e8ded090bdd2d87` |
 | Configuration schema | Version 1 |
@@ -25,6 +25,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M1 — Configuration Foundation | ACCEPTED / PASS |
 | M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC | ACCEPTED / PASS |
 | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor | ACCEPTED / PASS |
+| M4 — Routing + Health + Infrastructure Fallback Engine | IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE |
 
 ## Stable / accepted capabilities
 
@@ -56,6 +57,27 @@ M3 adds accepted, configuration-only pool management:
 - actual Pi/fake-gateway pool mutation, reload, and provider-regression proof.
 
 These capabilities do not implement runtime routing, worker execution, or full multi-agent orchestration. Pool order is configuration priority only.
+
+## M4 implementation awaiting acceptance
+
+M4 adds the pure, non-executing routing boundary and runtime health state:
+
+- deterministic ordered eligibility and preview selection for the three pools;
+- explicit `none`, `prefer`, and `require` diversity inputs with no model-name inference;
+- bounded same-route retry, fallback, cancellation/invalid-request stop semantics, and loop-free attempt chains;
+- structured quota, rate-limit, authentication, timeout, transport, provider/model, protocol, cancellation, and unknown failure classes;
+- injectable `HealthStore` runtime JSON with atomic persistence, cooldown/retry-after, circuit state, success recovery, corruption quarantine, and manual reset;
+- `/routing-status`, `/route-health`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`;
+- fake-clock deterministic tests and isolated Pi `0.84.1` fake-gateway RPC/reset evidence.
+
+M4 does not execute model requests, inspect quality, start workers, persist health in ConfigStore/export/history, or reconstruct opaque 9Router account/combo fallback. M4 remains unaccepted until Planner review.
+
+| M4 implementation evidence | Result |
+|---|---|
+| Deterministic, fake integration, and actual Pi suite | `86/86 PASS` |
+| Typecheck, build, and aggregate check | PASS |
+| Actual Pi `0.84.1` fake RPC | PASS — routing commands, preview, persisted health reset, M2/M3 regressions |
+| Paid calls / live environment changes | `0` / NONE |
 
 | M3 acceptance evidence | Result |
 |---|---|
@@ -99,8 +121,6 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ### Deferred capabilities
 
-- execution router and health/circuit-breaker runtime;
-- infrastructure fallback and diversity routing;
 - workers/subagents and Boss runtime;
 - Context Broker and Canonical Mission State runtime;
 - quality escalation;
@@ -110,7 +130,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M3 is accepted by STATE-3. M4 is the next planned milestone and is not started. Do not start M4 without its mission and acceptance plan.
+M3 is accepted by STATE-3. M4 implementation is present but awaits Planner acceptance. Do not start M5 until M4 is accepted by the Planner.
 
 ## Accepted evidence history
 
@@ -124,6 +144,6 @@ M3 is accepted by STATE-3. M4 is the next planned milestone and is not started. 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M4 has started merely because M3 is accepted.
+- Do not assume M4 is accepted or runtime-operational merely because its implementation is present.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

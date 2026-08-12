@@ -134,3 +134,17 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Rationale:** The existing schema already expresses every M3 choice. Retaining unavailable memberships preserves user intent and prevents discovery outages or global model changes from silently rewriting priorities.
 - **Alternatives:** Add a numeric priority field, create ConfigV2, auto-remove unavailable routes, or make pool edits reconcile the Pi provider.
 - **Consequences:** Pool mutations use `ConfigStore` history and its process-local FIFO queue; the same route may belong to multiple pools independently; pool-only changes do not alter provider registration; actual eligibility and selection remain M4 work.
+
+## ADR-020 — M4 health is runtime state, separate from user configuration
+
+- **Decision:** M4 stores route health in an injectable, versioned atomic `health.json` runtime file. Cooldowns, circuit state, failure class, retry-after, success timestamps, and manual reset never enter ConfigStore, config history, export, analytics, prompts, or completions.
+- **Rationale:** Health changes frequently and must survive reload without rewriting user intent or pool order. Corrupt runtime state can be quarantined independently of valid configuration.
+- **Alternatives:** Put health beside each ConfigV1 route, persist it in config history, or add SQLite in M4.
+- **Consequences:** Health updates are serialized in-process; stale last-known-good catalog data remains usable, while missing/unavailable routes are ineligible. Cross-process coordination and durable analytics remain later work.
+
+## ADR-021 — M4 routing is deterministic and conservative
+
+- **Decision:** Pool array position is canonical priority. The pure router filters disabled, missing, unavailable, attempted, excluded, cooldown, and required-diversity conflicts, then selects the first eligible route. Diversity is explicit (`none`, `prefer`, `require`) and never inferred from model names. Rate limits/timeouts/transports may retry within the ConfigV1 budget; cancellation, invalid requests, protocol errors, and unknown failures stop; fallback is bounded and loop-free.
+- **Rationale:** Deterministic selection preserves user order and makes failures explainable without pretending to know provider internals. 429 is rate-limited unless explicit structured quota evidence exists.
+- **Alternatives:** Random/score-based routing, family-name heuristics, unbounded fallback, or reconstructing 9Router's internal account/combo attempts.
+- **Consequences:** The router is a preview/decision boundary only. 9Router remains responsible for opaque internal fallback; quality outcomes belong to later quality gates and do not poison infrastructure health.

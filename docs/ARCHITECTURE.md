@@ -148,7 +148,7 @@ M3 implements `core/pools` as the only pool-mutation service. It reads configure
 ```text
 Model Manager -> configured routes
 Pool Manager  -> ordered memberships
-M4 Router     -> future route selection
+M4 Router     -> eligibility, priority, diversity, and health-aware preview
 ```
 
 The Pool Manager reports management state but does not decide eligibility or select a route.
@@ -178,6 +178,22 @@ configured pool order
 ```
 
 Historical scoring is not in the initial selection algorithm. A future scorer may supply a derived order without changing the selection contract.
+
+M4's implemented data flow is deliberately non-executing:
+
+```text
+Pool Manager
+    -> Router
+       [availability, diversity, health, priority]
+    -> Routing Decision
+
+Execution Result metadata
+    -> Failure Classifier
+    -> Failure Policy [retry same | fallback next | stop]
+    -> HealthStore
+```
+
+The router receives normalized status and never calls a model or infers a family from a model name. Stale last-known-good catalog entries remain selectable while positively missing/unavailable entries do not. 9Router account, credential, and combo fallback is opaque: one Pi route invocation produces one external result for M4.
 
 ### 5.7 `mission`
 
@@ -531,7 +547,7 @@ open --cooldown--> probing --success--> healthy
                          \--failure--> open with bounded cooldown
 ```
 
-One probe is admitted at a time. Manual reset clears the circuit but not catalog absence, disabled state, or missing auth.
+One probe is admitted at a time. Manual reset clears the circuit but not catalog absence, disabled state, or missing auth. M4 persists this runtime state as versioned atomic `health.json` under the injected runtime root; it is not part of ConfigStore, config history, export, analytics, prompts, completions, or secrets. Corrupt health is quarantined without changing user configuration. Cancellation and invalid-request outcomes stop conservatively; they do not cause uncontrolled fallback.
 
 ## 17. Analytics event flow
 

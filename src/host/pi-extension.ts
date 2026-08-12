@@ -9,6 +9,14 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { SecretRefV1, StableId } from "../core/config/types.js";
 import { ConfigStore } from "../core/config/store.js";
+import { HealthStore, type RouteHealthRecord } from "../core/health/index.js";
+import {
+	previewRouting,
+	type RouteAvailability,
+	type RoutingCandidate,
+	type RoutingPolicy,
+	type RoutingDecision,
+} from "../core/routing/index.js";
 import {
 	createPoolManager,
 	PoolManagerError,
@@ -86,6 +94,8 @@ export interface PiManagerContract {
 export interface PiHostOptions {
 	readonly manager: PiManagerContract;
 	readonly poolManager?: PoolManagerContract;
+	readonly configStore?: ConfigStore;
+	readonly healthStore?: HealthStore;
 	readonly providerId?: string;
 }
 
@@ -99,6 +109,7 @@ export interface ReconcileResult {
 export interface PiHost {
 	readonly manager: PiManagerContract;
 	readonly poolManager: PoolManagerContract;
+	readonly healthStore?: HealthStore;
 	reconcile(): Promise<ReconcileResult>;
 	registerCommands(): void;
 	dispose(): void;
@@ -179,6 +190,14 @@ const poolEntryLabel = (entry: PoolEntryView): string => {
 
 const poolCandidateLabel = (entry: PoolRouteCandidate): string =>
 	`${entry.displayName} — ${entry.remoteModelId} [${entry.state.toUpperCase()}] (${entry.routeId})`;
+
+const routeAvailability = (entry: PoolEntryView): RouteAvailability => {
+	if (entry.state === "missing") return "missing";
+	if (entry.catalogState === "stale") return "stale";
+	if (entry.state === "provider-unavailable" || entry.projectedPiAvailable === false || entry.actualPiAvailable === false) return "unavailable";
+	if (entry.state === "unknown" || entry.presentInCatalog === false) return "unknown";
+	return "available";
+};
 
 const emptyPoolView = (poolId: PoolId): CorePoolView => ({
 	id: poolId,
@@ -274,6 +293,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const providerId = options.providerId ?? NINEROUTER_PROVIDER_ID;
 	const manager = options.manager;
 	const poolManager = options.poolManager ?? emptyPoolManager();
+	const configStore = options.configStore;
+	const healthStore = options.healthStore;
 	let registeredFingerprint: string | undefined;
 	let reconciled = false;
 	const lifetime = new AbortController();
@@ -713,6 +734,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			"Investigation Pool",
 			"Implementation Pool",
 			"Verification Pool",
+			"Routing & Fallback",
+			"Health & Quotas",
 			"Refresh 9Router catalog",
 			"9Router status",
 			"Pool status",
@@ -732,6 +755,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			case "Verification Pool":
 				await openPoolEditor(ctx, "verification");
 				return;
+			case "Routing & Fallback":
+				await showRoutingStatus(ctx);
+				return;
+			case "Health & Quotas":
+				await showRouteHealth(ctx);
+				return;
 			case "Refresh 9Router catalog":
 				await refreshAndReconcile(ctx);
 				return;
@@ -746,6 +775,207 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				return;
 			default:
 				return;
+		}
+	};
+
+	const routingCandidates = (pool: PoolView, health: Readonly<Record<string, RouteHealthRecord>>): readonly RoutingCandidate[] =>
+		pool.entries.map((entry): RoutingCandidate => ({
+			routeId: entry.routeId,
+			poolId: pool.poolId,
+			poolPosition: entry.index,
+			poolEnabled: entry.poolEnabled,
+			globalEnabled: entry.globalEnabled,
+			remoteModelId: entry.remoteModelId,
+			...(entry.resourceId ? { resourceId: entry.resourceId } : {}),
+			...(entry.underlyingFamily ? { underlyingFamily: entry.underlyingFamily } : {}),
+			availability: routeAvailability(entry),
+			available: entry.projectedPiAvailable === false || entry.actualPiAvailable === false ? false : entry.state === "active",
+			...(health[entry.routeId] ? { health: health[entry.routeId] } : {}),
+		}));
+
+	const routingDecisionText = (decision: RoutingDecision, pool: PoolView): string[] => {
+		if (decision.kind === "SELECTED") {
+			const entry = pool.entries.find((candidate) => candidate.routeId === decision.routeId);
+			return [`Current first eligible: ${entry?.displayName ?? decision.routeId} (${decision.routeId})`, `  reason: ${decision.reason}`];
+		}
+		const lines = ["NO ELIGIBLE ROUTE"];
+		if (decision.earliestRetryAt) lines.push(`  earliest retry: ${decision.earliestRetryAt}`);
+		for (const reason of decision.reasons.filter((item) => item.reasons.length > 0)) {
+			lines.push(`  ${reason.routeId}: ${reason.reasons.join(", ")}`);
+		}
+		return lines;
+	};
+
+	const showRoutingStatus = async (ctx: ExtensionContext | ExtensionCommandContext, requested?: string): Promise<void> => {
+		if (!configStore) {
+			ctx.ui.notify("Routing status is unavailable until the runtime store is configured", "error");
+			return;
+		}
+		if (requested?.trim() && !isPoolId(requested.trim())) {
+			ctx.ui.notify(`Unknown pool '${requested.trim()}'. Use investigation, implementation, or verification.`, "error");
+			return;
+		}
+		try {
+			const loaded = await configStore.load();
+			if (!loaded.snapshot) {
+				ctx.ui.notify("Routing status unavailable: configuration is not valid", "error");
+				return;
+			}
+			const [views, health] = await Promise.all([
+				listPoolViews(ctx, requested?.trim() ? requested.trim() as PoolId : undefined),
+				healthStore ? healthStore.list() : Promise.resolve({} as Readonly<Record<string, RouteHealthRecord>>),
+			]);
+			const policy = loaded.snapshot.config.routing as RoutingPolicy;
+			const now = new Date();
+			const blocks: string[] = [];
+			for (const pool of views) {
+				const candidates = routingCandidates(pool, health);
+				blocks.push(`${pool.label} Pool`);
+				if (candidates.length === 0) {
+					blocks.push("  NO ROUTES ASSIGNED");
+					continue;
+				}
+				const decision = previewRouting({ poolId: pool.poolId, candidates, policy, now });
+				for (const entry of pool.entries) {
+					const evaluation = decision.kind === "SELECTED"
+						? decision.evaluations.find((item) => item.routeId === entry.routeId)
+						: decision.reasons.find((item) => item.routeId === entry.routeId);
+					const record = health[entry.routeId];
+					const status = healthStore ? healthStore.status(record, now) : "Unknown";
+					const suffix = evaluation?.eligible ? "eligible" : evaluation?.reasons.join(", ") || "not eligible";
+					blocks.push(`  ${entry.index + 1} ${entry.displayName} (${entry.routeId}) ${status} — ${suffix}`);
+				}
+				blocks.push(...routingDecisionText(decision, pool));
+			}
+			ctx.ui.notify(blocks.join("\n"), "info");
+		} catch (error) {
+			notifyError(ctx, "Routing status failed", error);
+		}
+	};
+
+	const healthEntries = async (ctx: ExtensionContext | ExtensionCommandContext): Promise<readonly { entry: PoolEntryView; pools: readonly string[] }[]> => {
+		const pools = await listPoolViews(ctx);
+		const memberships = new Map<string, { entry: PoolEntryView; pools: string[] }>();
+		for (const pool of pools) {
+			for (const entry of pool.entries) {
+				const existing = memberships.get(entry.routeId);
+				if (existing) existing.pools.push(pool.label);
+				else memberships.set(entry.routeId, { entry, pools: [pool.label] });
+			}
+		}
+		return [...memberships.values()];
+	};
+
+	const healthLabel = (entry: PoolEntryView, record: RouteHealthRecord | undefined, pools: readonly string[]): string => {
+		const status = healthStore ? healthStore.status(record) : "Unknown";
+		const cooldown = record?.cooldownUntil ? ` until ${record.cooldownUntil}` : "";
+		return `${entry.displayName} — ${entry.routeId} [${status}${cooldown}] (${pools.join(", ")})`;
+	};
+
+	const showRouteHealth = async (ctx: ExtensionContext | ExtensionCommandContext, filter?: string): Promise<void> => {
+		if (!healthStore) {
+			ctx.ui.notify("Route health is unavailable until the runtime store is configured", "error");
+			return;
+		}
+		try {
+			const health = await healthStore.list();
+			const entries = (await healthEntries(ctx)).filter(({ entry, pools }) => {
+				const needle = filter?.trim().toLocaleLowerCase();
+				return !needle || `${entry.routeId} ${entry.displayName} ${entry.remoteModelId} ${pools.join(" ")}`.toLocaleLowerCase().includes(needle);
+			});
+			if (entries.length === 0) {
+				ctx.ui.notify("No routes assigned", "warning");
+				return;
+			}
+			const options = entries.map(({ entry, pools }) => healthLabel(entry, health[entry.routeId], pools));
+			if (ctx.mode !== "tui" && !ctx.hasUI) {
+				ctx.ui.notify(options.join("\n"), "info");
+				return;
+			}
+			while (true) {
+				const selected = await ctx.ui.select("Route Health", [...options, "Back"]);
+				if (!selected || selected === "Back") return;
+				const index = options.indexOf(selected);
+				const selectedEntry = index >= 0 ? entries[index] : undefined;
+				if (!selectedEntry) return;
+				const record = health[selectedEntry.entry.routeId];
+				const details = [
+					`route: ${selectedEntry.entry.routeId}`,
+					`display: ${selectedEntry.entry.displayName}`,
+					`pools: ${selectedEntry.pools.join(", ")}`,
+					`global enabled: ${selectedEntry.entry.globalEnabled}`,
+					`catalog: ${selectedEntry.entry.catalogState}`,
+					`health: ${healthStore.status(record)}`,
+					`last success: ${record?.lastSuccessAt ?? "unknown"}`,
+					`last failure: ${record?.lastFailureClass ?? "none"}`,
+					`cooldown until: ${record?.cooldownUntil ?? "none"}`,
+					`quota remaining: unknown (no authoritative metadata)`,
+				].join("\n");
+				const action = await ctx.ui.select(details, ["Inspect", "Reset health", "Back"]);
+				if (action === "Inspect") {
+					ctx.ui.notify(details, "info");
+				} else if (action === "Reset health") {
+					if (!requireIdle(ctx, "route health")) continue;
+					const confirmed = await ctx.ui.confirm("Reset runtime health and cooldown?", selectedEntry.entry.routeId);
+					if (confirmed) {
+						const reset = await healthStore.reset(selectedEntry.entry.routeId);
+						ctx.ui.notify(`Health reset for ${reset.routeId}`, "info");
+					}
+				} else {
+					return;
+				}
+			}
+		} catch (error) {
+			notifyError(ctx, "Route health failed", error);
+		}
+	};
+
+	const openRoutingSettings = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (!configStore) {
+			ctx.ui.notify("Routing settings are unavailable until the configuration store is configured", "error");
+			return;
+		}
+		if (ctx.mode !== "tui" && !ctx.hasUI) {
+			ctx.ui.notify("Routing settings require TUI or RPC UI mode", "error");
+			return;
+		}
+		if (!requireIdle(ctx, "routing policy")) return;
+		try {
+			const loaded = await configStore.load();
+			if (!loaded.snapshot) throw new Error("configuration unavailable");
+			const current = loaded.snapshot.config.routing;
+			const choice = await ctx.ui.select("Routing & Fallback", [
+				`Max attempts (${current.maxAttempts})`,
+				`Timeout ms (${current.timeoutMs})`,
+				`Rate-limit cooldown ms (${current.rateLimitCooldownMs})`,
+				`Quota cooldown ms (${current.quotaCooldownMs})`,
+				`Fallback enabled (${current.fallback.enabled})`,
+				`Diversity (${current.diversityPreference})`,
+				"Back",
+			]);
+			if (!choice || choice === "Back") return;
+			if (choice.startsWith("Fallback enabled")) {
+				await configStore.update((draft) => { draft.routing.fallback.enabled = !current.fallback.enabled; });
+			} else if (choice.startsWith("Diversity")) {
+				const value = await ctx.ui.select("Diversity preference", ["none", "prefer-different-family", "prefer-different-resource", "require-different-family", "require-different-resource"]);
+				if (value) await configStore.update((draft) => { draft.routing.diversityPreference = value as typeof draft.routing.diversityPreference; });
+			} else {
+				const raw = await ctx.ui.input("New routing value", "");
+				const value = Number.parseInt(raw?.trim() ?? "", 10);
+				if (!Number.isInteger(value) || value < 0) {
+					ctx.ui.notify("Routing value must be a non-negative integer", "error");
+					return;
+				}
+				await configStore.update((draft) => {
+					if (choice.startsWith("Max attempts")) draft.routing.maxAttempts = value;
+					else if (choice.startsWith("Timeout")) draft.routing.timeoutMs = value;
+					else if (choice.startsWith("Rate-limit")) draft.routing.rateLimitCooldownMs = value;
+					else draft.routing.quotaCooldownMs = value;
+				});
+			}
+			ctx.ui.notify("Routing settings saved", "info");
+		} catch (error) {
+			notifyError(ctx, "Routing settings failed", error);
 		}
 	};
 
@@ -774,6 +1004,18 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			description: "Show execution pool membership and readiness status",
 			handler: async (args, ctx) => showPoolStatus(ctx, args),
 		});
+		pi.registerCommand("routing-status", {
+			description: "Preview ordered route eligibility and fallback status",
+			handler: async (args, ctx) => showRoutingStatus(ctx, args),
+		});
+		pi.registerCommand("route-health", {
+			description: "Inspect and reset runtime route health",
+			handler: async (args, ctx) => showRouteHealth(ctx, args),
+		});
+		pi.registerCommand("routing-settings", {
+			description: "Edit the configured routing and fallback policy",
+			handler: async (_args, ctx) => openRoutingSettings(ctx),
+		});
 	};
 
 	const dispose = (): void => {
@@ -783,7 +1025,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		reconciled = true;
 	};
 
-	return { manager, poolManager, reconcile, registerCommands, dispose };
+	return { manager, poolManager, ...(healthStore ? { healthStore } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
@@ -792,7 +1034,8 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	const configStore = new ConfigStore({ root });
 	const manager = createNineRouterManager(root, configStore) as PiManagerContract;
 	const poolManager = createPoolManager(root, configStore);
-	const host = createPiHost(pi, { manager, poolManager });
+	const healthStore = new HealthStore({ root });
+	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

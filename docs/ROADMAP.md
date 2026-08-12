@@ -64,16 +64,18 @@ Exit gate: PASS — pool add/remove/reorder, cross-pool independence, global-dis
 
 ## M4 — Routing, health, and infrastructure fallback
 
-Status: NEXT PLANNED — NOT STARTED.
+Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
 
 Deliverables:
 
-- ordered eligibility router using priority, enabled state, health, policy, and soft diversity preference;
-- failure classifier, retry-after handling, cooldown circuit breaker, recovery probe, and manual reset;
-- infrastructure fallback events and all-routes-unhealthy result;
-- explicit boundary with 9Router account/combo fallback.
+- pure ordered eligibility/preview router using pool priority, enabled state, availability, health, attempt exclusions, and explicit diversity context;
+- failure classifier and bounded same-route retry/fallback/stop decisions, including conservative 429, cancellation, invalid-request, protocol, and unknown semantics;
+- injectable runtime `HealthStore` JSON with retry-after/cooldown, circuit state, success recovery, corruption quarantine, and manual reset, kept out of ConfigStore/export/history;
+- Routing & Fallback and Health & Quotas flows in `/orchestrator`, plus `/routing-status`, `/route-health`, and `/routing-settings`;
+- fake-clock/unit, fake-gateway, and Pi `0.84.1` integration evidence with the M2/M3 regressions intact; and
+- explicit boundary with opaque 9Router account/combo fallback; M4 never executes a model request.
 
-Exit gate: deterministic clock-based routing, cooldown, recovery, quota, timeout, authentication, diversity, and fallback tests pass.
+Exit gate evidence: `86/86` tests, typecheck, build, aggregate check, fake-gateway, and real Pi `0.84.1` routing/health RPC checks pass. Planner acceptance is still required; M5 remains unopened.
 
 ## M5 — Subagent execution
 

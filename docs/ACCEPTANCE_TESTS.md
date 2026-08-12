@@ -342,6 +342,48 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** handle failure.
 - **Pass:** failure is `unknown`, does not leak raw content, and causes at most the configured bounded behavior; no infinite cycle or confident misclassification.
 
+### M4-ROUTE-01 — Pure priority and eligibility preview
+
+- **Level:** U
+- **Setup:** an Implementation pool contains ordered enabled, pool-disabled, globally disabled, missing, unavailable, cooldown, attempted, and eligible routes.
+- **Action:** call the preview selector with fixed time and explicit exclusions.
+- **Pass:** the first eligible route wins; no eligible output contains safe per-route reasons and earliest retry; pool order is unchanged.
+
+### M4-ROUTE-02 — Explicit diversity and same-model resources
+
+- **Level:** U
+- **Setup:** synthetic routes share a remote model ID but have distinct explicit resources; context marks one route/resource/model as conflicting.
+- **Action:** preview with `none`, `prefer`, and `require` diversity.
+- **Pass:** `prefer` skips conflicts only when possible, `require` treats them as ineligible, explicit resource identity keeps same-model routes distinct, and no model-name family inference occurs.
+
+### M4-FAILURE-01 — Bounded retry and fallback sequence
+
+- **Level:** U
+- **Setup:** fixed-clock fake executor sequence `A rate_limited`, `A rate_limited`, `B timeout`, `B timeout`, `C globally disabled`, `D success`; max attempts permits one same-route retry.
+- **Action:** classify each result, record the attempt chain, and select the next route.
+- **Pass:** exact attempts are `A, A, B, B, D`; A/B receive cooldown state; D succeeds; A remains priority 1 in configuration; no loop or pool reorder occurs.
+
+### M4-FAILURE-02 — Conservative failure actions
+
+- **Level:** U
+- **Setup:** quota, rate-limit, authentication, timeout, transport, provider/model unavailable, invalid request, protocol, cancellation, and unknown structured failures.
+- **Action:** classify and decide actions with fallback enabled.
+- **Pass:** explicit quota evidence is distinct from an ordinary 429 rate limit; retryable transient classes are bounded; auth/quota/provider/model may fallback; cancellation, invalid request, protocol, and unknown stop; raw provider text is never returned.
+
+### M4-HEALTH-01 — Runtime persistence and corruption isolation
+
+- **Level:** I
+- **Setup:** injectable fake clock/root; record failures, retry-after, circuit threshold, success, and reset; corrupt `health.json` with a secret sentinel.
+- **Action:** reload, advance the clock, inspect/reset, quarantine corruption, and inspect ConfigStore export/history.
+- **Pass:** cooldown survives reload and expires deterministically; success/reset recover the route; corrupt health is isolated/quarantined; health never appears in config export/history; the sentinel is absent from persisted/display-safe output.
+
+### M4-PI-01 — Pi 0.84.1 routing/health control surface
+
+- **Level:** P
+- **Setup:** isolated Pi `0.84.1`, fake 9Router, temporary agent/session/config/runtime roots.
+- **Action:** load the extension, inspect command registration, preview routing, reset a persisted cooldown through `/route-health`, and run existing model-list/completion/pool regression flows.
+- **Pass:** `/routing-status`, `/route-health`, and `/routing-settings` are registered; Routing & Fallback and Health & Quotas are reachable through Pi RPC; reset changes only runtime health; fake provider exposure/completion and M2/M3 behavior remain unchanged; no live credentials, Pi files, or paid calls are touched. Human keyboard TUI smoke remains separately pending.
+
 ### HEALTH-01 — Circuit recovery
 
 - **Level:** U

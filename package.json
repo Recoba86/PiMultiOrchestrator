@@ -22,6 +22,14 @@
       "types": "./dist/core/pools/index.d.ts",
       "import": "./dist/core/pools/index.js"
     },
+    "./routing": {
+      "types": "./dist/core/routing/index.d.ts",
+      "import": "./dist/core/routing/index.js"
+    },
+    "./health": {
+      "types": "./dist/core/health/index.d.ts",
+      "import": "./dist/core/health/index.js"
+    },
     "./pi": {
       "types": "./dist/host/pi-extension.d.ts",
       "import": "./dist/host/pi-extension.js"

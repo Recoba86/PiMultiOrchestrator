@@ -8,6 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
 
 import { ConfigStore, createDefaultConfig, type StableId } from "../src/core/config/index.js";
+import { HealthStore } from "../src/core/health/index.js";
+import { classifyFailure } from "../src/core/routing/index.js";
 import {
 	FakeNineRouter,
 	makeCatalogModels,
@@ -377,6 +379,7 @@ test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configurati
 			const result = await new Promise<PiRunResult>((resolvePromise, reject) => {
 				let settled = false;
 				let statusSent = false;
+				let routingSent = false;
 				let inputBuffer = "";
 				const deadline = setTimeout(() => {
 					child.kill("SIGTERM");
@@ -402,9 +405,18 @@ test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configurati
 								child.stdin.write(`${JSON.stringify({ type: "prompt", message: "/9router-status", id: "status" })}\n`);
 							} else if (
 								statusSent &&
+								!routingSent &&
 								event.type === "response" &&
 								event.command === "prompt" &&
 								event.id === "status"
+							) {
+								routingSent = true;
+								child.stdin.write(`${JSON.stringify({ type: "prompt", message: "/routing-status implementation", id: "routing" })}\n`);
+							} else if (
+								routingSent &&
+								event.type === "response" &&
+								event.command === "prompt" &&
+								event.id === "routing"
 							) {
 								// RPC has no explicit client shutdown request. Ending stdin
 								// after the command response asks Pi to run its graceful
@@ -438,7 +450,108 @@ test("[P][fixture-v1] Pi RPC exposes M2 and M3 commands without live configurati
 			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
 			const commandResponse = lines.find((event) => event.command === "get_commands");
 			const commands = ((commandResponse?.data as { commands?: { name?: string }[] } | undefined)?.commands ?? []).map((command) => command.name);
-			for (const name of ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status"]) assert.ok(commands.includes(name), `${name}: ${safePiDiagnostic(result, server.token)}`);
+			for (const name of ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings"]) assert.ok(commands.includes(name), `${name}: ${safePiDiagnostic(result, server.token)}`);
+			assert.equal(result.stdout.includes(server.token), false);
+			assert.equal(result.stderr.includes(server.token), false);
+			assert.ok(lines.some((event) => event.type === "extension_ui_request" && event.method === "notify" && typeof event.message === "string" && event.message.includes("Implementation Pool")), result.stdout);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
+test("[P][fixture-v1] Pi RPC route-health reset clears persisted cooldown without provider calls", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m4-health-rpc-"));
+		try {
+			const routeId = await stableRouteId(sourceModels[0]!.id);
+			const health = new HealthStore({ root: orchestratorRoot });
+			await health.recordFailure(routeId, classifyFailure({ status: 429 }), { retryAfterMs: 600_000 });
+			const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+			const child = spawn(
+				piCommand,
+				["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--mode", "rpc"],
+				{ cwd: repoRoot, env, stdio: ["pipe", "pipe", "pipe"] },
+			);
+			let stdout = "";
+			let stderr = "";
+			let buffer = "";
+			let resetSeen = false;
+			let resetRequested = false;
+			let notifyMessage = "";
+			const result = await new Promise<PiRunResult>((resolvePromise, reject) => {
+				let settled = false;
+				const deadline = setTimeout(() => {
+					child.kill("SIGTERM");
+					setTimeout(() => child.kill("SIGKILL"), 500).unref();
+				}, 12_000);
+				const send = (value: Record<string, unknown>): void => {
+					child.stdin.write(`${JSON.stringify(value)}\n`);
+				};
+				child.stdout.on("data", (chunk: Buffer) => {
+					const text = chunk.toString();
+					stdout += text;
+					buffer += text;
+					let newline = buffer.indexOf("\n");
+					while (newline >= 0) {
+						const line = buffer.slice(0, newline).replace(/\r$/u, "");
+						buffer = buffer.slice(newline + 1);
+						newline = buffer.indexOf("\n");
+						let event: Record<string, unknown>;
+						try {
+							event = JSON.parse(line) as Record<string, unknown>;
+						} catch {
+							continue;
+						}
+						if (event.type === "response" && event.command === "get_commands") {
+							send({ type: "prompt", message: `/route-health ${routeId}`, id: "route-health" });
+						} else if (event.type === "response" && event.command === "prompt" && event.id === "route-health") {
+							child.stdin.end();
+						} else if (event.type === "extension_ui_request") {
+							const id = typeof event.id === "string" ? event.id : undefined;
+							const method = event.method;
+							const title = typeof event.title === "string" ? event.title : "";
+							const options = Array.isArray(event.options) ? event.options.filter((value): value is string => typeof value === "string") : [];
+							if (id && method === "select" && title === "Route Health") {
+								if (resetRequested) {
+									send({ type: "extension_ui_response", id, value: "Back" });
+									continue;
+								}
+								const selected = options.find((option) => option.includes(routeId));
+								assert.ok(selected, options.join("\n"));
+								send({ type: "extension_ui_response", id, value: selected });
+							} else if (id && method === "select" && title.startsWith("route:")) {
+								send({ type: "extension_ui_response", id, value: "Reset health" });
+			} else if (id && method === "confirm") {
+				resetRequested = true;
+				resetSeen = true;
+				send({ type: "extension_ui_response", id, confirmed: true });
+							} else if (method === "notify" && typeof event.message === "string" && event.message.includes("Health reset")) {
+								resetSeen = true;
+								child.stdin.end();
+							} else if (method === "notify" && typeof event.message === "string") {
+								notifyMessage = event.message;
+							}
+						}
+					}
+				});
+				child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+				child.once("error", (error) => {
+					clearTimeout(deadline);
+					if (!settled) { settled = true; reject(error); }
+				});
+				child.once("close", (code, signal) => {
+					clearTimeout(deadline);
+					if (settled) return;
+					settled = true;
+					resolvePromise({ code, signal, stdout, stderr });
+				});
+				send({ type: "get_commands", id: "commands" });
+			});
+			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
+			assert.equal(resetSeen, true, result.stdout);
+			assert.equal((await health.get(routeId))?.circuit, "healthy", `${JSON.stringify(await health.get(routeId))} notify=${notifyMessage}`);
+			assert.equal(server.chatRequests.length, 0);
 			assert.equal(result.stdout.includes(server.token), false);
 			assert.equal(result.stderr.includes(server.token), false);
 		} finally {

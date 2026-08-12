@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import type {
@@ -15,6 +18,9 @@ import {
 	type PoolManagerContract,
 	NINEROUTER_PROVIDER_ID,
 } from "../src/host/pi-extension.js";
+import { ConfigStore, createDefaultConfig } from "../src/core/config/index.js";
+import { HealthStore } from "../src/core/health/index.js";
+import { classifyFailure } from "../src/core/routing/index.js";
 import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/ninerouter/index.js";
 import type { StableId } from "../src/core/config/types.js";
 import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
@@ -210,7 +216,7 @@ describe("Pi 9Router host adapter", () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: fixture });
 		host.registerCommands();
-		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status"]);
+		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings"]);
 
 		const notifications: string[] = [];
 		let prompts = 0;
@@ -376,5 +382,52 @@ describe("Pi 9Router host adapter", () => {
 		assert.match(notifications[0] ?? "", /2 routes/);
 		assert.match(notifications[0] ?? "", /pool-disabled/);
 		assert.match(notifications[0] ?? "", /No routes assigned\./);
+	});
+
+	it("[I][fixture-v1] previews routing and resets persisted health without touching config", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-host-routing-"));
+		try {
+			const configStore = new ConfigStore({ root });
+			await configStore.initialize(createDefaultConfig());
+			const healthStore = new HealthStore({ root });
+			await healthStore.recordFailure("route-a" as StableId, classifyFailure({ status: 429 }), { policy: { rateLimitCooldownMs: 60_000 } });
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, {
+				manager: managerFixture(projection([model("remote-a"), model("remote-b")])),
+				poolManager: poolManagerFixture(),
+				configStore,
+				healthStore,
+			});
+			host.registerCommands();
+			const notifications: string[] = [];
+			await pi.commands.get("routing-status")!.handler("implementation", {
+				mode: "rpc",
+				hasUI: false,
+				ui: { notify: (message: string) => notifications.push(message) },
+			} as unknown as ExtensionCommandContext);
+			assert.match(notifications[0] ?? "", /Current first eligible: Route B/);
+			assert.match(notifications[0] ?? "", /Rate-limit cooldown/);
+			const before = await configStore.load();
+			let healthSelection = 0;
+			await pi.commands.get("route-health")!.handler("route-a", {
+				mode: "tui",
+				hasUI: true,
+				isIdle: () => true,
+				ui: {
+					select: async (title: string, options: readonly string[]) => {
+						healthSelection += 1;
+						if (healthSelection === 1) return options.find((option) => option.includes("route-a"));
+						if (healthSelection === 2) return "Reset health";
+						return undefined;
+					},
+					confirm: async () => true,
+					notify: (message: string) => notifications.push(message),
+				},
+			} as unknown as ExtensionCommandContext);
+			assert.equal((await healthStore.get("route-a" as StableId))?.circuit, "healthy");
+			assert.equal((await configStore.load()).snapshot?.generation, before.snapshot?.generation);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 });
