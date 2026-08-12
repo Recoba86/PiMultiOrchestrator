@@ -49,17 +49,17 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 ## M3 — Three Execution Pool Manager
 
-- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Status:** ACCEPTED / PASS
 - **Starting HEAD:** `9535af998d434fa179781bc350a27fde1201d8e9`
-- **Implementation HEAD:** Pending final implementation handoff; the exact commit is recorded there. Planner acceptance remains pending.
+- **Accepted/final HEAD:** `e2efde838d84197f1fbe289e3e8ded090bdd2d87`
 - **Commit:** `feat(pools): add execution pool manager`
 - **Purpose:** Manage the three canonical pool memberships and list-order priorities as configuration without implementing runtime routing or workers.
 - **Major outcomes:** One pool service; add/remove/per-pool-enable/reorder operations; retained disabled/missing memberships; generic Pi-native pool editor; `/orchestrator` pool sections; `/pool-models`; `/pool-status`; actual Pi with fake-gateway proof.
-- **Tests/evidence:** `npm install` PASS; typecheck/build PASS; canonical suite `70/70 PASS`; actual Pi `0.84.1` fake-gateway pool command/mutation/reload PASS; M2 provider regression `5/5` routes PASS; package dry-run and diff checks PASS. Planner acceptance remains pending.
+- **Tests/evidence:** `npm install` PASS; typecheck/build PASS; canonical suite `70/70 PASS`; actual Pi `0.84.1` fake-gateway pool command/mutation/reload PASS; M2 provider regression `5/5` routes PASS; package dry-run and diff checks PASS; paid calls `0`.
 - **Important decisions:** ConfigV1 stays at version 1; array order is the sole priority; global enabled state, pool membership, and per-pool enabled state remain separate; pool-only edits never reconcile the Pi provider.
 - **Deferred work:** M4 routing, eligibility, health, fallback, and diversity; workers/subagents; live 9Router validation; human keyboard-driven TUI smoke unless separately performed.
 - **Live environment impact:** Pi configuration unchanged; real 9Router unchanged; credentials and Keychain unchanged; no paid calls.
-- **Next authorized milestone:** None. Planner review of M3 is required; do not start M4.
+- **Next authorized milestone:** M4 — Routing, health, and infrastructure fallback. M4 is planned, not started; do not start it in this handoff.
 
 ## Future milestone entry template
 

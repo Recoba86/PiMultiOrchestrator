@@ -47,7 +47,7 @@ Exit gate: remote 36/enabled 5, new-disabled-by-default, stale-catalog, duplicat
 
 ## M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor
 
-Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+Status: ACCEPTED / PASS.
 
 Deliverables:
 
@@ -60,9 +60,11 @@ Deliverables:
 
 Role, Boss-profile, and operational-profile data defined in M1 remain compatible; M3 adds no profile scheduling, task routing, or role execution.
 
-Exit gate: pool add/remove/reorder, cross-pool independence, global-disable/missing retention, same-model distinct-route, history/concurrency, Pi TUI/command, actual Pi with fake gateway, and M2 regression tests pass. Planner acceptance remains separate.
+Exit gate: PASS — pool add/remove/reorder, cross-pool independence, global-disable/missing retention, same-model distinct-route, history/concurrency, Pi TUI/command, actual Pi with fake gateway, and M2 regression tests all passed (`70/70`).
 
 ## M4 — Routing, health, and infrastructure fallback
+
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 
