@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, constants, copyFile, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -11,6 +11,11 @@ const DEFAULT_OUTPUT = resolve(REPO_ROOT, "..", "pi-multi-orchestrator-release")
 const EXPECTED_FILES = ["dist/**/*.js", "dist/**/*.d.ts", "README.md"];
 const OPTIONAL_FILES = ["docs/OPERATOR_GUIDE.md"];
 const ENTRYPOINT = "dist/host/pi-extension.js";
+const EXPECTED_RELEASE_VERSION = "0.1.0-rc.2";
+const PI_PACKAGE = "@earendil-works/pi-coding-agent";
+const PI_PACKAGE_ROOT = join(REPO_ROOT, "node_modules", "@earendil-works", "pi-coding-agent");
+const PI_CLI = join(PI_PACKAGE_ROOT, "dist", "cli.js");
+const PI_BIN = join(REPO_ROOT, "node_modules", ".bin", "pi");
 export const DIRECTORY_SOURCE = "directory-source";
 
 const fail = (message) => {
@@ -22,7 +27,12 @@ const isPathInside = (parent, candidate) => {
 	return child === "" || (child !== ".." && !child.startsWith(`..${sep}`));
 };
 
+
 const run = (command, args, options = {}) => new Promise((resolvePromise, reject) => {
+	if (!isAbsolute(command)) {
+		reject(new Error(`release tooling requires an absolute executable: ${command}`));
+		return;
+	}
 	const child = spawn(command, args, {
 		cwd: options.cwd,
 		env: options.env,
@@ -44,24 +54,123 @@ const run = (command, args, options = {}) => new Promise((resolvePromise, reject
 	});
 });
 
+const hashBytes = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
 const sha256 = async (path) => {
 	const digest = createHash("sha256");
 	digest.update(await readFile(path));
 	return digest.digest("hex");
 };
 
+const canonicalize = (value) => {
+	if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
+	if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(value[key])}`).join(",")}}`;
+	return JSON.stringify(value);
+};
+
+export const digestJson = (value) => hashBytes(Buffer.from(canonicalize(value), "utf8"));
+
 const commandOutput = async (command, args, options = {}) => (await run(command, args, options)).stdout.trim();
 
-const walkFiles = async (root, prefix = "") => {
+const fileInfo = async (candidate, label, executable = false) => {
+	if (!isAbsolute(candidate)) fail(`${label} must be an absolute path`);
+	const actual = await realpath(candidate).catch(() => fail(`${label} does not exist: ${label}`));
+	const details = await stat(actual).catch(() => fail(`${label} is not a file`));
+	if (!details.isFile()) fail(`${label} is not a file`);
+	if (executable) await access(actual, constants.X_OK).catch(() => fail(`${label} is not executable`));
+	return { path: candidate, realpath: actual, sha256: await sha256(actual) };
+};
+
+const systemCandidates = {
+	git: ["/usr/bin/git", "/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"],
+	tar: ["/usr/bin/tar", "/bin/tar", "/usr/local/bin/tar", "/opt/homebrew/bin/tar"],
+};
+
+export const trustedSystemExecutable = async (name) => {
+	for (const candidate of systemCandidates[name] ?? []) {
+		try { return await fileInfo(candidate, `${name} executable`, true); } catch { /* try the next fixed system location */ }
+	}
+	fail(`no trusted ${name} executable is available`);
+};
+
+export const trustedNode = async () => fileInfo(process.execPath, "process.execPath", true);
+
+export const trustedNpm = async () => {
+	const node = await trustedNode();
+	const nodeBin = dirname(node.realpath);
+	const candidates = [
+		resolve(nodeBin, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+		resolve(nodeBin, "..", "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+	];
+	for (const candidate of candidates) {
+		try {
+			const cli = await fileInfo(candidate, "npm CLI");
+			return { node, cli };
+		} catch { /* only accept npm bundled with the trusted Node runtime */ }
+	}
+	fail("could not locate npm CLI next to process.execPath");
+};
+
+export const trustedPi = async () => {
+	const packageManifestPath = join(PI_PACKAGE_ROOT, "package.json");
+	const packageManifest = JSON.parse(await readFile(packageManifestPath, "utf8"));
+	if (packageManifest.name !== PI_PACKAGE || packageManifest.version !== "0.84.1") fail("validated Pi dependency must be @earendil-works/pi-coding-agent@0.84.1");
+	const packageJson = await fileInfo(packageManifestPath, "Pi package manifest");
+	const cli = await fileInfo(PI_CLI, "Pi CLI", true);
+	const bin = await fileInfo(PI_BIN, "project-local Pi launcher");
+	if (bin.realpath !== cli.realpath) fail("project-local Pi launcher does not resolve to the validated Pi CLI");
+	return {
+		path: bin.path,
+		identity: {
+			package: PI_PACKAGE,
+			version: packageManifest.version,
+			packageJsonSha256: packageJson.sha256,
+			cli: "dist/cli.js",
+			cliSha256: cli.sha256,
+		},
+	};
+};
+
+const safeEnvironment = (nodePath, cacheDir) => {
+	const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:PATH|PI_BIN|npm_|NPM_CONFIG_)/u.test(key)));
+	const nodeDir = dirname(nodePath);
+	return {
+		...inherited,
+		PATH: [join(REPO_ROOT, "node_modules", ".bin"), nodeDir, "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"].join(delimiter),
+		LANG: "C",
+		LC_ALL: "C",
+		GIT_CONFIG_NOSYSTEM: "1",
+		GIT_CONFIG_GLOBAL: "/dev/null",
+		...(cacheDir ? {
+			npm_config_cache: cacheDir,
+			npm_config_userconfig: join(cacheDir, "empty-npmrc"),
+			npm_config_global: "false",
+			npm_config_audit: "false",
+			npm_config_fund: "false",
+			npm_config_update_notifier: "false",
+		} : {}),
+	};
+};
+
+export const trustedToolEnvironment = async (cacheDir) => safeEnvironment((await trustedNode()).realpath, cacheDir);
+
+const walkTree = async (root, prefix = "") => {
 	const entries = await readdir(join(root, prefix), { withFileTypes: true });
 	const files = [];
+	const symlinks = [];
 	for (const entry of entries) {
-		const path = join(prefix, entry.name);
-		if (entry.isDirectory()) files.push(...await walkFiles(root, path));
-		else if (entry.isFile()) files.push(path.split("\\").join("/"));
+		const path = join(prefix, entry.name).split("\\").join("/");
+		if (entry.isSymbolicLink()) symlinks.push(path);
+		else if (entry.isDirectory()) {
+			const nested = await walkTree(root, path);
+			files.push(...nested.files);
+			symlinks.push(...nested.symlinks);
+		} else if (entry.isFile()) files.push(path);
 	}
-	return files;
+	return { files, symlinks };
 };
+
+const walkFiles = async (root) => (await walkTree(root)).files;
 
 const sortUnique = (values) => [...new Set(values)].sort((left, right) => left.localeCompare(right));
 
@@ -89,28 +198,52 @@ const privacyTextPatterns = [
 	{ name: "openai-style-token", pattern: /\bsk-[A-Za-z0-9_-]{16,}\b/u },
 	{ name: "jwt", pattern: /\beyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/u },
 	{ name: "bearer-token", pattern: /\bbearer\s+[A-Za-z0-9._~+/=-]{16,}\b/iu },
-	{ name: "credential-assignment", pattern: /\b(?:api[_-]?key|authorization|password|secret|token|private[_-]?key)\s*[:=]\s*["'][A-Za-z0-9+/._~=-]{16,}["']/iu },
-	{ name: "credential-assignment-unquoted", pattern: /\b(?:API[_-]?KEY|AUTHORIZATION|PASSWORD|SECRET|TOKEN|PRIVATE[_-]?KEY)\s*=\s*[A-Za-z0-9+\/_~=-]{16,}\b/u },
+	{ name: "basic-auth", pattern: /\b(?:authorization|proxy-authorization)\b\s*[:=]\s*["']?\s*basic\s+[A-Za-z0-9+/]{8,}={0,2}/iu },
+	{ name: "credential-assignment", pattern: /["']?(?:api[_-]?key|access[_-]?key|authorization|password|passwd|secret|token|private[_-]?key|client[_-]?secret|credential|auth)["']?\s*[:=]\s*["'][^"'\r\n]{16,}["']/iu },
+	{ name: "credential-assignment-unquoted", pattern: /\b(?:api[_-]?key|access[_-]?key|authorization|password|passwd|secret|token|private[_-]?key|client[_-]?secret|credential|auth)\b\s*[:=]\s*[A-Za-z0-9+\/_~=-]{16,}\b/iu },
 	{ name: "credential-url", pattern: /\bhttps?:\/\/[^\s/@]+:[^\s/@]+@/iu },
 ];
+const privacyRuleNames = [...privacyTextPatterns.map((item) => item.name), "local-absolute-path", "runtime-state-filename", "sqlite-signature", "nul-byte", "symlink"];
 const localPathPattern = /(?:^|["'`\s(])(?:\/(?:Users|private|home|tmp|var\/folders)\/|[A-Z]:[\\/]Users[\\/])/u;
 const runtimeDatabaseName = /(?:^|\/)(?:[^/]+\.(?:sqlite(?:[-.][^/]*)?|sqlite3|db(?:[-.][^/]*)?|log)|(?:state|history|sessions?)(?:\/|$))/iu;
 
 export const scanPrivacy = async (root) => {
-	const issues = [];
-	const files = await walkFiles(root);
-	for (const path of files) {
-		if (runtimeDatabaseName.test(path)) issues.push(`${path}: runtime-state filename`);
-		const content = await readFile(join(root, path));
-		if (content.includes(Buffer.from("SQLite format 3\0"))) issues.push(`${path}: SQLite database signature`);
-		if (content.includes(0)) continue;
-		const text = content.toString("utf8");
-		if (localPathPattern.test(text)) issues.push(`${path}: local absolute path`);
-		for (const pattern of privacyTextPatterns) {
-			if (pattern.pattern.test(text)) issues.push(`${path}: ${pattern.name}`);
+	const report = {
+		schemaVersion: 3,
+		filesScanned: 0,
+		binaryHandling: "NUL-containing files are reported and not interpreted as text",
+		symlinkHandling: "symlinks are reported and never followed",
+		rules: privacyRuleNames,
+		symlinks: [],
+		issues: [],
+	};
+	const addIssue = (path, kind) => report.issues.push({ path: path || ".", kind });
+	const rootStat = await lstat(root);
+	if (rootStat.isSymbolicLink()) {
+		report.symlinks.push(".");
+		addIssue(".", "symlink");
+	} else if (!rootStat.isDirectory()) addIssue(".", "root-not-directory");
+	else {
+		const tree = await walkTree(root);
+		report.symlinks.push(...tree.symlinks);
+		for (const path of tree.symlinks) addIssue(path, "symlink");
+		for (const path of tree.files) {
+			report.filesScanned += 1;
+			if (runtimeDatabaseName.test(path)) addIssue(path, "runtime-state-filename");
+			const content = await readFile(join(root, path));
+			if (content.includes(Buffer.from("SQLite format 3\0"))) addIssue(path, "sqlite-signature");
+			if (content.includes(0)) {
+				addIssue(path, "nul-byte");
+				continue;
+			}
+			const text = content.toString("utf8");
+			if (localPathPattern.test(text)) addIssue(path, "local-absolute-path");
+			for (const pattern of privacyTextPatterns) if (pattern.pattern.test(text)) addIssue(path, pattern.name);
 		}
 	}
-	return sortUnique(issues);
+	report.symlinks.sort((left, right) => left.localeCompare(right));
+	report.issues.sort((left, right) => left.path.localeCompare(right.path) || left.kind.localeCompare(right.kind));
+	return { ...report, clean: report.issues.length === 0 };
 };
 
 const parseArgs = (argv) => {
@@ -141,7 +274,7 @@ const packagePathAllowed = (path) => path === "README.md"
 
 const assertManifest = (manifest) => {
 	if (manifest.private === true) fail("release candidate package must not be private");
-	if (manifest.version !== "0.1.0-rc.1") fail(`expected release-candidate version 0.1.0-rc.1, got ${manifest.version}`);
+	if (manifest.version !== EXPECTED_RELEASE_VERSION) fail(`expected release-candidate version ${EXPECTED_RELEASE_VERSION}, got ${manifest.version}`);
 	if (!Array.isArray(manifest.keywords) || !manifest.keywords.includes("pi-package")) fail("package is missing the pi-package keyword");
 	if (!Array.isArray(manifest.files) || !EXPECTED_FILES.every((file) => manifest.files.includes(file))) fail("package files allowlist is missing a required entry");
 	if (manifest.files.some((file) => !EXPECTED_FILES.includes(file) && !OPTIONAL_FILES.includes(file))) fail("package files allowlist contains an unexpected entry");
@@ -187,9 +320,10 @@ const verifyUnpacked = async ({ packageRoot, packageManifest, files }) => {
 		if (sourceLeak.test(content)) fail(`source path leaked into ${path}`);
 	}
 	if (sourceMapLinks.length > 0) fail(`dangling source map reference: ${sourceMapLinks.join(", ")}`);
-	const privacyIssues = await scanPrivacy(packageRoot);
-	if (privacyIssues.length > 0) fail(`privacy scan failed: ${privacyIssues.join(", ")}`);
-	await run(process.execPath, ["--check", join(packageRoot, ENTRYPOINT)]);
+	const privacyReport = await scanPrivacy(packageRoot);
+	if (!privacyReport.clean) fail(`privacy scan failed: ${privacyReport.issues.map((issue) => `${issue.path}: ${issue.kind}`).join(", ")}`);
+	const node = await trustedNode();
+	await run(node.realpath, ["--check", join(packageRoot, ENTRYPOINT)], { env: safeEnvironment(node.realpath) });
 	const hostPeerRoot = join(packageRoot, "node_modules", "@earendil-works", "pi-coding-agent");
 	await mkdir(dirname(hostPeerRoot), { recursive: true });
 	try {
@@ -198,7 +332,7 @@ const verifyUnpacked = async ({ packageRoot, packageManifest, files }) => {
 		fail(`validated Pi peer is unavailable: ${error instanceof Error ? error.message : String(error)}`);
 	}
 	const entryUrl = pathToFileURL(join(packageRoot, ENTRYPOINT)).href;
-	await run(process.execPath, ["--input-type=module", "-e", `const module = await import(${JSON.stringify(entryUrl)}); if (typeof module.default !== "function") throw new Error("compiled Pi entrypoint has no default extension function");`], { cwd: packageRoot });
+	await run(node.realpath, ["--input-type=module", "-e", `const module = await import(${JSON.stringify(entryUrl)}); if (typeof module.default !== "function") throw new Error("compiled Pi entrypoint has no default extension function");`], { cwd: packageRoot, env: safeEnvironment(node.realpath) });
 	const unpackedManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 	if (JSON.stringify(unpackedManifest) !== JSON.stringify(packageManifest)) fail("unpacked package.json differs from the source manifest");
 	return {
@@ -206,14 +340,15 @@ const verifyUnpacked = async ({ packageRoot, packageManifest, files }) => {
 		entrypoint: true,
 		manifest: true,
 		sourceIndependent: true,
-		privacySafe: privacyIssues.length === 0,
+		privacySafe: privacyReport.clean,
 		syntax: true,
 		sourceIndependentImport: true,
 	};
 };
 
 const archiveEntries = async (artifactPath) => {
-	const listing = await commandOutput("tar", ["-tzf", artifactPath]);
+	const tar = await trustedSystemExecutable("tar");
+	const listing = await commandOutput(tar.realpath, ["-tzf", artifactPath], { env: safeEnvironment((await trustedNode()).realpath) });
 	const entries = listing.split(/\r?\n/u).map((entry) => entry.replace(/\/$/u, "")).filter(Boolean);
 	for (const entry of entries) {
 		if (entry.startsWith("/") || entry.split("/").includes("..") || !entry.startsWith("package/")) {
@@ -231,10 +366,68 @@ const assertSameFiles = async (leftRoot, rightRoot, paths) => {
 	}
 };
 
+const captureSourceIdentity = async () => {
+	const git = await trustedSystemExecutable("git");
+	const node = await trustedNode();
+	const env = safeEnvironment(node.realpath);
+	const commit = await commandOutput(git.realpath, ["rev-parse", "HEAD"], { cwd: REPO_ROOT, env });
+	const tree = await commandOutput(git.realpath, ["rev-parse", "HEAD^{tree}"], { cwd: REPO_ROOT, env });
+	if (!/^[0-9a-f]{40}$/u.test(commit) || !/^[0-9a-f]{40}$/u.test(tree)) fail("Git source identity is not a full commit/tree SHA");
+	const status = await commandOutput(git.realpath, ["status", "--porcelain=v1", "--untracked-files=all"], { cwd: REPO_ROOT, env });
+	const trackedChanges = status.split(/\r?\n/u).filter((line) => line && !line.startsWith("?? "));
+	if (trackedChanges.length > 0) fail(`source checkout has tracked changes; commit the release inputs first (${trackedChanges.length} change${trackedChanges.length === 1 ? "" : "s"})`);
+	const tracked = await run(git.realpath, ["ls-files", "--stage", "-z"], { cwd: REPO_ROOT, env });
+	return {
+		gitCommit: commit,
+		gitTree: tree,
+		trackedClean: true,
+		sourceDigest: hashBytes(Buffer.from(tracked.stdout, "utf8")),
+		untrackedCount: status.split(/\r?\n/u).filter((line) => line.startsWith("?? ")).length,
+	};
+};
+
+const assertSourceIdentity = (manifest) => {
+	if (!/^[0-9a-f]{40}$/u.test(manifest.gitCommit) || !/^[0-9a-f]{40}$/u.test(manifest.gitTree)) fail("release manifest has an invalid Git identity");
+	if (manifest.dirty !== false || manifest.trackedClean !== true) fail("release manifest does not prove a clean tracked source state");
+	if (!/^[0-9a-f]{64}$/u.test(manifest.sourceDigest)) fail("release manifest has no deterministic source digest");
+};
+
+const buildDigestFor = (manifest) => digestJson({
+	sourceDigest: manifest.sourceDigest,
+	gitTree: manifest.gitTree,
+	nodeVersion: manifest.nodeVersion,
+	piIdentity: manifest.piIdentity,
+	package: manifest.package,
+	files: manifest.files.map((file) => ({ path: file.path, size: file.size, sha256: file.sha256 })),
+});
+
+const validateEvidenceRecord = (record, name) => {
+	if (!record || record.file !== name || !/^[0-9a-f]{64}$/u.test(record.sha256)) fail(`release evidence binding is invalid for ${name}`);
+};
+
+const verifyEvidenceBinding = async (root, manifest, verification) => {
+	if (!manifest.evidence) {
+		if (verification.evidence !== undefined) fail("verification contains evidence without a manifest binding");
+		return null;
+	}
+	if (manifest.evidence.schemaVersion !== 1 || !manifest.evidence.test || !manifest.evidence.pi) fail("release evidence binding is incomplete");
+	validateEvidenceRecord(manifest.evidence.test, "test-evidence.json");
+	validateEvidenceRecord(manifest.evidence.pi, "pi-install-evidence.json");
+	if (JSON.stringify(verification.evidence) !== JSON.stringify(manifest.evidence)) fail("verification evidence binding differs from release manifest");
+	for (const record of [manifest.evidence.test, manifest.evidence.pi]) {
+		const digest = await sha256(join(root, record.file));
+		if (digest !== record.sha256) fail(`release evidence checksum mismatch for ${record.file}`);
+	}
+	return manifest.evidence;
+};
+
 export async function verifyReleaseDirectory(directory) {
 	const root = resolve(directory);
 	const manifest = JSON.parse(await readFile(join(root, "release-manifest.json"), "utf8"));
 	const verification = JSON.parse(await readFile(join(root, "verification.json"), "utf8"));
+	assertSourceIdentity(manifest);
+	if (manifest.schemaVersion !== 2 || manifest.releaseStatus !== "candidate") fail("release manifest schema/status is not the hardened candidate format");
+	if (!manifest.piIdentity || manifest.piIdentity.package !== PI_PACKAGE || manifest.piIdentity.version !== "0.84.1" || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.packageJsonSha256) || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.cliSha256)) fail("release manifest has no bound Pi identity");
 	const artifactName = manifest.artifact?.file;
 	if (typeof artifactName !== "string" || artifactName !== artifactName.split(/[\\/]/u).pop() || !artifactName.endsWith(".tgz")) fail("release manifest has an invalid artifact filename");
 	const artifactPath = join(root, artifactName);
@@ -243,12 +436,23 @@ export async function verifyReleaseDirectory(directory) {
 	if (manifest.artifact.size !== (await stat(artifactPath)).size) fail("release metadata artifact size does not match artifact");
 	const records = manifest.files;
 	if (!Array.isArray(records) || records.length === 0 || manifest.fileCount !== records.length) fail("release manifest file records are invalid");
+	for (const record of records) {
+		if (!record || typeof record.path !== "string" || record.path.startsWith("/") || record.path.split("/").includes("..") || !/^[0-9a-f]{64}$/u.test(record.sha256) || !Number.isSafeInteger(record.size) || record.size < 0) fail("release manifest has an unsafe file record");
+	}
 	const listed = (await readFile(join(root, "artifact-files.txt"), "utf8")).trim().split(/\r?\n/u).filter(Boolean);
 	const expectedPaths = records.map((record) => record.path).sort((left, right) => left.localeCompare(right));
 	if (JSON.stringify(listed) !== JSON.stringify(expectedPaths)) fail("artifact file list differs from release manifest");
-	if (verification.verified !== true || JSON.stringify(verification.checks) !== JSON.stringify(manifest.checks)) fail("verification evidence is not deterministic or complete");
+	if (verification.schemaVersion !== 2 || verification.verified !== true || JSON.stringify(verification.checks) !== JSON.stringify(manifest.checks)) fail("verification evidence is not deterministic or complete");
+	if (verification.gitCommit !== manifest.gitCommit || verification.gitTree !== manifest.gitTree || verification.dirty !== manifest.dirty || verification.sourceDigest !== manifest.sourceDigest || verification.buildDigest !== manifest.buildDigest || JSON.stringify(verification.piIdentity) !== JSON.stringify(manifest.piIdentity)) fail("verification evidence is not bound to the release source/build identity");
+	if (manifest.buildDigest !== buildDigestFor(manifest)) fail("release build digest does not match its source, Pi, or artifact records");
+	await verifyEvidenceBinding(root, manifest, verification);
+	const privacyReport = JSON.parse(await readFile(join(root, "privacy-report.json"), "utf8"));
+	if (privacyReport.schemaVersion !== 1 || !privacyReport.artifact || !privacyReport.directorySource) fail("detailed privacy report is missing");
 	if (manifest.directorySource !== DIRECTORY_SOURCE) fail("release manifest is missing the supported directory source");
 	const directorySourcePath = join(root, DIRECTORY_SOURCE);
+	const directoryPrivacy = await scanPrivacy(directorySourcePath);
+	if (!directoryPrivacy.clean) fail(`directory source privacy scan failed: ${directoryPrivacy.issues.map((issue) => `${issue.path}: ${issue.kind}`).join(", ")}`);
+	if (digestJson(privacyReport.directorySource) !== digestJson(directoryPrivacy)) fail("directory privacy report does not match the scanned directory source");
 	const directoryFiles = (await walkFiles(directorySourcePath)).sort((left, right) => left.localeCompare(right));
 	if (JSON.stringify(directoryFiles) !== JSON.stringify(expectedPaths)) fail("directory source files differ from release manifest");
 	for (const record of records) {
@@ -261,7 +465,8 @@ export async function verifyReleaseDirectory(directory) {
 	if (JSON.stringify(archivePaths) !== JSON.stringify(expectedPaths)) fail("artifact archive files differ from release manifest");
 	const staging = await mkdtemp(join(tmpdir(), "pi-multi-orchestrator-release-verify-"));
 	try {
-		await run("tar", ["-xzf", artifactPath, "-C", staging]);
+		const tar = await trustedSystemExecutable("tar");
+		await run(tar.realpath, ["-xzf", artifactPath, "-C", staging], { env: safeEnvironment((await trustedNode()).realpath) });
 		const packageRoot = join(staging, "package");
 		await assertSameFiles(packageRoot, directorySourcePath, expectedPaths);
 		const packageManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
@@ -283,15 +488,43 @@ export async function verifyReleaseDirectory(directory) {
 		};
 		if (JSON.stringify(selectedPackage) !== JSON.stringify(selectedManifest)) fail("artifact package.json differs from release manifest");
 		await verifyUnpacked({ packageRoot, packageManifest, files: records });
+		await rm(join(packageRoot, "node_modules"), { recursive: true, force: true });
+		const artifactPrivacy = await scanPrivacy(packageRoot);
+		if (!artifactPrivacy.clean || digestJson(privacyReport.artifact) !== digestJson(artifactPrivacy)) fail("artifact privacy report does not match the scanned artifact");
 	} finally {
 		await rm(staging, { recursive: true, force: true });
 	}
 	return { verified: true, artifact: artifactName, sha256: artifactHash, directorySource: DIRECTORY_SOURCE, checks: manifest.checks };
 }
 
+export async function bindReleaseEvidence(directory) {
+	const root = resolve(directory);
+	const manifestPath = join(root, "release-manifest.json");
+	const verificationPath = join(root, "verification.json");
+	const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+	const verification = JSON.parse(await readFile(verificationPath, "utf8"));
+	await verifyReleaseDirectory(root);
+	const records = {};
+	for (const name of ["test-evidence.json", "pi-install-evidence.json"]) {
+		const details = await lstat(join(root, name));
+		if (!details.isFile()) fail(`release evidence must be a regular file: ${name}`);
+		records[name === "test-evidence.json" ? "test" : "pi"] = { file: name, sha256: await sha256(join(root, name)) };
+	}
+	const evidence = { schemaVersion: 1, test: records.test, pi: records.pi };
+	const nextManifest = { ...manifest, evidence };
+	const nextVerification = { ...verification, evidence };
+	await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");
+	await writeFile(verificationPath, `${JSON.stringify(nextVerification, null, 2)}\n`, "utf8");
+	await verifyReleaseDirectory(root);
+	return evidence;
+}
+
 export async function buildReleaseCandidate({ output, force = false } = {}) {
 	const target = resolve(output ?? DEFAULT_OUTPUT);
 	if (isPathInside(REPO_ROOT, target)) fail("release output must be outside the source checkout");
+	const sourceIdentity = await captureSourceIdentity();
+	const pi = await trustedPi();
+	const npm = await trustedNpm();
 	const targetEntries = await readdir(target).catch((error) => {
 		if (error?.code === "ENOENT") return [];
 		throw error;
@@ -305,14 +538,15 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 	const staging = await mkdtemp(join(tmpdir(), "pi-multi-orchestrator-release-"));
 	try {
 		const npmCache = join(staging, "npm-cache");
+		const env = safeEnvironment(npm.node.realpath, npmCache);
 		await rm(join(REPO_ROOT, "dist"), { recursive: true, force: true });
-		await run("npm", ["run", "build"], {
+		await run(npm.node.realpath, [npm.cli.realpath, "run", "build"], {
 			cwd: REPO_ROOT,
-			env: { ...process.env, npm_config_cache: npmCache },
+			env,
 		});
-		const packed = await run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", staging], {
+		const packed = await run(npm.node.realpath, [npm.cli.realpath, "pack", "--json", "--ignore-scripts", "--pack-destination", staging], {
 			cwd: REPO_ROOT,
-			env: { ...process.env, npm_config_cache: npmCache },
+			env,
 		});
 		const packInfo = JSON.parse(packed.stdout.trim());
 		const info = Array.isArray(packInfo) ? packInfo[0] : packInfo;
@@ -320,7 +554,8 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 		const sourceArtifact = join(staging, info.filename);
 		const packageRoot = join(staging, "unpacked", "package");
 		await mkdir(packageRoot, { recursive: true });
-		await run("tar", ["-xzf", sourceArtifact, "-C", join(staging, "unpacked")]);
+		const tar = await trustedSystemExecutable("tar");
+		await run(tar.realpath, ["-xzf", sourceArtifact, "-C", join(staging, "unpacked")], { env });
 		const directorySourcePath = join(target, DIRECTORY_SOURCE);
 		await cp(packageRoot, directorySourcePath, { recursive: true });
 		const checks = {
@@ -329,21 +564,28 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 			directorySource: true,
 			sourceMaps: true,
 		};
+		await rm(join(packageRoot, "node_modules"), { recursive: true, force: true });
 		const artifactPath = join(target, info.filename);
 		await copyFile(sourceArtifact, artifactPath);
+		const privacyReport = {
+			schemaVersion: 1,
+			artifact: await scanPrivacy(packageRoot),
+			directorySource: await scanPrivacy(directorySourcePath),
+		};
+		await writeFile(join(target, "privacy-report.json"), `${JSON.stringify(privacyReport, null, 2)}\n`, "utf8");
 		const artifactHash = await sha256(artifactPath);
 		const artifactSize = (await stat(artifactPath)).size;
 		const fileRecords = [];
 		for (const file of [...info.files].sort((left, right) => left.path.localeCompare(right.path))) {
 			const path = join(packageRoot, file.path);
-			fileRecords.push({ path: file.path, size: file.size, sha256: await sha256(path) });
+			fileRecords.push({ path: file.path, size: (await stat(path)).size, sha256: await sha256(path) });
 		}
+		const finalSourceIdentity = await captureSourceIdentity();
+		if (finalSourceIdentity.gitCommit !== sourceIdentity.gitCommit || finalSourceIdentity.gitTree !== sourceIdentity.gitTree || finalSourceIdentity.sourceDigest !== sourceIdentity.sourceDigest || !finalSourceIdentity.trackedClean) fail("source identity changed during release build");
 		const filesName = "artifact-files.txt";
 		const checksumName = `${info.filename}.sha256`;
 		const manifestName = "release-manifest.json";
 		const verificationName = "verification.json";
-		const gitCommit = await commandOutput("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT });
-		const gitStatus = await commandOutput("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: REPO_ROOT });
 		const buildTimestamp = process.env.SOURCE_DATE_EPOCH
 			? new Date(Number(process.env.SOURCE_DATE_EPOCH) * 1000).toISOString()
 			: new Date().toISOString();
@@ -351,13 +593,18 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 		await writeFile(join(target, filesName), `${fileRecords.map((file) => file.path).join("\n")}\n`, "utf8");
 		await writeFile(join(target, checksumName), `${artifactHash}  ${info.filename}\n`, "utf8");
 		const manifest = {
-			schemaVersion: 1,
+			schemaVersion: 2,
 			releaseStatus: "candidate",
-			gitCommit,
-			dirty: gitStatus.length > 0,
+			gitCommit: sourceIdentity.gitCommit,
+			gitTree: sourceIdentity.gitTree,
+			dirty: false,
+			trackedClean: true,
+			untrackedCount: finalSourceIdentity.untrackedCount,
+			sourceDigest: sourceIdentity.sourceDigest,
 			buildTimestamp,
 			nodeVersion: process.version,
 			piVersion: "0.84.1",
+			piIdentity: pi.identity,
 			testResult,
 			configSchema: 2,
 			missionSchema: 2,
@@ -377,14 +624,20 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 			files: fileRecords,
 			checks,
 		};
+		manifest.buildDigest = buildDigestFor(manifest);
 		await writeFile(join(target, manifestName), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 		const verification = {
-			schemaVersion: 1,
+			schemaVersion: 2,
 			verified: Object.values(checks).every(Boolean),
 			artifact: info.filename,
 			sha256: artifactHash,
-			gitCommit,
-			dirty: gitStatus.length > 0,
+			gitCommit: sourceIdentity.gitCommit,
+			gitTree: sourceIdentity.gitTree,
+			dirty: false,
+			trackedClean: true,
+			sourceDigest: sourceIdentity.sourceDigest,
+			buildDigest: manifest.buildDigest,
+			piIdentity: pi.identity,
 			checks,
 		};
 		await writeFile(join(target, verificationName), `${JSON.stringify(verification, null, 2)}\n`, "utf8");

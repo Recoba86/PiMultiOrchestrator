@@ -11,7 +11,7 @@ const script = join(root, "scripts", "release-candidate.mjs");
 
 test("release candidate metadata is a strict Pi package manifest", () => {
 	const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as Record<string, any>;
-	assert.equal(manifest.version, "0.1.0-rc.1");
+	assert.equal(manifest.version, "0.1.0-rc.2");
 	assert.equal(manifest.private, undefined);
 	assert.deepEqual(manifest.files, ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "docs/OPERATOR_GUIDE.md"]);
 	assert.ok(manifest.keywords.includes("pi-package"));
@@ -33,6 +33,7 @@ test("release script emits a verified artifact outside the checkout", () => {
 		artifact,
 		artifact + ".sha256",
 		"directory-source",
+		"privacy-report.json",
 		"release-manifest.json",
 		"verification.json",
 	].sort());
