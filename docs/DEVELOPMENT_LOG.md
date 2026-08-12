@@ -63,9 +63,10 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 ## M4 — Routing + Health + Infrastructure Fallback Engine
 
-- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE
+- **Status:** ACCEPTED / PASS
 - **Starting HEAD:** `e01456ed21be345b33176ae49fec365a534e7554`
-- **Implementation HEAD:** `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` (implementation commit); Planner acceptance remains pending
+- **Implementation commit:** `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697`
+- **Accepted evidence HEAD:** `f5e25e21bbebe7995a9cc050efea3ed20d94f18c`
 - **Commit:** `feat(routing): add health-aware fallback engine`
 - **Purpose:** Add a pure ordered routing preview/decision boundary, explicit infrastructure failure actions, and reload-safe runtime route health without starting execution workers.
 - **Major outcomes:** ConfigV1 remains schema version 1; pool array order remains canonical priority; `none`/`prefer`/`require` diversity is explicit; bounded retry/fallback chains stop conservatively for cancellation, invalid request, protocol, and unknown failures; 429 is rate-limited unless explicit quota evidence exists; `HealthStore` persists only sanitized runtime state in atomic `health.json`; health never mutates ConfigStore, history, or export; Routing & Fallback and Health & Quotas host flows plus direct status/settings/health commands are wired through Pi `0.84.1`.
@@ -73,9 +74,9 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Important decisions:** 9Router account/combo fallback remains opaque; stale last-known-good catalog entries remain usable while missing/unavailable entries do not; health does not reorder pools; cancellation and invalid request do not trigger uncontrolled fallback; no SQLite, analytics, workers, mission state, or model execution in M4.
 - **Deferred work:** human keyboard TUI smoke, live 9Router metadata/inference, cross-process runtime locking, workers/subagents, canonical mission state, quality gates, analytics, and M5 execution.
 - **Live environment impact:** Pi configuration unchanged; 9Router unchanged; no credentials or Keychain access; fake localhost only; no paid calls.
-- **Next authorized milestone:** Planner review/acceptance of M4, then M5. Do not start M5 from this handoff.
+- **Next authorized milestone:** M5 — Routed Subagent Execution. M5 is next planned and not started; do not start it from this handoff.
 
-**Correction to the prior M3 handoff:** the attached M4 mission subsequently authorized this implementation. M3 remains accepted; the M4 status above is implementation-only and still awaits Planner acceptance.
+**Correction to the prior M3 handoff:** the attached M4 mission subsequently authorized this implementation. STATE-4 now records M4 as accepted; M3 remains accepted and M5 remains unopened.
 
 ## Future milestone entry template
 

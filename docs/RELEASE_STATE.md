@@ -8,8 +8,9 @@ This file records releasable product state. It does not promote development prog
 
 | Field | State |
 |---|---|
-| Latest accepted development milestone | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor |
-| Accepted development commit | `e2efde838d84197f1fbe289e3e8ded090bdd2d87` |
+| Latest accepted development milestone | M4 — Routing + Health + Infrastructure Fallback Engine |
+| Accepted development commit | `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` |
+| Accepted evidence HEAD | `f5e25e21bbebe7995a9cc050efea3ed20d94f18c` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
@@ -19,7 +20,7 @@ This file records releasable product state. It does not promote development prog
 | Installable production release | NONE |
 | Production-ready | NO |
 | Release rollback target | NONE; no release exists |
-| Accepted development recovery reference | M3 commit `e2efde838d84197f1fbe289e3e8ded090bdd2d87` |
+| Accepted development recovery reference | M4 implementation commit `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697`; evidence HEAD `f5e25e21bbebe7995a9cc050efea3ed20d94f18c` |
 
 Milestone acceptance does not itself create a product release.
 
@@ -28,13 +29,13 @@ Milestone acceptance does not itself create a product release.
 | Evidence | Current result |
 |---|---|
 | Configuration schema | Version 1 |
-| Deterministic and fake integration suite | `70/70 PASS` |
+| Deterministic and fake integration suite | `86/86 PASS` |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
 | Tested Node.js version | `22.23.0`; package requires `>=22.19.0` |
 | Fake gateway integration | PASS |
-| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, and pool mutation/reload |
+| Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, and health reset |
 | Real live 9Router catalog | NOT VERIFIED — credential-gated probe was skipped |
 | Real paid inference | NOT PERFORMED |
 
@@ -44,7 +45,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Routing, workers, Boss execution, durable mission state, quality escalation, analytics, hardening, and packaging milestones remain incomplete.
+- Workers, Boss execution, durable mission state, quality escalation, analytics, hardening, cost/budget-aware routing, and packaging milestones remain incomplete.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

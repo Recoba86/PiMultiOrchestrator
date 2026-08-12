@@ -10,10 +10,10 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M4 implemented; Planner acceptance pending |
-| Last accepted milestone | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor |
-| Accepted M3 commit | `e2efde838d84197f1fbe289e3e8ded090bdd2d87` |
-| M4 implementation commit | `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` (not accepted) |
+| Development phase | M4 accepted; M5 next planned |
+| Last accepted milestone | M4 — Routing + Health + Infrastructure Fallback Engine |
+| Accepted M4 implementation commit | `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` |
+| Accepted M4 evidence HEAD | `f5e25e21bbebe7995a9cc050efea3ed20d94f18c` |
 | Configuration schema | Version 1 |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -26,7 +26,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M1 — Configuration Foundation | ACCEPTED / PASS |
 | M2 — 9Router Integration + Selective Model Manager + First Controlled Pi Runtime PoC | ACCEPTED / PASS |
 | M3 — Three Execution Pool Manager + Ordered Route Priorities + TUI Pool Editor | ACCEPTED / PASS |
-| M4 — Routing + Health + Infrastructure Fallback Engine | IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE |
+| M4 — Routing + Health + Infrastructure Fallback Engine | ACCEPTED / PASS |
+| M5 — Routed Subagent Execution | NEXT PLANNED / NOT STARTED |
 
 ## Stable / accepted capabilities
 
@@ -59,9 +60,9 @@ M3 adds accepted, configuration-only pool management:
 
 These capabilities do not implement runtime routing, worker execution, or full multi-agent orchestration. Pool order is configuration priority only.
 
-## M4 implementation awaiting acceptance
+## M4 accepted capabilities
 
-M4 adds the pure, non-executing routing boundary and runtime health state:
+M4 adds the accepted pure, non-executing routing boundary and runtime health state:
 
 - deterministic ordered eligibility and preview selection for the three pools;
 - explicit `none`, `prefer`, and `require` diversity inputs with no model-name inference;
@@ -71,9 +72,9 @@ M4 adds the pure, non-executing routing boundary and runtime health state:
 - `/routing-status`, `/route-health`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`;
 - fake-clock deterministic tests and isolated Pi `0.84.1` fake-gateway RPC/reset evidence.
 
-M4 does not execute model requests, inspect quality, start workers, persist health in ConfigStore/export/history, or reconstruct opaque 9Router account/combo fallback. M4 remains unaccepted until Planner review.
+M4 does not implement actual child/subagent execution, Boss runtime, Task Packet or Context Broker runtime, canonical mission state, quality review/escalation, analytics, auto-tuning, or full cost/budget-aware routing. It does not persist health in ConfigStore/export/history or reconstruct opaque 9Router account/combo fallback.
 
-| M4 implementation evidence | Result |
+| M4 acceptance evidence | Result |
 |---|---|
 | Deterministic, fake integration, and actual Pi suite | `86/86 PASS` |
 | Typecheck, build, and aggregate check | PASS |
@@ -131,7 +132,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M3 is accepted by STATE-3. M4 implementation is present but awaits Planner acceptance. Do not start M5 until M4 is accepted by the Planner.
+M4 is accepted by STATE-4. M5 — Routed Subagent Execution is next planned and not started. Do not start M5 from this handoff.
 
 ## Accepted evidence history
 
@@ -139,13 +140,13 @@ M3 is accepted by STATE-3. M4 implementation is present but awaits Planner accep
 - M1: `b451408a57306cdb0c0cd9d4b41f76edd92c9395` — `feat(core): add configuration foundation` — ACCEPTED / PASS; `41/41` tests, typecheck, and aggregate check passed.
 - M2: `43f810cc9c6fbda50abd69b94d5f8aad1597756a` — `feat(pi): add selective 9Router model manager` — ACCEPTED / PASS; evidence recorded above.
 - M3: `e2efde838d84197f1fbe289e3e8ded090bdd2d87` — `feat(pools): add execution pool manager` — ACCEPTED / PASS; `70/70` tests, typecheck/build, and actual Pi/fake-gateway pool mutation/reload evidence passed.
-- M4 implementation: `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` — `feat(routing): add health-aware fallback engine` — IMPLEMENTED BUT NOT ACCEPTED; `86/86` tests and isolated Pi/fake-gateway routing/health evidence passed.
+- M4: `cae53b220e4cb78ec8b1f4f0400c9be4bb5a9697` — `feat(routing): add health-aware fallback engine` — ACCEPTED / PASS; evidence HEAD `f5e25e21bbebe7995a9cc050efea3ed20d94f18c`, `86/86` tests, and isolated Pi/fake-gateway routing/health evidence passed.
 
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M4 is accepted or runtime-operational merely because its implementation is present.
+- Do not assume M5 has started merely because M4 is accepted.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

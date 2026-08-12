@@ -64,7 +64,7 @@ Exit gate: PASS — pool add/remove/reorder, cross-pool independence, global-dis
 
 ## M4 — Routing, health, and infrastructure fallback
 
-Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+Status: ACCEPTED / PASS.
 
 Deliverables:
 
@@ -75,9 +75,11 @@ Deliverables:
 - fake-clock/unit, fake-gateway, and Pi `0.84.1` integration evidence with the M2/M3 regressions intact; and
 - explicit boundary with opaque 9Router account/combo fallback; M4 never executes a model request.
 
-Exit gate evidence: `86/86` tests, typecheck, build, aggregate check, fake-gateway, and real Pi `0.84.1` routing/health RPC checks pass. Planner acceptance is still required; M5 remains unopened.
+Exit gate: PASS — `86/86` tests, typecheck, build, aggregate check, fake-gateway, and real Pi `0.84.1` routing/health RPC checks passed. M5 remains unopened.
 
-## M5 — Subagent execution
+## M5 — Routed Subagent Execution
+
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 

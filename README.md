@@ -4,9 +4,9 @@ Pi Multi-Orchestrator is a planned Pi extension for coordinating a Boss model an
 
 ## Status
 
-M0, M1, M2, and M3 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface. M3 adds configuration-only management for the ordered Investigation, Implementation, and Verification pools. M4 is implemented but awaits Planner acceptance: it adds pure routing preview/eligibility, bounded infrastructure fallback decisions, and separate runtime health state.
+M0 through M4 are accepted. M2 adds a real Pi `0.84.1` extension entrypoint, an environment-reference-only 9Router connection, bounded catalog discovery and last-known-good caching, explicit model enablement, dynamic provider registration, and the first Pi-native Models & 9Router control surface. M3 adds configuration-only management for the ordered Investigation, Implementation, and Verification pools. M4 adds pure routing preview/eligibility, bounded infrastructure fallback decisions, and separate runtime health state.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. M4 does not execute models or start workers; 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. There is no worker runtime, Boss execution, SQLite runtime state, analytics collection, or full M9 control center.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. M4 does not execute models or start workers; 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. There is no worker/subagent runtime, Boss execution, SQLite runtime state, analytics collection, cost/budget-aware routing, or full M9 control center.
 
 The implementation contract is split across:
 
@@ -71,4 +71,4 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M4 did not modify any live environment. M3 is the last accepted milestone; M4 is implemented but not yet Planner-accepted. M5 has not started. See [Roadmap](docs/ROADMAP.md).
+M1 through M4 did not modify any live environment. M4 is the last accepted milestone; M5 — Routed Subagent Execution is next planned and has not started. See [Roadmap](docs/ROADMAP.md).
