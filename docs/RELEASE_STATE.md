@@ -8,9 +8,9 @@ This file records releasable product state. It does not promote development prog
 
 | Field | State |
 |---|---|
-| Latest accepted development milestone | M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations |
-| Accepted development commit | `c5f741e65412dc4133e58962c314e2fae82f622e` |
-| Accepted evidence HEAD | `809394fdbc53c40ca86dbcd6f4dcd37573d5523f` |
+| Latest accepted development milestone | M8.5 — Manual AI Recommendation Analyst |
+| Accepted development commit | `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1` |
+| Accepted evidence HEAD | `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.0.0-development` — not a release version |
@@ -20,7 +20,7 @@ This file records releasable product state. It does not promote development prog
 | Installable production release | NONE |
 | Production-ready | NO |
 | Release rollback target | NONE; no release exists |
-| Accepted development recovery reference | M7 implementation commit `db82ac141094db749835a0cc7f1f79dc780005e4`; evidence HEAD `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
+| Accepted development recovery reference | M8.5 implementation commit `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1`; evidence HEAD `28b75bebb4c3fabd48d5c4ab6d3f37376b6c01d1` |
 
 Milestone acceptance does not itself create a product release.
 
@@ -32,7 +32,7 @@ Milestone acceptance does not itself create a product release.
 | M6 accepted deterministic/fake baseline | `111/111 PASS` |
 | M7 accepted verification suite | `121/121 PASS`; typecheck/build/check PASS; Pi/fake quality-loop proof PASS |
 | M8 accepted verification suite | `134/134 PASS`; typecheck/build/check PASS; Pi/fake analytics/fallback/quality/billing/recommendation proof PASS |
-| M8.5 implementation verification (not accepted) | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS; Planner acceptance pending |
+| M8.5 accepted verification suite | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -48,7 +48,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, Planner acceptance of M8.5, scheduled/autonomous tuning, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M8 is the latest accepted development state; M8.5 is implemented but not accepted; no stable release is implied.
+- Boss runtime, scheduled/autonomous tuning, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M8.5 is the latest accepted development state; no stable release is implied.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

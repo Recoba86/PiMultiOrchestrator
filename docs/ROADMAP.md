@@ -135,7 +135,7 @@ Exit gate: PASS — `134/134` tests, `npm run check`, actual Pi 0.84.1 fake-gate
 
 ## M8.5 — Manual AI Recommendation Analyst
 
-Status: IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+Status: ACCEPTED / PASS by STATE-8.5.
 
 Deliverables:
 
@@ -145,11 +145,11 @@ Deliverables:
 - bounded audit metadata, deterministic input fingerprint, stale analysis detection, and privacy filtering;
 - Recommendation Analyst UI/RPC with explicit Analyze Now/Re-analyze and no background execution or automatic Apply.
 
-Evidence: `141/141` full tests, analyst/provider focused suites, typecheck/build/check PASS, and Pi `0.84.1` fake-gateway support/oppose/insufficient/failure-preserves-deterministic flows. Planner acceptance remains pending; M9 is not started.
+Evidence: `141/141` full tests, analyst/provider focused suites, typecheck/build/check PASS, and Pi `0.84.1` fake-gateway support/oppose/insufficient/failure-preserves-deterministic flows. Analyst execution is manual-only, deterministic recommendations remain authoritative, and explicit Apply remains the M8/M3 mutation path; paid calls `0`.
 
 ## M9 — Full TUI control center
 
-Status: NOT STARTED.
+Status: NEXT PLANNED — NOT STARTED.
 
 Deliverables:
 
