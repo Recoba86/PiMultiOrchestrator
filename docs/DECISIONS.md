@@ -172,3 +172,10 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Decision:** M8 stores bounded idempotent telemetry in a separate local `analytics.sqlite` schema v1. ConfigV1 remains version 1 and its existing disabled-by-default `analytics` policy is authoritative.
 - **Consequences:** Analytics failures are non-critical; unsupported Pi usage fields and provider-default zero pricing remain unknown; mixed currencies are not summed; recommendations are pool-specific, sample-gated, explainable, and never mutate configuration until an explicit Apply action uses PoolManager.
 - **Privacy:** Prompts, transcripts, source, tool arguments/results, headers, credentials, and completion text are not persisted.
+
+## ADR-026 — M8.5 analyst is manual, advisory, and Verification-Pool bound
+
+- **Decision:** The optional Recommendation Analyst runs only after an explicit operator Analyze Now/Re-analyze action. It selects a configured Verification Pool route by stable `routeId`, consumes a bounded deterministic analytics packet, and returns one bounded SUPPORT/OPPOSE/INSUFFICIENT_EVIDENCE result. It cannot alter facts, pools, ConfigStore, or Apply state; explicit Apply remains the M8 RecommendationApplicationService → PoolManager path.
+- **Rationale:** Deterministic metrics and recommendations remain the source of truth while an operator may request bounded qualitative context. Reusing M4/M5 preserves route identity, retries, health separation, and privacy boundaries without hard-coding a model.
+- **Persistence:** Store only recommendation ID, route ID, timestamp, deterministic input fingerprint, verdict, factors, caveats, and concise explanation. Keep prior records; a changed fingerprint makes the old analysis stale. Never persist prompts, transcripts, source, tool output, or secrets.
+- **Consequences:** AI-assisted analysis is optional and manual-only; unavailable/rate-limited/timed-out analyst routes leave the deterministic recommendation usable. Scheduled analysis, automatic tuning, and automatic Apply remain deferred.

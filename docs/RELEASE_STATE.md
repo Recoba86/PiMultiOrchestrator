@@ -32,6 +32,7 @@ Milestone acceptance does not itself create a product release.
 | M6 accepted deterministic/fake baseline | `111/111 PASS` |
 | M7 accepted verification suite | `121/121 PASS`; typecheck/build/check PASS; Pi/fake quality-loop proof PASS |
 | M8 accepted verification suite | `134/134 PASS`; typecheck/build/check PASS; Pi/fake analytics/fallback/quality/billing/recommendation proof PASS |
+| M8.5 implementation verification (not accepted) | `141/141 PASS`; analyst/provider focused suites, typecheck/build/check, and Pi/fake manual analyst flows PASS; Planner acceptance pending |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -47,7 +48,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, installable production package, compatibility matrix, installation guide, or verified release rollback exists.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, AI-assisted recommendation analysis, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M8 is the latest accepted development state; no stable release is implied.
+- Boss runtime, Planner acceptance of M8.5, scheduled/autonomous tuning, hardening, cost/budget-aware routing, parallel orchestration, and packaging remain incomplete. M8 is the latest accepted development state; M8.5 is implemented but not accepted; no stable release is implied.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 
 ## Future release record

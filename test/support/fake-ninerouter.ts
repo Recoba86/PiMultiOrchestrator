@@ -23,6 +23,9 @@ export type ModelsMode =
 	| "error"
 	| "slow";
 
+/** Structured M8.5 analyst outcomes returned by the fake Verification route. */
+export type AnalystVerdict = "support" | "oppose" | "insufficient_evidence";
+
 export interface FakeNineRouterOptions {
 	readonly token?: string;
 	readonly models?: readonly FakeModel[];
@@ -33,6 +36,10 @@ export interface FakeNineRouterOptions {
 	readonly toolCallFlow?: boolean;
 	/** When enabled, exercise reviewer reject -> repair -> reviewer pass. */
 	readonly qualityLoopFlow?: boolean;
+	/** When set, exercise the bounded manual recommendation-analyst protocol. */
+	readonly analystFlow?: AnalystVerdict | "infra-failure";
+	/** Optional secret-like marker included only in the fake analyst payload. */
+	readonly analystSecret?: string;
 	/** Models that return a bounded infrastructure error before any tool flow. */
 	readonly failModels?: readonly string[];
 	readonly failureStatus?: number;
@@ -145,6 +152,8 @@ export class FakeNineRouter {
 	private readonly completionText: string;
 	private readonly toolCallFlow: boolean;
 	private readonly qualityLoopFlow: boolean;
+	private readonly analystFlow: AnalystVerdict | "infra-failure" | undefined;
+	private readonly analystSecret: string;
 	private readonly failModels: ReadonlySet<string>;
 	private readonly failureStatus: number;
 	private qualityReviewCount = 0;
@@ -158,6 +167,8 @@ export class FakeNineRouter {
 		this.completionText = options.completionText ?? DEFAULT_COMPLETION;
 		this.toolCallFlow = options.toolCallFlow ?? false;
 		this.qualityLoopFlow = options.qualityLoopFlow ?? false;
+		this.analystFlow = options.analystFlow;
+		this.analystSecret = options.analystSecret ?? "fixture-analyst-secret";
 		this.failModels = new Set(options.failModels ?? []);
 		this.failureStatus = options.failureStatus ?? 429;
 		this.server = createServer((req, res) => {
@@ -184,6 +195,10 @@ export class FakeNineRouter {
 
 	get chatRequests(): FakeRequestObservation[] {
 		return this.observations.filter((request) => request.method === "POST" && request.path.endsWith("/chat/completions"));
+	}
+
+	get analystRequests(): FakeRequestObservation[] {
+		return this.chatRequests.filter((request) => request.toolNames?.some((name) => /(?:recommendation|analyst|analysis)/iu.test(name)) === true);
 	}
 
 	setModelsMode(mode: ModelsMode): void {
@@ -312,7 +327,7 @@ export class FakeNineRouter {
 			sendError(res, this.failureStatus, "fixture-route-failure");
 			return;
 		}
-		if (this.toolCallFlow) {
+		if (this.toolCallFlow || this.analystFlow !== undefined) {
 			const tools = Array.isArray(body.tools) ? body.tools.flatMap((tool) => {
 				if (!tool || typeof tool !== "object") return [];
 				const fn = (tool as { function?: { name?: unknown } }).function;
@@ -320,6 +335,26 @@ export class FakeNineRouter {
 			}) : [];
 			const hasToolResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { role?: unknown }).role === "tool") === true;
 			const hasDelegateResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-delegate") === true;
+			const analystTool = tools.find((name) => /(?:recommendation|analyst|analysis)/iu.test(name) && /(?:submit|result|verdict)/iu.test(name));
+			if (this.analystFlow !== undefined && analystTool) {
+				if (this.analystFlow === "infra-failure") {
+					sendError(res, 503, "fixture-analyst-infrastructure-failure");
+					return;
+				}
+				const hasAnalystResult = messages?.some((message) => typeof message === "object" && message !== null && typeof (message as { tool_call_id?: unknown }).tool_call_id === "string" && (message as { tool_call_id: string }).tool_call_id === "call-analyst-result") === true;
+				if (!hasAnalystResult) {
+					const verdict = this.analystFlow;
+					await this.sendToolCall(res, model, "call-analyst-result", analystTool, JSON.stringify({
+						verdict,
+						explanation: `Fixture analyst ${verdict}`,
+						reasoningFactors: ["Bounded fake Verification Pool evidence."],
+						caveats: ["fixture only"],
+					}));
+					return;
+				}
+				this.sendCompletion(res, model);
+				return;
+			}
 			if (this.qualityLoopFlow && tools.includes("submit_verification_result")) {
 				const hasReadResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-quality-read") === true;
 				const hasQualityResult = messages?.some((message) => typeof message === "object" && message !== null && (message as { tool_call_id?: unknown }).tool_call_id === "call-quality-result") === true;

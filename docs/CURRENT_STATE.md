@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M8 accepted; M8.5 next planned / not started |
+| Development phase | M8 accepted; M8.5 implemented / awaiting Planner acceptance |
 | Last accepted milestone | M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -33,7 +33,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M6 — Context Broker + Canonical Mission State + Task Packets + Checkpoint/Resume Foundation | ACCEPTED / PASS |
 | M7 — Quality Gates, Review, and Escalation | ACCEPTED / PASS |
 | M8 — Analytics + Statistics + Cost/Token Accounting + Quality/Value Metrics + Auto-Tuning Recommendations | ACCEPTED / PASS |
-| M8.5 | NEXT PLANNED / NOT STARTED |
+| M8.5 — Manual AI Recommendation Analyst | IMPLEMENTED BUT NOT ACCEPTED |
 | M9 — Full TUI control center | NOT STARTED |
 
 ## Stable / accepted capabilities
@@ -172,7 +172,7 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 - automatic broad mission decomposition and task scheduling;
 - general role generation;
 - parallel workers and worktree isolation/fan-out;
-- AI-assisted recommendation analysis and automatic autonomous tuning;
+- autonomous/scheduled tuning and any AI analysis beyond the bounded manual M8.5 analyst;
 - automatic pool reordering and budget-aware routing;
 - public release tooling;
 - cross-process configuration locking; and
@@ -180,11 +180,11 @@ Automated Pi-native dialog callback and RPC tests passed for the M2 model manage
 
 ## Next milestone rule
 
-M6 is accepted by STATE-6, M7 is accepted by STATE-7, and M8 is accepted by STATE-8. M8.5 is next planned and not started; M9 is not started.
+M6 is accepted by STATE-6, M7 is accepted by STATE-7, and M8 is accepted by STATE-8. M8.5 is implemented but not accepted pending Planner review; M9 is not started.
 
 ## M8 implementation snapshot
 
-M8 is accepted by STATE-8. It adds a separate local AnalyticsStore with idempotent telemetry and restart dedupe; route, pool, mission, fallback, and quality statistics; actual Pi token provenance with UNKNOWN preservation; ConfigV1→V2 billing/reference profiles; cost provenance, fixed-point reference estimates, and multi-currency safety; Quality/Value metrics with insufficient-data behavior; deterministic recommendations; explicit Details/Ignore/Apply; stale recommendation protection; no automatic priority mutation; and Apply through PoolManager with ConfigStore history. It does not claim AI-assisted recommendation analysis. Analytics remains disabled by default and prompts, transcripts, tool arguments, source, headers, and secrets are not persisted.
+M8 is accepted by STATE-8. It adds a separate local AnalyticsStore with idempotent telemetry and restart dedupe; route, pool, mission, fallback, and quality statistics; actual Pi token provenance with UNKNOWN preservation; ConfigV1→V2 billing/reference profiles; cost provenance, fixed-point reference estimates, and multi-currency safety; Quality/Value metrics with insufficient-data behavior; deterministic recommendations; explicit Details/Ignore/Apply; stale recommendation protection; no automatic priority mutation; and Apply through PoolManager with ConfigStore history. Analytics remains disabled by default and prompts, transcripts, tool arguments, source, headers, and secrets are not persisted.
 
 | M8 accepted evidence | Result |
 |---|---|
@@ -194,6 +194,19 @@ M8 is accepted by STATE-8. It adds a separate local AnalyticsStore with idempote
 | Restart dedupe and ConfigV1→V2 billing-profile migration/persistence | PASS |
 | Nine analytics detail views | PASS |
 | Recommendation Details/Ignore/Apply/stale protection; PoolManager + ConfigStore history; automatic Apply | PASS / NO |
+| Paid calls / live environment changes | `0` / NONE |
+
+## M8.5 implementation snapshot
+
+M8.5 is implemented but not accepted. It adds an optional, manual-only Recommendation Analyst over the deterministic M8 candidate: the analyst is selected only from enabled Verification Pool routes, receives a bounded analytics packet, returns one bounded SUPPORT/OPPOSE/INSUFFICIENT_EVIDENCE result, and cannot change metrics, pools, ConfigStore, or Apply state. Results persist only bounded audit metadata and become stale when the deterministic input fingerprint changes. The Statistics & Analytics → Recommendation Analyst UI exposes Deterministic only/AI-assisted mode, route selection, Analyze Now, Re-analyze, status, and last-analysis details; there is no timer or background execution. Analyst infrastructure failure leaves the deterministic recommendation usable, and explicit Apply remains the existing RecommendationApplicationService → PoolManager → ConfigStore path. No AI transcript/source/prompt/tool output/secret is persisted.
+
+| M8.5 implementation evidence | Result |
+|---|---|
+| Analyst protocol, bounds, verdicts, privacy, stale detection | `3/3 PASS` focused analyst suite |
+| Host/TUI/RPC Recommendation Analyst surface | `17/17 PASS` focused provider suite |
+| Pi 0.84.1 + fake-gateway manual analyst flow and M8 regressions | `141/141 PASS` full suite; fake support/oppose/insufficient and failure-preserves-deterministic flows PASS |
+| Typecheck, build, aggregate check, and diff check | PASS |
+| Planner acceptance / STATE-8.5 | PENDING |
 | Paid calls / live environment changes | `0` / NONE |
 
 ## Accepted evidence history
@@ -210,12 +223,13 @@ M8 is accepted by STATE-8. It adds a separate local AnalyticsStore with idempote
 - M7: `db82ac141094db749835a0cc7f1f79dc780005e4` — ACCEPTED / PASS by STATE-7; evidence HEAD `d15dccfd3415e7c705600526a6ef7d634d8c90c5`, `121/121` tests, typecheck/build/check, and actual Pi/fake reviewer reject→repair→re-review lineage passed.
 
 - M8: `c5f741e` implementation accepted by STATE-8 with evidence HEAD `809394f`; `134/134` and actual Pi/fake analytics evidence passed.
+- M8.5: implementation started from `5ba8c52`; feature/test evidence is recorded above; Planner acceptance is pending and no accepted evidence HEAD is claimed.
 
 ## Assumptions agents must not make
 
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- Do not assume M8.5 or M9 has started; M8 acceptance does not imply Boss/planner runtime, AI-assisted recommendation analysis, parallel/worktree orchestration, or release readiness.
+- Do not assume M8.5 is Planner-accepted or that M9 has started; M8 acceptance does not imply Boss/planner runtime, autonomous tuning, parallel/worktree orchestration, or release readiness.
 - Do not treat accepted pool management as runtime routing or worker execution.
 - Do not assume a GitHub remote, tag, public release, or stable package exists.

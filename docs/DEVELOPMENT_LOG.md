@@ -130,9 +130,21 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Evidence:** `npm test` and `npm run check` `134/134 PASS`; typecheck/build PASS; actual Pi 0.84.1 fake-gateway mission analytics, token provenance/UNKNOWN handling, fallback, quality reject→repair→re-verification, billing migration/persistence, nine detail views, and recommendation controls PASS; paid/live calls `0`.
 - **Decisions:** analytics remains separate from MissionStore and HealthStore; ConfigV1 imports migrate sequentially to ConfigV2 reference billing profiles; disabled collection keeps history and rejects new rows; unknown cost is not zero; recommendation generation does not mutate configuration and Apply uses PoolManager with stale protection.
 - **Live impact:** no live Pi/provider configuration, credentials, Keychain, paid calls, or external network used.
-- **Next:** M8.5 planned/not started; M9 not started.
+- **Next:** M8.5 implemented but not accepted pending Planner review; M9 not started.
 
-**STATE-8 correction:** M8 is accepted / PASS. M8.5 is next planned and not started; M9 is not started. AI-assisted recommendation analysis remains deferred.
+**STATE-8 correction (historical):** M8 is accepted / PASS. At that handoff M8.5 was next planned and not started, M9 was not started, and AI-assisted recommendation analysis remained deferred; the M8.5 implementation entry below records the later change without changing STATE-8 acceptance.
+
+## M8.5 — Manual AI Recommendation Analyst
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED — AWAITING PLANNER ACCEPTANCE.
+- **Starting HEAD:** `5ba8c5276d1125138ce90ed9cc60021af5bab5bc` (accepted M8 state).
+- **Implementation:** optional manual-only Recommendation Analyst over deterministic M8 candidates; Verification Pool route selection; bounded analytics packet and structured SUPPORT/OPPOSE/INSUFFICIENT_EVIDENCE result; bounded audit metadata with deterministic input fingerprint and stale detection; no transcript/source/prompt/tool-output/secret persistence; no pool/config mutation or automatic Apply.
+- **Host surface:** Statistics & Analytics → Recommendation Analyst and `/recommendation-analyst` with Deterministic only/AI-assisted mode, Verification Pool route selector, Analyze Now, Re-analyze, status, and last-analysis details. Execution is explicit only; no timer or background polling.
+- **Evidence:** analyst suite `3/3 PASS`; provider/TUI suite `17/17 PASS`; full `npm test` `141/141 PASS`; typecheck, build, and aggregate check PASS; Pi `0.84.1` + fake-gateway support/oppose/insufficient and infrastructure-failure-preserves-deterministic flows PASS; paid/live calls `0`.
+- **Decisions:** deterministic metrics remain authoritative; analyst output is advisory and may disagree; route failures use existing M4/M5 behavior without breaking deterministic recommendations; explicit Apply remains RecommendationApplicationService → PoolManager → ConfigStore; previous analyses remain auditable and stale when fingerprints change.
+- **Deferred work:** Planner acceptance, Boss/planner runtime, scheduled/autonomous tuning, M9, live-provider validation, and release work.
+- **Live environment impact:** No live Pi configuration, 9Router deployment, credentials, Keychain, paid calls, or external network used.
+- **Next:** Planner acceptance of M8.5; M9 remains not started.
 
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED

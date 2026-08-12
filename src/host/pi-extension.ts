@@ -66,6 +66,10 @@ import {
 	RecommendationApplicationService,
 	RecommendationEngine,
 	SQLiteAnalyticsStore,
+	RecommendationAnalystService,
+	createRecommendationAnalyst,
+	type AnalystPacket,
+	type AnalystRoute,
 	type AnalyticsEventV1,
 	type AnalyticsRange,
 	type AnalyticsStoreAdapter,
@@ -94,6 +98,42 @@ export interface PoolManagerContract {
 	moveRouteDown(poolId: PoolId, routeId: StableId): MaybePromise<unknown>;
 	moveRoute(poolId: PoolId, routeId: StableId, targetIndex: number): MaybePromise<unknown>;
 	setPoolEntryEnabled(poolId: PoolId, routeId: StableId, enabled: boolean): MaybePromise<unknown>;
+}
+
+export type RecommendationAnalystMode = "deterministic" | "ai-assisted";
+
+export interface RecommendationAnalystSettings {
+	readonly mode: RecommendationAnalystMode;
+	readonly routeId?: string;
+}
+
+export interface RecommendationAnalystRoute {
+	readonly routeId: string;
+	readonly displayName?: string;
+	readonly remoteModelId?: string;
+	readonly enabled?: boolean;
+	readonly available?: boolean;
+}
+
+export interface RecommendationAnalystStatus {
+	readonly state: "idle" | "running" | "completed" | "failed";
+	readonly mode?: RecommendationAnalystMode;
+	readonly routeId?: string;
+	readonly lastAnalysisAt?: string;
+	readonly recommendationCount?: number;
+	readonly message?: string;
+}
+
+/**
+ * Optional host adapter for the M8.5 analyst. The host only invokes `analyze`
+ * after an explicit user action; it never schedules analysis or applies a
+ * recommendation. The domain owns persistence and deterministic/AI policy.
+ */
+export interface RecommendationAnalystContract {
+	getSettings(): MaybePromise<RecommendationAnalystSettings>;
+	getStatus(): MaybePromise<RecommendationAnalystStatus>;
+	listVerificationRoutes(): MaybePromise<readonly RecommendationAnalystRoute[]>;
+	analyze(request: { readonly mode: RecommendationAnalystMode; readonly routeId: string }): MaybePromise<RecommendationAnalystStatus | unknown>;
 }
 
 export interface ModelManagerEntry {
@@ -140,6 +180,7 @@ export interface PiHostOptions {
 	readonly providerId?: string;
 	readonly subagentExecutor?: SubagentExecutor;
 	readonly analyticsStore?: AnalyticsStoreAdapter;
+	readonly recommendationAnalyst?: RecommendationAnalystContract;
 }
 
 export interface ReconcileResult {
@@ -158,6 +199,7 @@ export interface PiHost {
 	readonly qualityStore?: QualityPersistence;
 	readonly qualityService?: QualityService;
 	readonly analyticsStore?: AnalyticsStoreAdapter;
+	readonly recommendationAnalyst?: RecommendationAnalystContract;
 	readonly qualityExecutor?: SubagentExecutor;
 	reconcile(): Promise<ReconcileResult>;
 	registerCommands(): void;
@@ -176,6 +218,40 @@ const SUBAGENT_PARAMETERS = {
 	},
 	required: ["role", "pool", "task"],
 } as unknown;
+
+const ANALYST_RESULT_PARAMETERS = {
+	type: "object",
+	additionalProperties: false,
+	properties: {
+		verdict: { type: "string", enum: ["support", "oppose", "insufficient_evidence"] },
+		suggestedMove: { type: "string", maxLength: 160 },
+		reasoningFactors: { type: "array", maxItems: 16, items: { type: "string", maxLength: 512 } },
+		caveats: { type: "array", maxItems: 16, items: { type: "string", maxLength: 512 } },
+		explanation: { type: "string", maxLength: 1_000 },
+	},
+	required: ["verdict", "explanation"],
+} as unknown;
+
+const createAnalystResultProtocol = (request: SubagentExecutionRequest): ChildResultProtocol => {
+	let result: unknown;
+	let violation = false;
+	return {
+		toolName: "submit_recommendation_analysis",
+		tool: {
+			name: "submit_recommendation_analysis",
+			label: "Submit recommendation analysis",
+			description: "Submit one bounded recommendation analyst verdict, then stop.",
+			parameters: ANALYST_RESULT_PARAMETERS as never,
+			execute: async (_id, params) => {
+				if (result !== undefined) { violation = true; return { content: [{ type: "text", text: "Only one analyst result is allowed." }], details: { accepted: false }, terminate: true }; }
+				result = params;
+				return { content: [{ type: "text", text: "Analyst result accepted. Stop now." }], details: { accepted: true }, terminate: true };
+			},
+		},
+		getResult: () => result,
+		hasProtocolViolation: () => violation,
+	};
+};
 
 const errorMessage = (error: unknown): string =>
 	error instanceof NineRouterError
@@ -292,6 +368,7 @@ const ANALYTICS_SECTIONS = [
 	"Quality",
 	"Fallbacks",
 	"Recommendations",
+	"Recommendation Analyst",
 ] as const;
 
 type AnalyticsSection = (typeof ANALYTICS_SECTIONS)[number];
@@ -528,6 +605,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const qualityStore = options.qualityStore ?? options.missionStore;
 	const qualityService = options.qualityService ?? (qualityStore ? new QualityService(qualityStore) : undefined);
 	const analyticsStore = options.analyticsStore;
+	const recommendationAnalyst = options.recommendationAnalyst;
 	const analytics = analyticsStore ? new AnalyticsQueryService(analyticsStore) : undefined;
 	const recommendationApplication = analyticsStore ? new RecommendationApplicationService(analyticsStore, poolManager) : undefined;
 	const recordAnalytics = (event: AnalyticsEventV1): void => {
@@ -1944,8 +2022,132 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
+	const analystModeLabel = (mode: RecommendationAnalystMode): string => mode === "ai-assisted" ? "AI-assisted" : "Deterministic only";
+	const analystMode = (value: string | undefined): RecommendationAnalystMode | undefined => {
+		switch (value?.trim().toLocaleLowerCase()) {
+			case "deterministic":
+			case "deterministic-only":
+			case "deterministic only":
+				return "deterministic";
+			case "ai":
+			case "ai-assisted":
+			case "ai assisted":
+				return "ai-assisted";
+			default:
+				return undefined;
+		}
+	};
+	const analystStatusLines = (status: RecommendationAnalystStatus, settings: RecommendationAnalystSettings, routeLabel?: string): string[] => {
+		const latest = (status as RecommendationAnalystStatus & { readonly latest?: { readonly verdict?: unknown; readonly explanation?: unknown } }).latest;
+		return [
+			"Recommendation Analyst",
+			`state=${status.state}`,
+			`mode=${analystModeLabel(status.mode ?? settings.mode)}`,
+			`verification-route=${routeLabel ?? status.routeId ?? settings.routeId ?? "UNKNOWN"}`,
+			`last-analysis=${status.lastAnalysisAt ?? "UNKNOWN"}`,
+			`recommendations=${status.recommendationCount ?? "UNKNOWN"}`,
+			...(latest?.verdict === undefined ? [] : [`verdict=${String(latest.verdict)}`]),
+			...(latest?.explanation === undefined ? [] : [`analysis completed: ${String(latest.explanation)}`]),
+			...(status.message ? [`message=${status.message}`] : []),
+			"manual-only: no scheduled analysis; Apply remains under /recommendations",
+		];
+	};
+	const analystRoutes = async (): Promise<readonly RecommendationAnalystRoute[]> => {
+		if (!recommendationAnalyst) return [];
+		const listed = await recommendationAnalyst.listVerificationRoutes();
+		if (listed.length > 0) return listed;
+		const pool = await poolManager.getPool("verification");
+		return pool.entries.map((entry) => ({ routeId: entry.routeId, displayName: entry.displayName, remoteModelId: entry.remoteModelId, enabled: entry.poolEnabled && entry.globalEnabled, available: entry.state === "active" }));
+	};
+	const analystRouteLabel = (route: RecommendationAnalystRoute): string => `${route.displayName ?? route.remoteModelId ?? route.routeId} (${route.routeId})${route.available === false ? " [unavailable]" : route.enabled === false ? " [disabled]" : ""}`;
+	const runRecommendationAnalysis = async (
+		ctx: ExtensionContext | ExtensionCommandContext,
+		mode: RecommendationAnalystMode,
+		routeId: string | undefined,
+		reanalyze: boolean,
+	): Promise<void> => {
+		if (!recommendationAnalyst) { ctx.ui.notify("Recommendation Analyst is unavailable", "warning"); return; }
+		const routes = await analystRoutes();
+		const selectedRoute = routeId ? routes.find((route) => route.routeId === routeId) : routes[0];
+		if (!selectedRoute) { ctx.ui.notify("Recommendation Analyst requires a route in the Verification Pool", "warning"); return; }
+		if (selectedRoute.available === false || selectedRoute.enabled === false) {
+			ctx.ui.notify(`Verification route ${selectedRoute.routeId} is unavailable or disabled`, "warning");
+			return;
+		}
+		const result = await recommendationAnalyst.analyze({ mode, routeId: selectedRoute.routeId });
+		const status = await recommendationAnalyst.getStatus();
+		const resultStatus = result && typeof result === "object" ? result as RecommendationAnalystStatus : status;
+		ctx.ui.notify([
+			...analystStatusLines(resultStatus, { mode, routeId: selectedRoute.routeId }, analystRouteLabel(selectedRoute)),
+			`action=${reanalyze ? "re-analyze" : "analyze"}`,
+		].join("\n"), resultStatus.state === "failed" ? "warning" : "info");
+	};
+	const showRecommendationAnalyst = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
+		if (!recommendationAnalyst) { ctx.ui.notify("Recommendation Analyst is unavailable", "warning"); return; }
+		try {
+			const initialSettings = await recommendationAnalyst.getSettings();
+			const initialStatus = await recommendationAnalyst.getStatus();
+			const routes = await analystRoutes();
+			const defaultRoute = initialSettings.routeId && routes.some((route) => route.routeId === initialSettings.routeId) ? initialSettings.routeId : routes[0]?.routeId;
+			const raw = (args ?? "").trim();
+			const parts = raw.split(/\s+/u).filter(Boolean);
+			const action = parts[0]?.toLocaleLowerCase();
+			const requestedMode = analystMode(parts.find((part) => analystMode(part) !== undefined));
+			const requestedRoute = parts.find((part) => routes.some((route) => route.routeId === part));
+			if (action === "status" || action === "show") {
+				ctx.ui.notify(analystStatusLines(initialStatus, initialSettings, routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute)) ? analystRouteLabel(routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute))!) : undefined).join("\n"), "info");
+				return;
+			}
+			if (action === "analyze" || action === "reanalyze" || action === "re-analyze") {
+				await runRecommendationAnalysis(ctx, requestedMode ?? initialSettings.mode, requestedRoute ?? defaultRoute, action !== "analyze");
+				return;
+			}
+			if (raw && requestedMode === undefined && requestedRoute === undefined) {
+				ctx.ui.notify("Usage: /recommendation-analyst [status|analyze|reanalyze] [deterministic|ai-assisted] [verification-route]", "error");
+				return;
+			}
+			if (ctx.mode !== "tui" && !ctx.hasUI) {
+				ctx.ui.notify(analystStatusLines(initialStatus, initialSettings, routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute)) ? analystRouteLabel(routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute))!) : undefined).join("\n"), "info");
+				return;
+			}
+			let mode = initialSettings.mode;
+			let routeId = defaultRoute;
+			while (true) {
+				const status = await recommendationAnalyst.getStatus();
+				const route = routes.find((entry) => entry.routeId === routeId);
+				const choice = await ctx.ui.select("Recommendation Analyst", [
+					"Analyze Now",
+					"Re-analyze",
+					`Mode: ${analystModeLabel(mode)}`,
+					`Verification route: ${route ? analystRouteLabel(route) : "UNKNOWN"}`,
+					"Status",
+					"Back",
+				]);
+				if (!choice || choice === "Back") return;
+				if (choice === "Analyze Now" || choice === "Re-analyze") {
+					await runRecommendationAnalysis(ctx, mode, routeId, choice === "Re-analyze");
+					continue;
+				}
+				if (choice === "Status") {
+					ctx.ui.notify(analystStatusLines(status, { mode, ...(routeId === undefined ? {} : { routeId }) }, route ? analystRouteLabel(route) : undefined).join("\n"), "info");
+					continue;
+				}
+				if (choice.startsWith("Mode:")) {
+					const selected = await ctx.ui.select("Recommendation Analyst mode", ["Deterministic only", "AI-assisted", "Back"]);
+					if (selected && selected !== "Back") mode = selected === "AI-assisted" ? "ai-assisted" : "deterministic";
+					continue;
+				}
+				if (choice.startsWith("Verification route:")) {
+					const selected = await ctx.ui.select("Verification Pool route", [...routes.map(analystRouteLabel), "Back"]);
+					const index = routes.map(analystRouteLabel).indexOf(selected ?? "");
+					if (index >= 0) routeId = routes[index]!.routeId;
+				}
+			}
+		} catch (error) { notifyError(ctx, "Recommendation Analyst failed", error); }
+	};
+
 	const showAnalytics = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
-		if (!analytics) { ctx.ui.notify("Analytics is disabled or unavailable", "warning"); return; }
+		if (!analytics && !recommendationAnalyst) { ctx.ui.notify("Analytics is disabled or unavailable", "warning"); return; }
 		try {
 			const raw = (args ?? "").trim();
 			const parts = raw.split(/\s+/u).filter(Boolean);
@@ -1988,6 +2190,11 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				if (!section) return;
 			}
 			section ??= "Overview";
+			if (section === "Recommendation Analyst") {
+				await showRecommendationAnalyst(ctx);
+				return;
+			}
+			if (!analytics) { ctx.ui.notify("Analytics is disabled or unavailable", "warning"); return; }
 			const summary = analytics.overview(range);
 			const lines = [
 				`Statistics & Analytics — ${section}`,
@@ -2017,7 +2224,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				const transitions = Object.entries(summary.fallbackTransitions ?? {}).sort(([a], [b]) => a.localeCompare(b));
 				if (transitions.length === 0) lines.push("transitions: UNKNOWN (no fallback edge was reported)");
 				else lines.push("transitions:", ...transitions.map(([key, value]) => `${key}: ${value.count}`));
-			} else {
+			} else if (section === "Recommendations") {
 				const recommendations = analytics.recommendations();
 				lines.push(`saved recommendations=${recommendations.length}`);
 				if (recommendations.length === 0) lines.push("recommendations: UNKNOWN (none saved)");
@@ -2113,6 +2320,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			},
 		});
 		pi.registerCommand("analytics", { description: "Show local metadata-only analytics", handler: async (args, ctx) => showAnalytics(ctx, args) });
+		pi.registerCommand("recommendation-analyst", { description: "Run the manual Recommendation Analyst", handler: async (args, ctx) => showRecommendationAnalyst(ctx, args) });
 		pi.registerCommand("recommendations", { description: "Show explainable pool recommendations", handler: async (args, ctx) => showRecommendations(ctx, args) });
 	};
 
@@ -2126,7 +2334,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		reconciled = true;
 	};
 
-		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), reconcile, registerCommands, dispose };
+		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
@@ -2168,7 +2376,43 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	} catch {
 		qualityExecutor = undefined;
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(analyticsStore ? { analyticsStore } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	let recommendationAnalyst: RecommendationAnalystService | undefined;
+	if (analyticsStore) {
+		let analystExecutor: SubagentExecutor | undefined;
+		try { analystExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => createAnalystResultProtocol(request)); } catch { analystExecutor = undefined; }
+		recommendationAnalyst = createRecommendationAnalyst({
+			store: analyticsStore,
+			routeProvider: async (): Promise<readonly AnalystRoute[]> => {
+				const pool = await poolManager.getPool("verification");
+				return pool.entries.map((entry) => ({ routeId: entry.routeId, displayName: entry.displayName, remoteModelId: entry.remoteModelId, enabled: entry.poolEnabled && entry.globalEnabled, available: entry.state === "active" }));
+			},
+			packetProvider: async (recommendationId): Promise<AnalystPacket> => {
+				const recommendation = analyticsStore.listRecommendations().find((item) => item.status === "proposed" && (!recommendationId || item.recommendationId === recommendationId));
+				if (!recommendation) throw new Error("no proposed recommendation is available for analysis");
+				const poolId = recommendation.poolId;
+				const pool = await poolManager.getPool(poolId as PoolId);
+				const summary = analyticsStore.summary();
+				return {
+					recommendationId: recommendation.recommendationId,
+					poolId,
+					candidateRouteId: recommendation.proposedRouteId,
+					currentOrder: pool.entries.map((entry) => entry.routeId),
+					metrics: { sampleSize: recommendation.sampleSize, score: recommendation.score, runs: summary.runs, successes: summary.successes, fallbacks: summary.fallbacks, qualityPasses: summary.qualityPasses, qualityRejects: summary.qualityRejects, unknownTokenAttempts: summary.unknownTokenAttempts, unknownCostEvents: summary.unknownCostEvents },
+					scoreComponents: [],
+					basis: recommendation.evidence,
+				};
+			},
+			execute: async ({ routeId, packet }) => {
+				if (!analystExecutor) throw new Error("analyst execution is unavailable");
+				const verificationPool = await poolManager.getPool("verification");
+				const run = await analystExecutor.run({ roleId: "recommendation-analyst", poolId: "verification", task: `Analyze this bounded deterministic recommendation packet and submit one structured verdict:\n${JSON.stringify(packet)}`, cwd: root, acceptanceCriteria: ["Return support, oppose, or insufficient_evidence with concise factors and caveats."], excludedRouteIds: verificationPool.entries.filter((entry) => entry.routeId !== routeId).map((entry) => entry.routeId) });
+				if (run.terminalStatus !== "completed" || run.protocolResult === undefined) throw new Error(run.summary);
+				if (run.finalRouteId !== routeId) throw new Error("analyst route changed");
+				return run.protocolResult;
+			},
+		});
+	}
+	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

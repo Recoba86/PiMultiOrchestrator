@@ -16,6 +16,8 @@ import {
 	type ModelManagerEntry,
 	type PiManagerContract,
 	type PoolManagerContract,
+	type RecommendationAnalystContract,
+	type RecommendationAnalystStatus,
 	NINEROUTER_PROVIDER_ID,
 } from "../src/host/pi-extension.js";
 import { ConfigStore, createDefaultConfig } from "../src/core/config/index.js";
@@ -263,6 +265,28 @@ function analyticsFixture(): AnalyticsStoreAdapter {
 	};
 }
 
+function recommendationAnalystFixture(): RecommendationAnalystContract & {
+	readonly calls: Array<{ mode: string; routeId: string }>;
+} {
+	const calls: Array<{ mode: string; routeId: string }> = [];
+	let status: RecommendationAnalystStatus = { state: "idle" };
+	const routes = [
+		{ routeId: "route-a" as StableId, displayName: "Route A", remoteModelId: "remote-a", enabled: true, available: true },
+		{ routeId: "route-b" as StableId, displayName: "Route B", remoteModelId: "remote-b", enabled: true, available: true },
+	] as const;
+	return {
+		calls,
+		getSettings: async () => ({ mode: "deterministic" as const, routeId: "route-a" as StableId }),
+		getStatus: async () => status,
+		listVerificationRoutes: async () => routes,
+		analyze: async (request) => {
+			calls.push(request);
+			status = { state: "completed", mode: request.mode, routeId: request.routeId, lastAnalysisAt: "2026-08-12T00:00:00.000Z", recommendationCount: 1 };
+			return status;
+		},
+	};
+}
+
 describe("Pi 9Router host adapter", () => {
 	it("[U][fixture-pi-0.84.1] registers only enabled projection models and skips identical reconciliation", async () => {
 		const fixture = managerFixture(projection());
@@ -317,7 +341,7 @@ describe("Pi 9Router host adapter", () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: fixture });
 		host.registerCommands();
-		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "subagent-run", "missions", "mission-packet", "quality-status", "verify-task", "analytics", "recommendations"]);
+		assert.deepEqual([...pi.commands.keys()], ["orchestrator", "9router-models", "9router-refresh", "9router-status", "pool-models", "pool-status", "routing-status", "route-health", "routing-settings", "subagent-run", "missions", "mission-packet", "quality-status", "verify-task", "analytics", "recommendation-analyst", "recommendations"]);
 
 		const notifications: string[] = [];
 		let prompts = 0;
@@ -346,6 +370,51 @@ describe("Pi 9Router host adapter", () => {
 		assert.deepEqual(fixture.setEnabledCalls, []);
 		assert.match(notifications[0] ?? "", /remote: remote-a/);
 		assert.ok(notifications.some((message) => /active 9Router model/.test(message)));
+	});
+
+	it("[U][fixture-pi-0.84.1] runs the manual Recommendation Analyst against a Verification Pool route", async () => {
+		const analyst = recommendationAnalystFixture();
+		const pools = poolManagerFixture();
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), poolManager: pools, recommendationAnalyst: analyst });
+		host.registerCommands();
+		const notifications: string[] = [];
+		await pi.commands.get("recommendation-analyst")!.handler("analyze", {
+			mode: "rpc",
+			hasUI: false,
+			ui: { notify: (message: string) => notifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.deepEqual(analyst.calls, [{ mode: "deterministic", routeId: "route-a" }]);
+		assert.match(notifications[0] ?? "", /manual-only/);
+		assert.match(notifications[0] ?? "", /verification-route=Route A \(route-a\)/);
+		const titles: string[] = [];
+		await pi.commands.get("recommendation-analyst")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			ui: {
+				select: (() => {
+					let modeChanged = false;
+					let routeChanged = false;
+					let analyzed = false;
+					return async (title: string, options: readonly string[]) => {
+						titles.push(title);
+						if (title === "Recommendation Analyst") {
+							if (!modeChanged) return (modeChanged = true, options.find((option) => option.startsWith("Mode:")));
+							if (!routeChanged) return (routeChanged = true, options.find((option) => option.startsWith("Verification route:")));
+							if (!analyzed) return (analyzed = true, "Analyze Now");
+							return "Back";
+						}
+						if (title === "Recommendation Analyst mode") return "AI-assisted";
+						if (title === "Verification Pool route") return options.find((option) => option.includes("route-b"));
+						return "Back";
+					};
+				})(),
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.deepEqual(analyst.calls, [{ mode: "deterministic", routeId: "route-a" }, { mode: "ai-assisted", routeId: "route-b" }]);
+		assert.equal(pools.moveDownCalls, 0);
+		assert.deepEqual(titles.slice(0, 3), ["Recommendation Analyst", "Recommendation Analyst mode", "Recommendation Analyst"]);
 	});
 
 	it("[U][fixture-pi-0.84.1] exposes quality status and confirmation-gated task verification", async () => {

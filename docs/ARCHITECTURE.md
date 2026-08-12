@@ -213,6 +213,8 @@ M5 constructs fresh `AgentSession` instances with `SessionManager.inMemory`, an 
 
 Accepts privacy-filtered internal events, persists metadata, creates query projections, and generates explainable recommendations. It cannot call configuration mutation directly; Apply flows through `config` after user confirmation.
 
+M8.5 adds an optional manual Recommendation Analyst above the deterministic recommendation. It receives only a bounded analytics packet, uses an explicitly selected Verification Pool route through the existing M4/M5 boundary, persists bounded verdict metadata plus an input fingerprint, and never mutates metrics, pools, or configuration. Changed deterministic inputs make prior analyst records stale; analyst failure is advisory and does not invalidate the deterministic recommendation.
+
 ### 5.11 `tui`
 
 Renders the twelve Control Center sections using Pi TUI components and calls application operations. Components do not read files, query SQLite, resolve secrets, or call 9Router directly. Each screen receives view data plus explicit commands so non-TUI tests can exercise the same operations.

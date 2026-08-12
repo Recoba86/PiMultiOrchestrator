@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -153,6 +153,24 @@ async function seedConfig(root: string, baseUrl: string, models: readonly FakeMo
 	await new CatalogCacheStore(root).save(cache);
 }
 
+async function seedRecommendation(root: string, proposedRouteId: StableId, baselineRouteId: StableId): Promise<void> {
+	const store = new SQLiteAnalyticsStore({ root, enabled: true });
+	store.saveRecommendation({
+		recommendationId: "rec-fixture",
+		poolId: "verification",
+		proposedRouteId,
+		baselineRouteId,
+		sampleSize: 10,
+		score: 0.9,
+		formulaVersion: "quality-v1",
+		evidence: ["9/10 successful runs on proposed route"],
+		limitations: ["fixture only"],
+		proposedDiff: { baselineOrder: [baselineRouteId, proposedRouteId] },
+		status: "proposed",
+	});
+	store.close();
+}
+
 function isolatedEnv(server: FakeNineRouter, agentRoot: string, orchestratorRoot: string, sessionsRoot: string): NodeJS.ProcessEnv {
 	const inherited = Object.fromEntries(
 		["PATH", "TMPDIR", "LANG", "LC_ALL", "TERM"]
@@ -223,7 +241,7 @@ function parseJsonLines(value: string): Record<string, unknown>[] {
 		});
 }
 
-async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly qualityLoopFlow?: boolean; readonly analyticsEnabled?: boolean; readonly fallbackEnabled?: boolean; readonly failModels?: readonly string[] } = {}): Promise<T> {
+async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly qualityLoopFlow?: boolean; readonly analystFlow?: "support" | "oppose" | "insufficient_evidence" | "infra-failure"; readonly analystSecret?: string; readonly analyticsEnabled?: boolean; readonly fallbackEnabled?: boolean; readonly failModels?: readonly string[] } = {}): Promise<T> {
 	const server = new FakeNineRouter({ models: sourceModels, ...options });
 	const root = await mkdtemp(join(tmpdir(), "pi-m2-integration-"));
 	const agentRoot = join(root, "agent");
@@ -280,6 +298,73 @@ test("[I][fixture-v1] fake 9Router catalog and SSE contract are bounded and auth
 		});
 	} finally {
 		await server.close();
+	}
+});
+
+test("[I][fixture-v1][M8.5] fake Verification route returns bounded analyst verdicts without transcript metadata", async () => {
+	for (const verdict of ["support", "oppose", "insufficient_evidence"] as const) {
+		const secret = `analyst-secret-${verdict}`;
+		const server = new FakeNineRouter({ toolCallFlow: true, analystFlow: verdict, analystSecret: secret });
+		try {
+			await server.start();
+			const request = (messages: readonly Record<string, unknown>[]) => fetch(`${server.baseUrl}/chat/completions`, {
+				method: "POST",
+				headers: { authorization: `Bearer ${server.token}`, "content-type": "application/json" },
+				body: JSON.stringify({
+					model: "fake/model-01",
+					messages,
+					stream: true,
+					stream_options: { include_usage: true },
+					tools: [{ type: "function", function: { name: "submit_recommendation_analysis", parameters: { type: "object" } } }],
+				}),
+			});
+			const first = await request([{ role: "user", content: "Analyze the bounded recommendation." }]);
+			assert.equal(first.status, 200);
+			const body = await first.text();
+			const argumentLine = body.split(/\r?\n/u).find((line) => line.includes('"arguments":"'));
+			assert.ok(argumentLine, body);
+			const encoded = argumentLine?.match(/"arguments":"((?:\\.|[^"\\])*)"/u)?.[1];
+			assert.ok(encoded, body);
+			const analystResult = JSON.parse(JSON.parse(`"${encoded}"`)) as Record<string, unknown>;
+			assert.equal(analystResult.verdict, verdict);
+			assert.equal(typeof analystResult.explanation, "string");
+			assert.ok(Array.isArray(analystResult.reasoningFactors));
+			assert.ok(Array.isArray(analystResult.caveats));
+			assert.equal(body.includes(secret), false);
+			assert.equal(body.includes("transcript"), false);
+			assert.equal(server.analystRequests.length, 1);
+			assert.equal(JSON.stringify(server.analystRequests).includes(secret), false);
+			assert.equal(JSON.stringify(server.analystRequests).includes("transcript"), false);
+		} finally {
+			await server.close();
+		}
+	}
+});
+
+test("[I][fixture-v1][M8.5] analyst infrastructure failure leaves deterministic recommendation proposed", async () => {
+	const server = new FakeNineRouter({ toolCallFlow: true, analystFlow: "infra-failure" });
+	const root = await mkdtemp(join(tmpdir(), "pi-m85-analyst-failure-"));
+	try {
+		await server.start();
+		await seedRecommendation(root, "route-proposed" as StableId, "route-baseline" as StableId);
+		const response = await fetch(`${server.baseUrl}/chat/completions`, {
+			method: "POST",
+			headers: { authorization: `Bearer ${server.token}`, "content-type": "application/json" },
+			body: JSON.stringify({
+				model: "fake/model-01",
+				messages: [{ role: "user", content: "Analyze recommendation" }],
+				stream: true,
+				tools: [{ type: "function", function: { name: "submit_recommendation_analysis", parameters: { type: "object" } } }],
+			}),
+		});
+		assert.equal(response.status, 503);
+		const store = new SQLiteAnalyticsStore({ root, enabled: true });
+		assert.equal(store.listRecommendations()[0]?.status, "proposed");
+		assert.equal(store.listAnalystAnalyses?.().length ?? 0, 0);
+		store.close();
+	} finally {
+		await server.close();
+		await rm(root, { recursive: true, force: true });
 	}
 });
 
@@ -594,6 +679,90 @@ test("[P][fixture-v1] Pi M7 quality loop persists reject, repair, and re-verific
 			await rm(root, { recursive: true, force: true });
 		}
 	}, { toolCallFlow: true, qualityLoopFlow: true, analyticsEnabled: true });
+});
+
+test("[P][fixture-v1][M8.5] Pi manual Recommendation Analyst uses Verification Pool and never auto-applies", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const routeIds = await Promise.all(sourceModels.slice(0, 3).map((model) => stableRouteId(model.id)));
+		await seedRecommendation(orchestratorRoot, routeIds[2]!, routeIds[1]!);
+		const before = (await new ConfigStore({ root: orchestratorRoot }).load()).snapshot?.config.pools.verification.entries.map((entry) => entry.routeId);
+		const secret = "m85-pi-analyst-secret";
+		const root = await mkdtemp(join(tmpdir(), "pi-m85-analyst-run-"));
+		try {
+			const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+			const child = spawn(piCommand, ["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--mode", "rpc"], { cwd: repoRoot, env, stdio: ["pipe", "pipe", "pipe"] });
+			let stdout = "";
+			let stderr = "";
+			let buffer = "";
+			let commandList: string[] = [];
+			let requested = false;
+			let finished = false;
+			let modeSelected = false;
+			const send = (value: Record<string, unknown>): void => { child.stdin.write(`${JSON.stringify(value)}\n`); };
+			const result = await new Promise<PiRunResult>((resolvePromise, reject) => {
+				let settled = false;
+				const deadline = setTimeout(() => { child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 500).unref(); }, 45_000);
+				child.stdout.on("data", (chunk: Buffer) => {
+					const text = chunk.toString(); stdout += text; buffer += text;
+					let newline = buffer.indexOf("\n");
+					while (newline >= 0) {
+						const line = buffer.slice(0, newline).replace(/\r$/u, ""); buffer = buffer.slice(newline + 1); newline = buffer.indexOf("\n");
+						let event: Record<string, unknown>; try { event = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+						if (event.type === "response" && event.command === "get_commands") {
+							const data = event.data as { commands?: Array<{ name?: unknown }> } | undefined;
+							commandList = (data?.commands ?? []).flatMap((entry) => typeof entry.name === "string" ? [entry.name] : []);
+							assert.ok(commandList.includes("recommendation-analyst"), commandList.join(","));
+							if (!requested) { requested = true; send({ type: "prompt", message: "/recommendation-analyst", id: "m85-analyst" }); }
+							continue;
+						}
+						if (event.type === "response" && event.command === "prompt" && event.id === "m85-analyst" && !finished && !stdout.includes("extension_ui_request")) continue;
+						if (event.type !== "extension_ui_request") continue;
+						const id = typeof event.id === "string" ? event.id : undefined;
+						const method = event.method;
+						const title = typeof event.title === "string" ? event.title : "";
+						const options = Array.isArray(event.options) ? event.options.filter((value): value is string => typeof value === "string") : [];
+						if (!id) continue;
+						if (method === "confirm") {
+							send({ type: "extension_ui_response", id, confirmed: /analy[sz]e|recommendation/iu.test(title) });
+							continue;
+						}
+						if (method === "select") {
+							const mode = options.find((value) => /ai[- ]assisted/iu.test(value)) ?? options.find((value) => /deterministic/iu.test(value));
+							const route = options.find((value) => value.includes(sourceModels[1]!.id)) ?? options.find((value) => value.includes(routeIds[1]!));
+							const action = options.find((value) => /analy[sz]e now|re-analy[sz]e|run analy/iu.test(value));
+							const selected = /mode/iu.test(title) ? mode : /route|verification/iu.test(title) ? route : (!modeSelected && options.some((value) => /^Mode:/u.test(value)) ? (modeSelected = true, options.find((value) => /^Mode:/u.test(value))) : action ?? options.find((value) => value !== "Back"));
+							if (selected) send({ type: "extension_ui_response", id, value: selected });
+							else send({ type: "extension_ui_response", id, value: "Back" });
+							continue;
+						}
+						if (method === "notify" && typeof event.message === "string") {
+							const message = event.message;
+							if (/(?:state=completed|verdict\s*=|support|oppose|insufficient[_ ]evidence|analysis (?:completed|failed))/iu.test(message) && !/unavailable|disabled/iu.test(message)) { finished = true; child.stdin.end(); }
+						}
+					}
+				});
+				child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+				child.once("error", (error) => { clearTimeout(deadline); if (!settled) { settled = true; reject(error); } });
+				child.once("close", (code, signal) => { clearTimeout(deadline); if (settled) return; settled = true; resolvePromise({ code, signal, stdout, stderr }); });
+				send({ type: "get_commands", id: "commands" });
+			});
+			assert.equal(result.code, 0, safePiDiagnostic(result, server.token));
+			assert.equal(finished, true, result.stdout);
+			assert.equal(result.stdout.includes(server.token) || result.stderr.includes(server.token), false);
+			assert.ok(server.analystRequests.length >= 1, result.stdout);
+			assert.equal(server.analystRequests.every((request) => request.model === sourceModels[1]!.id), true);
+			assert.equal(server.analystRequests.every((request) => request.toolNames?.includes("delegate_agent") !== true), true);
+			const after = (await new ConfigStore({ root: orchestratorRoot }).load()).snapshot?.config.pools.verification.entries.map((entry) => entry.routeId);
+			assert.deepEqual(after, before, "analyst must not auto-apply recommendation");
+			const analytics = new SQLiteAnalyticsStore({ root: orchestratorRoot, enabled: true });
+			assert.equal(analytics.listAnalystAnalyses?.().at(-1)?.verdict, "support");
+			analytics.close();
+			const stored = await readFile(join(orchestratorRoot, "analytics.sqlite"));
+			assert.equal(stored.includes(Buffer.from(secret)), false, "analyst transcript/secret must not be persisted");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	}, { toolCallFlow: true, analystFlow: "support", analystSecret: "m85-pi-analyst-secret", analyticsEnabled: true });
 });
 
 test("[P][fixture-v1] Pi RPC exposes M2-M6 commands without live configuration", { skip: integrationSkip }, async () => {

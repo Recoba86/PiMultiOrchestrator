@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS analytics_recommendations (
   status TEXT NOT NULL,
   payload_json TEXT NOT NULL
 ) STRICT;
+CREATE TABLE IF NOT EXISTS analytics_analyst_results (
+  analysis_id TEXT PRIMARY KEY,
+  recommendation_id TEXT NOT NULL,
+  analyzed_at TEXT NOT NULL,
+  route_id TEXT NOT NULL,
+  input_fingerprint TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+) STRICT;
 `;
 export const AnalyticsSchemaV1 = ANALYTICS_SCHEMA_V1;
 
@@ -154,6 +162,8 @@ export interface AnalyticsStoreAdapter {
   saveRecommendation(recommendation: AnalyticsRecommendation): Promise<void> | void;
   listRecommendations(): readonly AnalyticsRecommendation[];
   updateRecommendationStatus?(recommendationId: string, status: AnalyticsRecommendation["status"]): boolean;
+  saveAnalystAnalysis?(analysis: import("./analyst.js").AnalystAnalysisRecord): Promise<void> | void;
+  listAnalystAnalyses?(): readonly import("./analyst.js").AnalystAnalysisRecord[];
   close?(): void;
 }
 export type AnalyticsStore = AnalyticsStoreAdapter;
@@ -281,6 +291,8 @@ export class SQLiteAnalyticsStore implements AnalyticsStoreAdapter, AnalyticsSin
   }
   listRecommendations(): readonly AnalyticsRecommendation[] { if (this.closed) return []; return (this.db.prepare("SELECT payload_json FROM analytics_recommendations ORDER BY created_at,recommendation_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { return [JSON.parse(row.payload_json) as AnalyticsRecommendation]; } catch { return []; } }); }
   updateRecommendationStatus(recommendationId: string, status: AnalyticsRecommendation["status"]): boolean { if (this.closed) return false; const row = this.db.prepare("SELECT payload_json FROM analytics_recommendations WHERE recommendation_id=?").get(recommendationId) as { payload_json?: string } | undefined; if (!row?.payload_json) return false; try { const payload = { ...(JSON.parse(row.payload_json) as AnalyticsRecommendation), status }; const result = this.db.prepare("UPDATE analytics_recommendations SET status=?,payload_json=? WHERE recommendation_id=?").run(status, JSON.stringify(payload), recommendationId); return Number(result.changes) > 0; } catch { return false; } }
+  saveAnalystAnalysis(analysis: import("./analyst.js").AnalystAnalysisRecord): void { if (!this.enabled || this.closed) return; const payload = JSON.stringify(analysis); const analysisId = `${analysis.recommendationId}:${analysis.routeId}:${analysis.inputFingerprint}`; this.db.prepare("INSERT OR IGNORE INTO analytics_analyst_results(analysis_id,recommendation_id,analyzed_at,route_id,input_fingerprint,payload_json) VALUES (?,?,?,?,?,?)").run(analysisId, analysis.recommendationId, analysis.analyzedAt, analysis.routeId, analysis.inputFingerprint, payload); }
+  listAnalystAnalyses(): readonly import("./analyst.js").AnalystAnalysisRecord[] { if (this.closed) return []; return (this.db.prepare("SELECT payload_json FROM analytics_analyst_results ORDER BY analyzed_at,analysis_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { const value: unknown = JSON.parse(row.payload_json); return value && typeof value === "object" ? [value as import("./analyst.js").AnalystAnalysisRecord] : []; } catch { return []; } }); }
   close(): void { if (!this.closed) { this.closed = true; this.db.close(); } }
 }
 
@@ -383,3 +395,4 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
 };
 
 export { AnalyticsQueryService as AnalyticsService };
+export * from "./analyst.js";

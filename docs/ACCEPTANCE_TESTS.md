@@ -507,7 +507,7 @@ Unless a case says otherwise, tests use fixed time/IDs, a temporary agent direct
 - **Action:** finish attempt.
 - **Pass:** one versioned event references mission/task/role/pool/route and known metrics; unknown cache/cost are null with provenance, not zero/fabricated; no prompt/source/tool output exists in row.
 
-M8 implementation note: the current focused evidence exercises bounded synthetic events, mission-attempt observer hooks, and the host command surface (`7/7` analytics focused tests). Actual Pi/fake-gateway mission→quality→analytics, live usage provenance, and loopback proof remain required before Planner acceptance.
+M8 acceptance note: STATE-8 records `134/134 PASS` and the actual Pi/fake-gateway mission→quality→analytics, usage provenance, fallback, billing, detail-view, and recommendation-control evidence. M8.5 analyst checks are recorded below and remain pending Planner acceptance.
 
 ### AN-02 — Fallback and quality counts remain distinct
 
@@ -550,6 +550,20 @@ M8 implementation note: the current focused evidence exercises bounded synthetic
 - **Setup:** prompts, source snippets, headers, tool args/results, and secret markers flow through fake events.
 - **Action:** persist and export analytics.
 - **Pass:** none of those content values/markers appear in database/query/export; permitted IDs/metrics remain.
+
+### ANL-01 — Manual Recommendation Analyst
+
+- **Level:** I/P
+- **Setup:** deterministic candidate exists; enabled Verification Pool route is selected; analytics input includes bounded metrics and UNKNOWN fields.
+- **Action:** operator explicitly chooses AI-assisted → Analyze Now or Re-analyze.
+- **Pass:** only the selected Verification Pool route is used; no timer/background call runs; the bounded packet excludes prompts/source/transcripts/tool output/secrets; result validates as SUPPORT, OPPOSE, or INSUFFICIENT_EVIDENCE with bounded factors/caveats; deterministic metrics remain unchanged and explicit Apply still uses the existing recommendation service.
+
+### ANL-02 — Analyst persistence, staleness, and failure isolation
+
+- **Level:** U/I/P
+- **Setup:** persist one analyst result, reopen analytics storage, then materially change the deterministic input; separately make the analyst route unavailable or infrastructure-fail.
+- **Action:** inspect status and deterministic recommendation.
+- **Pass:** bounded audit metadata reopens without transcript/source content; changed input marks the prior result stale; analyst failure leaves the deterministic recommendation usable; no pool/config mutation or automatic Apply occurs.
 
 ## 10. Export and security
 
