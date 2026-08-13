@@ -1,8 +1,18 @@
 # Development log
 
-Last updated: 2026-08-13
+Last updated: 2026-08-14
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
+
+## M12.1 — Frictionless Mission Entry
+
+- **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.1 is not a public or production-ready release.
+- **Starting HEAD/candidate:** `22c6df3bd23b9c325a6e665af5da6de160a63f62`, `0.1.0-rc.8`.
+- **Purpose:** Make explicit Mission entry available from normal Pi input while preserving ordinary prompts and clarifying Direct Workers versus canonical Mission/M7 verification.
+- **Major outcomes:** Pi `0.84.1` native `input` handling recognizes `@orchestrator <goal>`; empty/ordinary/extension input is bounded; English, Persian, mixed, whitespace, case, quoted, and embedded forms are covered; input and the existing New Mission menu reuse `createCanonicalMission`; MissionStore persistence and pointer-only session history remain canonical.
+- **UX boundary:** `/subagent-run` is labeled Direct Workers, including Direct Verification Worker; its UI and completion feedback state that no canonical Mission task, M7 verification run, quality decision, or quality history is created. Canonical `/verify-task` status/history are labeled Mission quality (M7) without changing their persistence or confirmation semantics.
+- **Evidence:** Focused provider tests passed for real temporary SQLite persistence, menu equivalence, ordinary-input isolation, empty input, and direct-worker labeling. Final RC.9 check, release verification, focused review, and isolated Computer-Use evidence are recorded when complete.
+- **Scope boundary:** No smart routing, automatic classification, Routing Memory, live Pi configuration, provider account, credential, public tag, push, npm publication, or GitHub release.
 
 ## M0 — Specification Freeze
 

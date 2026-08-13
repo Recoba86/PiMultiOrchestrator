@@ -4,6 +4,8 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionContext,
+	InputEvent,
+	InputEventResult,
 	ModelRuntime,
 	ProviderConfig,
 	ProviderModelConfig,
@@ -52,13 +54,12 @@ import {
 import type { FailureClassification, RoutingRequest } from "../core/routing/index.js";
 import type {
 	EvidenceRecord,
-	MissionCreateInput,
 	MissionId,
 	MissionRecord,
 	MissionStatus,
 	MissionStoreAdapter,
 } from "../core/mission/types.js";
-import { createMissionStore } from "../core/mission/index.js";
+import { createCanonicalMission, createMissionStore } from "../core/mission/index.js";
 import { executeMissionTask } from "../core/mission/index.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
@@ -303,6 +304,17 @@ const poolLabels: Record<PoolId, string> = {
 	investigation: "Investigation",
 	implementation: "Implementation",
 	verification: "Verification",
+};
+
+const directWorkerLabels: Record<PoolId, string> = {
+	investigation: "Direct Investigation Worker",
+	implementation: "Direct Implementation Worker",
+	verification: "Direct Verification Worker",
+};
+
+export const parseOrchestratorInvocation = (text: string): { readonly goal: string } | undefined => {
+	const match = /^\s*@orchestrator(?:\s+([\s\S]*))?\s*$/iu.exec(text);
+	return match ? { goal: (match[1] ?? "").trim() } : undefined;
 };
 
 const isPoolId = (value: string): value is PoolId => (POOL_IDS as readonly string[]).includes(value);
@@ -943,6 +955,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			ctx.ui.notify("/pool-models requires TUI or RPC UI mode", "error");
 			return;
 		}
+		if (poolId === "verification") ctx.ui.notify("Verification Pool — shared route configuration\nDirect Workers use it for read-only foreground work; canonical Mission reviewers use it for M7. Use /subagent-run for direct work and /verify-task for canonical M7 verification.", "info");
 		while (true) {
 			let view: PoolView;
 			try {
@@ -1505,7 +1518,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const runSubagent = async (
 		ctx: ExtensionContext | ExtensionCommandContext,
-		params: { readonly role: string; readonly pool: string; readonly task: string; readonly acceptanceCriteria?: readonly string[]; readonly timeoutMs?: number },
+		params: { readonly role: string; readonly pool: string; readonly task: string; readonly acceptanceCriteria?: readonly string[]; readonly timeoutMs?: number; readonly standalone?: boolean },
 		signal?: AbortSignal,
 	): Promise<SubagentRunResult | undefined> => {
 		if (!subagentExecutor || !isPoolId(params.pool)) {
@@ -1534,10 +1547,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				for (let index = 0; index + 1 < result.attempts.length; index++) { const from = result.attempts[index]!; const to = result.attempts[index + 1]!; if (from.failureAction !== "FALLBACK_NEXT_ROUTE") continue; events.push({ eventId: `fallback-${result.runId}-${index}`, occurredAt: to.startedAt, eventType: "fallback", ...base, fallbackFromRouteId: from.routeId, fallbackToRouteId: to.routeId, ...(from.infrastructureFailure?.class ? { failureClass: from.infrastructureFailure.class } : {}), outcome: "fallback" }); }
 				for (const event of events) { try { analyticsStore.append(event); } catch { /* analytics is non-critical */ } }
 			}
-			ctx.ui.notify(`Subagent ${result.terminalStatus}: ${result.summary}`, result.terminalStatus === "completed" ? "info" : "warning");
+			ctx.ui.notify(params.standalone
+				? [`Direct Worker ${result.terminalStatus}: ${result.summary}`, "No canonical Mission task, M7 verification run, or quality history was created."].join("\n")
+				: `Subagent ${result.terminalStatus}: ${result.summary}`, result.terminalStatus === "completed" ? "info" : "warning");
 			return result;
 		} catch (error) {
-			notifyError(ctx, "Subagent execution failed", error);
+			notifyError(ctx, params.standalone ? "Direct worker execution failed" : "Subagent execution failed", error);
 			return undefined;
 		}
 	};
@@ -1571,24 +1586,32 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const openSubagentRunner = async (ctx: ExtensionCommandContext): Promise<void> => {
 		if (!subagentExecutor) {
-			ctx.ui.notify("Routed subagent execution is unavailable", "error");
+			ctx.ui.notify("Direct Workers execution is unavailable", "error");
 			return;
 		}
 		if (ctx.mode !== "tui" && !ctx.hasUI) {
-			ctx.ui.notify("/subagent-run requires TUI or RPC UI mode", "error");
+			ctx.ui.notify("Direct Workers require TUI or RPC UI mode", "error");
 			return;
 		}
 		if (!requireIdle(ctx, "subagent execution")) return;
-		const poolLabel = await ctx.ui.select("Execution pool", POOL_IDS.map((poolId) => `${poolLabels[poolId]} (${poolId})`));
+		const poolLabel = await ctx.ui.select("Direct Workers", POOL_IDS.map((poolId) => `${directWorkerLabels[poolId]} (${poolId})`));
 		if (!poolLabel) return;
 		const poolId = POOL_IDS.find((pool) => poolLabel.endsWith(`(${pool})`));
 		if (!poolId) return;
 		const role = await ctx.ui.input("Role ID", "debugger");
 		const task = await ctx.ui.input("Task", "");
 		if (!role?.trim() || !task?.trim()) return;
-		ctx.ui.notify(`Pool: ${poolLabels[poolId]} | tools: ${poolId === "implementation" ? "read, grep, find, ls, bash, edit, write" : "read, grep, find, ls"} | routing: M4 fallback policy`, "info");
+		ctx.ui.notify([
+			directWorkerLabels[poolId],
+			`Role: ${role.trim()}`,
+			poolId === "verification"
+				? "Runs a verification-role worker directly. This does not create a canonical Mission task, M7 verification run, or quality decision."
+				: "Runs an ad-hoc foreground worker. This does not create a canonical Mission.",
+			`Tools: ${poolId === "implementation" ? "read, grep, find, ls, bash, edit, write" : "read, grep, find, ls"}`,
+			"Routing: M4 fallback policy",
+		].join("\n"), "info");
 		if (poolId === "implementation" && !(await ctx.ui.confirm("Implementation tools may modify files. Continue?", ctx.cwd))) return;
-		await runSubagent(ctx, { role: role.trim(), pool: poolId, task: task.trim() }, ctx.signal);
+		await runSubagent(ctx, { role: role.trim(), pool: poolId, task: task.trim(), standalone: true }, ctx.signal);
 	};
 
 	const openRoutingSettings = async (ctx: ExtensionCommandContext): Promise<void> => {
@@ -1642,6 +1665,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const missionStatusLabel = (mission: MissionRecord): string =>
 		`${mission.missionId} [${mission.status}] rev ${mission.revision} — ${mission.goal}`;
+
+	const missionCreatedMessage = (mission: MissionRecord): string => [
+		"Mission created",
+		`Goal: ${mission.goal}`,
+		`Status: ${mission.status}`,
+		`Next: open /missions ${mission.missionId} to add a Task`,
+		`Mission ID: ${mission.missionId}`,
+	].join("\n");
 
 	const appendMissionPointer = (mission: MissionRecord): void => {
 		// The session entry is only a pointer/status hint. Canonical state remains in
@@ -1707,7 +1738,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const qualityHistoryText = (missionId: string, taskId: string): string => {
 		const verifications = qualityList<VerificationRunRecord>("listVerificationRuns", missionId, taskId);
 		const decisions = qualityList<{ readonly decisionId?: string; readonly verdict: string; readonly round: number; readonly reviewerSummary?: string; readonly reviewerRouteId?: string; readonly findings?: readonly string[]; readonly requiredFixes?: readonly string[] }>("listQualityDecisions", missionId, taskId);
-		const lines = [`mission: ${missionId}`, `task: ${taskId}`, `verification history: ${verifications.length}`];
+		const lines = ["Canonical Mission quality (M7)", `mission: ${missionId}`, `task: ${taskId}`, `verification history: ${verifications.length}`];
 		for (const run of verifications) lines.push(`  run ${run.verificationId} round ${run.round}: ${run.status}${run.reviewerRouteId ? ` reviewer=${run.reviewerRouteId}` : ""}`);
 		lines.push(`decisions: ${decisions.length}`);
 		for (const decision of decisions) {
@@ -1720,7 +1751,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const qualityStatusText = (missionId: string, taskId: string, status: TaskQualityStatus | undefined): string => {
-		const lines = [`mission: ${missionId}`, `task: ${taskId}`, ...qualityTaskDetails(missionId, taskId, status)];
+		const lines = ["Canonical Mission quality (M7)", `mission: ${missionId}`, `task: ${taskId}`, ...qualityTaskDetails(missionId, taskId, status)];
 		if (status?.latestVerificationId) lines.push(`latest verification: ${status.latestVerificationId}`);
 		if (status?.latestDecisionId) lines.push(`latest decision: ${status.latestDecisionId}`);
 		if (status?.updatedAt) lines.push(`updated: ${status.updatedAt}`);
@@ -1746,7 +1777,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const runReviewer = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, verificationId: string, targetRunId: string, implementationRouteId?: StableId): Promise<void> => {
 		if (!qualityService || !qualityExecutor) {
-			ctx.ui.notify(`Verification started: ${verificationId}; reviewer execution is unavailable`, "info");
+			ctx.ui.notify(`Canonical Mission verification (M7) started: ${verificationId}; reviewer execution is unavailable`, "info");
 			return;
 		}
 		try {
@@ -1755,12 +1786,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			if (result.terminalStatus !== "completed") {
 				qualityService.failVerification(verificationId, result.potentialMutationObserved ? "interrupted" : "blocked", result.summary);
 				recordAnalytics({ eventId: `quality-${verificationId}-blocked`, occurredAt: new Date().toISOString(), eventType: "quality", missionId, taskId, runId: targetRunId, verificationId, poolId: "verification", ...(result.finalRouteId === undefined ? {} : { routeId: result.finalRouteId }), outcome: result.terminalStatus, qualityOutcome: "blocked" });
-				ctx.ui.notify(`Verification ${verificationId} ${result.terminalStatus}; quality remains review_required`, "warning");
+				ctx.ui.notify(`Canonical Mission verification (M7) ${verificationId} ${result.terminalStatus}; quality remains review_required`, "warning");
 				return;
 			}
 			const completed = qualityService.completeVerification(verificationId, result.protocolResult ?? result.structuredResult, criteria);
 				recordAnalytics({ eventId: `quality-${completed.decision.decisionId}`, occurredAt: completed.decision.createdAt, eventType: "quality", missionId, taskId, runId: targetRunId, verificationId, qualityRound: completed.run.round, poolId: "implementation", ...(completed.run.implementationRouteId === undefined ? {} : { routeId: completed.run.implementationRouteId }), outcome: completed.decision.verdict, qualityOutcome: completed.decision.verdict, firstPass: completed.decision.verdict === "pass" && completed.run.round === 0, repairRound: completed.run.round, dimensions: completed.run.reviewerRouteId === undefined ? {} : { reviewerRouteId: completed.run.reviewerRouteId } });
-			ctx.ui.notify(`Quality ${completed.decision.verdict}: ${completed.decision.reviewerSummary}`, completed.decision.verdict === "pass" ? "info" : "warning");
+			ctx.ui.notify(`Canonical Mission quality (M7) ${completed.decision.verdict}: ${completed.decision.reviewerSummary}`, completed.decision.verdict === "pass" ? "info" : "warning");
 		} catch (error) {
 			try { qualityService.failVerification(verificationId, "blocked", "Reviewer protocol or infrastructure result was unavailable"); } catch { /* preserve original bounded diagnostic */ }
 			notifyError(ctx, "Task verification failed", error);
@@ -1829,7 +1860,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		try {
 			const status = taskQualityStatus(taskId);
 			if (status?.status === "verification_running") {
-				ctx.ui.notify(`Verification is already running (${status.latestVerificationId ?? "unknown run"})`, "warning");
+				ctx.ui.notify(`Canonical Mission verification (M7) is already running (${status.latestVerificationId ?? "unknown run"})`, "warning");
 				return;
 			}
 			const packet = task?.packet && typeof task.packet === "object" && typeof (task.packet as Record<string, unknown>).packetId === "string"
@@ -1846,7 +1877,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				...(task?.lastRunId ? {} : { potentialMutationObserved: false }),
 			});
 			if (qualityExecutor) await runReviewer(ctx, missionId, taskId, run.verificationId, targetRunId, targetAttempt?.routeId);
-			else ctx.ui.notify(`Verification started: ${run.verificationId}; reviewer result is still required`, "info");
+			else ctx.ui.notify(`Canonical Mission verification (M7) started: ${run.verificationId}; reviewer result is still required`, "info");
 		} catch (error) { notifyError(ctx, "Task verification failed", error); }
 	};
 
@@ -2167,20 +2198,40 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const goal = await ctx.ui.input("Mission goal", "Describe the bounded mission");
 		if (!goal?.trim()) return;
 		const criteriaText = await ctx.ui.input("Acceptance criteria (optional; separate with ;)", "tests pass; review complete");
-		const input: MissionCreateInput = {
-			goal: goal.trim(),
-			...(criteriaText?.trim() ? { acceptanceCriteria: criteriaText.split(";").map((value) => value.trim()).filter(Boolean) } : {}),
-			repository: { cwd: ctx.cwd },
-			actor: "user",
-			status: "draft",
-		};
 		try {
-			const mission = await Promise.resolve(store.createMission(input));
+			const mission = await Promise.resolve(createCanonicalMission(store, goal, {
+				repositoryCwd: ctx.cwd,
+				...(criteriaText?.trim() ? { acceptanceCriteria: criteriaText.split(";").map((value) => value.trim()).filter(Boolean) } : {}),
+			}));
 			appendMissionPointer(mission);
-			ctx.ui.notify(`Mission created: ${mission.missionId}`, "info");
+			ctx.ui.notify(missionCreatedMessage(mission), "info");
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
 		}
+	};
+
+	const handleInput = async (event: InputEvent, ctx: ExtensionContext): Promise<InputEventResult> => {
+		if (event.source === "extension") return { action: "continue" };
+		const invocation = parseOrchestratorInvocation(event.text);
+		if (!invocation) return { action: "continue" };
+		if (!invocation.goal) {
+			ctx.ui.notify("Add a goal after @orchestrator.", "warning");
+			return { action: "handled" };
+		}
+		const store = options.missionStore;
+		if (!store) {
+			missionStoreUnavailable(ctx);
+			return { action: "handled" };
+		}
+		if (!requireIdle(ctx, "mission state")) return { action: "handled" };
+		try {
+			const mission = createCanonicalMission(store, invocation.goal, { repositoryCwd: ctx.cwd });
+			appendMissionPointer(mission);
+			ctx.ui.notify(missionCreatedMessage(mission), "info");
+		} catch (error) {
+			notifyError(ctx, "Mission creation failed", error);
+		}
+		return { action: "handled" };
 	};
 
 	const listMissionRecords = async (ctx: ExtensionCommandContext, requested?: string): Promise<void> => {
@@ -2267,9 +2318,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			return;
 		}
 		while (true) {
-			const action = await ctx.ui.select("Context & Mission Settings", ["Missions", "Create mission", "Context settings", "Back"]);
+			const action = await ctx.ui.select("Context & Mission Settings", ["Missions", "Direct Workers", "Create mission", "Context settings", "Back"]);
 			if (!action || action === "Back") return;
 			if (action === "Missions") await listMissionRecords(ctx);
+			else if (action === "Direct Workers") await openSubagentRunner(ctx);
 			else if (action === "Create mission") await createMission(ctx);
 			else if (action === "Context settings") await showContextMissionSettings(ctx);
 		}
@@ -2541,8 +2593,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			description: "Edit the configured routing and fallback policy",
 			handler: async (_args, ctx) => openRoutingSettings(ctx),
 		});
-			pi.registerCommand("subagent-run", {
-				description: "Run one routed foreground subagent",
+		pi.registerCommand("subagent-run", {
+			description: "Run one Direct Worker without a canonical Mission or M7 quality decision",
 				handler: async (_args, ctx) => openSubagentRunner(ctx),
 			});
 		pi.registerCommand("missions", {
@@ -2586,6 +2638,11 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		registeredFingerprint = undefined;
 		reconciled = true;
 	};
+
+	const piOn = (pi as unknown as {
+		on?: (event: "input", handler: (event: InputEvent, ctx: ExtensionContext) => Promise<InputEventResult>) => void;
+	}).on;
+	if (piOn) piOn.call(pi, "input", handleInput);
 
 		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, registerCommands, dispose };
 }

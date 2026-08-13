@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M11 rc.8 Stage 4A autonomous Computer-Use dogfood PASS / human sanity and acceptance pending |
+| Development phase | M10 accepted; M12.1 implemented locally on RC.9 / M11 acceptance, M12.1 independent review, Planner, and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,7 +23,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M11 candidate | `0.1.0-rc.8` — local, not public |
+| M12.1 candidate | `0.1.0-rc.9` — local, not public; starting HEAD `22c6df3bd23b9c325a6e665af5da6de160a63f62` |
+| M11 candidate | `0.1.0-rc.8` — historical local candidate; not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
 | M11-R4 historical release evidence | rc.2 artifact and `165/165 PASS`; rejected by Independent Review #3 for the custom-tool bypass |
 | M11-R6 historical release evidence | rc.3 safety/remediation, release, compatibility, rescue, privacy, provenance, and bundle verification PASS; rejected by External Review #4 for release-evidence integrity defects |
@@ -51,6 +52,16 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M9 — Full TUI control center | ACCEPTED / PASS |
 | M10 — Safety and hardening | ACCEPTED / PASS |
 | M11 — Packaging, release, and dogfooding | IMPLEMENTED BUT NOT ACCEPTED |
+| M12 — Smart Mission Entry, Hybrid Routing & Routing Memory | IN PROGRESS; only M12.1 is authorized |
+| M12.1 — Frictionless Mission Entry | IMPLEMENTED LOCALLY / ACCEPTANCE EVIDENCE IN PROGRESS |
+
+## M12.1 current implementation
+
+- Pi `0.84.1` native `input` events recognize an explicit `@orchestrator <goal>` entry; ordinary input continues unchanged.
+- The entry and `/orchestrator` → Context & Mission Settings → Create mission menu call the shared `createCanonicalMission` operation and persist through the real MissionStore.
+- Empty entry is handled with `Add a goal after @orchestrator.`; no empty Mission is written. Direct Workers are labeled separately from canonical Mission/M7 verification.
+- No smart routing, automatic prompt classification, routing memory, live Pi configuration, provider account, credential, or public release work is included.
+- Final acceptance still requires the focused UX review, authorized isolated Computer-Use checks, final RC.9 verification evidence, and clean Git handoff. M10 remains the latest accepted milestone.
 
 ## Stable / accepted capabilities
 

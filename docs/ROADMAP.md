@@ -193,3 +193,33 @@ The rc.1 candidate and its R2 evidence were rejected by Independent Review #2 fo
 Stage 3 autonomous closeout is PASS on the explicit supported route `9router/ag/claude-opus-4-6-thinking` through the actual M7 path. Compatibility findings remain route-specific: Tabi produced a valid structured result but a quality REJECT after one failed exploratory mechanical check; DeepSeek Flash exhausted its explicit request cap without submission; DeepSeek Pro and cx/gpt-5.6-sol remain unproven. RC.8 Stage 4A autonomous Computer-Use dogfood is also PASS: a disposable-root Mission → Task → Implementation run created the requested fixture, and the normal Verify action completed a durable M7 `pass` decision on the same explicit route. Final human sanity, fully independent External Review #5, and Planner acceptance remain open. A local RC is not a public release; npm publish, GitHub release, tags, remotes, and live configuration require separate authorization.
 
 Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A autonomous dogfood, and canonical M7 evidence pass. Final human sanity, independent review, Planner acceptance, and authorized publication gates remain pending. Creating a GitHub repository, remote, tag, or release requires separate authorization.
+
+## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
+
+Status: IN PROGRESS. Only M12.1 is authorized; M12.2, M12.3, and the M12 Final Gate are not started.
+
+### M12.1 — Frictionless Mission Entry
+
+Status: COMPLETE / LOCAL PASS; not a public release or accepted development milestone.
+
+Deliverables:
+
+- explicit `@orchestrator <goal>` entry through Pi `0.84.1` native input handling;
+- one shared canonical Mission creation operation for input and the existing New Mission menu;
+- real MissionStore persistence with goal/status/Repository metadata and pointer-only Pi history;
+- clear `Direct Workers` and canonical Mission/M7 terminology without changing `/verify-task` semantics; and
+- deterministic parser, persistence, menu-equivalence, ordinary-input, and direct-worker regression coverage.
+
+Exit gate: local typecheck/build/full tests, release verification, focused UX review, and isolated Computer-Use checks pass; M10 remains the latest accepted milestone, with independent review and Planner/publication gates still separate.
+
+### M12.2 — Hybrid Smart Router
+
+Status: NOT STARTED.
+
+### M12.3 — Adaptive Routing Memory
+
+Status: NOT STARTED.
+
+### M12 Final Gate — Routing Dogfood
+
+Status: NOT STARTED.

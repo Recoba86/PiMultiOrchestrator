@@ -41,7 +41,10 @@ message where applicable.
 - **Investigation Pool**, **Implementation Pool**, and **Verification Pool**
   share the same ordered editor. Add, inspect, remove, enable/disable, and
   move entries without changing provider registration. Implementation and
-  other mutating actions retain their existing confirmation/idle gates.
+  other mutating actions retain their existing confirmation/idle gates. The
+  Verification Pool is shared route configuration: Direct Verification Workers
+  are standalone, while canonical Mission reviewers use it for M7. Use
+  `/subagent-run` for the former and `/verify-task` for the latter.
 - **Boss / Orchestrator Profiles** shows accepted profile configuration and
   explicitly says `Boss runtime not implemented yet`; profiles do not imply
   autonomous planning or scheduling.
@@ -86,8 +89,20 @@ deterministic recommendation usable.
 
 The direct M2–M8.5 commands remain available, including `/9router-models`,
 `/pool-models`, `/pool-status`, `/routing-status`, `/route-health`,
-`/routing-settings`, `/missions`, `/quality-status`, `/verify-task`,
+`/routing-settings`, `/subagent-run`, `/missions`, `/quality-status`, `/verify-task`,
 `/analytics`, `/recommendations`, and `/recommendation-analyst`.
+
+`@orchestrator <goal>` is the explicit one-step Mission entry from Pi's normal
+input surface. It creates a canonical draft Mission and shows the Goal, Status,
+and next action. Ordinary prompts remain ordinary Pi prompts; the marker must be
+at the beginning (surrounding whitespace is allowed), and an empty marker asks
+for a goal.
+
+`/subagent-run` opens **Direct Workers**: Direct Investigation Worker, Direct
+Implementation Worker, or Direct Verification Worker. These are foreground,
+ad-hoc workers and do not create a canonical Mission task, M7 verification run,
+quality decision, or quality history. Use `/verify-task` for canonical Mission
+verification (M7).
 
 ## Safety boundary
 

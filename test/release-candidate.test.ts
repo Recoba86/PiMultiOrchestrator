@@ -11,7 +11,7 @@ const script = join(root, "scripts", "release-candidate.mjs");
 
 test("release candidate metadata is a strict Pi package manifest", () => {
 	const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as Record<string, any>;
-	assert.equal(manifest.version, "0.1.0-rc.8");
+	assert.equal(manifest.version, "0.1.0-rc.9");
 	assert.equal(manifest.private, undefined);
 	assert.deepEqual(manifest.files, ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "docs/OPERATOR_GUIDE.md"]);
 	assert.ok(manifest.keywords.includes("pi-package"));

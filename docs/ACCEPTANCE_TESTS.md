@@ -845,3 +845,31 @@ A milestone is complete only when every required case through that milestone pas
 - **Level:** I/P, Pi `0.84.1`, fake gateway only
 - **Action:** run the 20 mandatory release-integrity attacks; recursively enumerate regular bundle files; reject all symlinks and type changes; verify against a separately supplied root digest; build the named M10 commit, create non-empty Config/Mission/Analytics/Trust state with its modules, read the same state with rc.4 modules, and read it again after M10 rollback.
 - **Pass:** all `20/20` attacks are rejected; every bundle file, review document, root package, and nested M10 file is bound; wrong external roots fail; M10/candidate/rollback provenance is explicit; all four semantic domains are non-empty and equal; `dataLoss` is false; actual `pi list` identity/version/source assertions pass; live calls and paid inference remain zero.
+
+## 19. M12.1 frictionless Mission entry
+
+### M12.1-01 — Explicit input parser is bounded
+
+- **Level:** U
+- **Action:** exercise `@orchestrator` with English, Persian, mixed, surrounding whitespace, empty, case-variant, quoted/code-fenced, embedded, and ordinary text.
+- **Pass:** only an explicit marker at the supported input position is handled; the goal is preserved after normal outer trimming; empty input reports `Add a goal after @orchestrator.` and creates no Mission.
+
+### M12.1-02 — Explicit input persists one canonical Mission
+
+- **Level:** I/P fixture
+- **Action:** invoke the registered Pi `input` handler against a temporary real MissionStore with a disposable cwd.
+- **Pass:** exactly one draft Mission is persisted with the supplied goal and repository metadata; only the Mission pointer/status/revision is appended to Pi history; ordinary input returns `continue` and creates no Mission.
+
+### M12.1-03 — Menu and input share canonical creation
+
+- **Level:** I/P fixture
+- **Action:** create one Mission through `@orchestrator` and one through `/orchestrator` → Context & Mission Settings → Create mission.
+- **Pass:** both records use equivalent canonical defaults and persistence, including status, repository metadata, and acceptance criteria where supplied.
+
+### M12.1-04 — Direct Worker/M7 distinction
+
+- **Level:** U/P fixture
+- **Action:** run `/subagent-run` through Direct Verification Worker and inspect `/verify-task`/quality status labels.
+- **Pass:** the direct flow remains available, creates no Mission task or M7 quality record, explicitly states the distinction, and canonical `/verify-task` remains confirmation-gated and Mission/M7-labeled.
+
+M12.1 does not add automatic prompt classification, smart routing, Routing Memory, or background execution. Real Pi Computer-Use checks and final release verification remain separately labeled evidence.

@@ -7,12 +7,16 @@ import { describe, it } from "node:test";
 import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
+	ExtensionContext,
+	InputEvent,
+	InputEventResult,
 	ProviderConfig,
 	ProviderModelConfig,
 } from "@earendil-works/pi-coding-agent";
 
 import {
 	createPiHost,
+	parseOrchestratorInvocation,
 	type ModelManagerEntry,
 	type PiManagerContract,
 	type PoolManagerContract,
@@ -27,6 +31,7 @@ import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/nine
 import type { StableId } from "../src/core/config/types.js";
 import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
 import type { SubagentExecutionRequest, SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
+import { createMissionStore } from "../src/core/mission/index.js";
 import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/types.js";
 import type { QualityPersistence, TaskQualityStatus, VerificationRunRecord } from "../src/core/quality/types.js";
 import { summarize, type AnalyticsEventV1, type AnalyticsRecommendation, type AnalyticsStoreAdapter } from "../src/core/analytics/index.js";
@@ -148,6 +153,7 @@ interface PiFixture {
 	readonly registerCalls: string[];
 	readonly tools: Map<string, unknown>;
 	readonly entries: Array<{ customType: string; data: unknown }>;
+	readonly inputHandlers: Array<(event: InputEvent, ctx: ExtensionContext) => Promise<InputEventResult>>;
 }
 
 function piFixture(): PiFixture {
@@ -157,6 +163,7 @@ function piFixture(): PiFixture {
 	const registerCalls: string[] = [];
 	const tools = new Map<string, unknown>();
 	const entries: Array<{ customType: string; data: unknown }> = [];
+	const inputHandlers: Array<(event: InputEvent, ctx: ExtensionContext) => Promise<InputEventResult>> = [];
 	const pi = {
 		registerProvider(name: string, config: ProviderConfig): void {
 			registerCalls.push(name);
@@ -175,8 +182,11 @@ function piFixture(): PiFixture {
 		appendEntry(customType: string, data: unknown): void {
 			entries.push({ customType, data });
 		},
+		on(event: string, handler: (event: InputEvent, ctx: ExtensionContext) => Promise<InputEventResult>): void {
+			if (event === "input") inputHandlers.push(handler);
+		},
 	} as unknown as ExtensionAPI;
-	return { pi, providers, commands, unregisters, registerCalls, tools, entries };
+	return { pi, providers, commands, unregisters, registerCalls, tools, entries, inputHandlers };
 }
 
 function missionFixture(): { store: MissionStoreAdapter; mission: MissionRecord; transitions: Array<{ id: string; status: string }> } {
@@ -393,7 +403,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /M11 .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /M12\.1 .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);
@@ -482,7 +492,7 @@ describe("Pi 9Router host adapter", () => {
 		} as unknown as ExtensionCommandContext);
 		assert.equal(quality.runs.length, 1);
 		assert.equal(quality.status.status, "verification_running");
-		assert.ok(notifications.some((message) => /Verification started/.test(message)));
+		assert.ok(notifications.some((message) => /Canonical Mission verification \(M7\) started/.test(message)));
 	});
 
 	it("[U][fixture-pi-0.84.1] direct task verification prefers a different reviewer route", async () => {
@@ -523,6 +533,112 @@ describe("Pi 9Router host adapter", () => {
 		host.registerCommands();
 		assert.ok(pi.tools.has("delegate_agent"));
 		assert.ok(pi.commands.has("subagent-run"));
+	});
+
+	it("[U][fixture-pi-0.84.1] creates one canonical mission from @orchestrator and keeps ordinary input unchanged", async () => {
+		assert.deepEqual(parseOrchestratorInvocation("  @orchestrator  build a safe plan  "), { goal: "build a safe plan" });
+		assert.deepEqual(parseOrchestratorInvocation("@orchestrator بررسی مسیر"), { goal: "بررسی مسیر" });
+		assert.deepEqual(parseOrchestratorInvocation("@orchestrator"), { goal: "" });
+		assert.equal(parseOrchestratorInvocation("What does @orchestrator mean?"), undefined);
+		assert.equal(parseOrchestratorInvocation("\"@orchestrator goal\""), undefined);
+		assert.equal(parseOrchestratorInvocation("```@orchestrator goal```"), undefined);
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-entry-"));
+		let entryId = 0;
+		const store = createMissionStore({ root, id: () => `entry-${++entryId}` });
+		try {
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store });
+			host.registerCommands();
+			const notifications: string[] = [];
+			const ctx = {
+				cwd: "/private/tmp/pi-m12-entry-dogfood",
+				isIdle: () => true,
+				ui: { notify: (message: string) => notifications.push(message) },
+			} as unknown as ExtensionContext;
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+
+			assert.deepEqual(await handleInput({ type: "input", text: " @ORCHESTRATOR بررسی mixed مسیر", source: "interactive" }, ctx), { action: "handled" });
+			const mission = store.listMissions()[0];
+			assert.ok(mission);
+			assert.equal(mission.goal, "بررسی mixed مسیر");
+			assert.equal(mission.status, "draft");
+			assert.equal(mission.repository.cwd, ctx.cwd);
+			assert.equal(store.listMissions().length, 1);
+			assert.deepEqual(pi.entries, [{ customType: "pi-multi-orchestrator:mission", data: { missionId: mission.missionId, status: "draft", revision: 1 } }]);
+			assert.match(notifications[0] ?? "", /Mission created[\s\S]*Goal: بررسی mixed مسیر[\s\S]*Status: draft[\s\S]*Next:/u);
+
+			assert.deepEqual(await handleInput({ type: "input", text: "What does @orchestrator mean?", source: "interactive" }, ctx), { action: "continue" });
+			assert.deepEqual(await handleInput({ type: "input", text: "@orchestrator   ", source: "interactive" }, ctx), { action: "handled" });
+			assert.match(notifications.at(-1) ?? "", /Add a goal after @orchestrator\./u);
+			assert.deepEqual(await handleInput({ type: "input", text: "@orchestrator ignored extension input", source: "extension" }, ctx), { action: "continue" });
+			assert.equal(store.listMissions().length, 1);
+
+			const selections = ["Context & Mission Settings", "Create mission", "Back", "Back"];
+			const inputs = ["Menu-created mission", "tests pass; review complete"];
+			await pi.commands.get("orchestrator")!.handler("", {
+				cwd: ctx.cwd,
+				mode: "tui",
+				hasUI: true,
+				isIdle: () => true,
+				ui: {
+					select: async () => selections.shift(),
+					input: async () => inputs.shift(),
+					notify: (message: string) => notifications.push(message),
+				},
+			} as unknown as ExtensionCommandContext);
+			const menuMission = store.listMissions()[1];
+			assert.ok(menuMission, JSON.stringify({ selections, inputs, notifications, missions: store.listMissions().map((item) => item.goal) }));
+			assert.equal(menuMission.goal, "Menu-created mission");
+			assert.equal(menuMission.status, "draft");
+			assert.deepEqual(menuMission.repository, { cwd: ctx.cwd });
+			assert.deepEqual(menuMission.acceptanceCriteria, ["tests pass", "review complete"]);
+		} finally {
+			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][fixture-pi-0.84.1] labels direct verification workers separately from canonical M7 verification", async () => {
+		const pi = piFixture();
+		const requests: SubagentExecutionRequest[] = [];
+		const result: SubagentRunResult = {
+			protocolVersion: 1,
+			runId: "direct-run",
+			roleId: "debugger",
+			poolId: "verification",
+			terminalStatus: "completed",
+			attempts: [],
+			potentialMutationObserved: false,
+			fallbackCount: 0,
+			summary: "direct worker complete",
+		};
+		const executor = {
+			run: async (request: SubagentExecutionRequest): Promise<SubagentRunResult> => {
+				requests.push(request);
+				return result;
+			},
+		} as unknown as SubagentExecutor;
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), subagentExecutor: executor });
+		host.registerCommands();
+		const notifications: string[] = [];
+		const selections = ["Direct Verification Worker (verification)"];
+		const inputs = ["quality-check", "Inspect the bounded result"];
+		await pi.commands.get("subagent-run")!.handler("", {
+			cwd: "/private/tmp/pi-m12-entry-dogfood",
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async () => selections.shift(),
+				input: async () => inputs.shift(),
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.equal(requests[0]?.poolId, "verification");
+		assert.ok(notifications.some((message) => message.includes("Direct Verification Worker")));
+		assert.ok(notifications.some((message) => message.includes("does not create a canonical Mission task, M7 verification run")));
+		assert.ok(notifications.some((message) => message.includes("Direct Worker completed") && message.includes("No canonical Mission task")));
 	});
 
 	it("[U][fixture-pi-0.84.1] exposes canonical missions and stores only a pointer/status entry", async () => {

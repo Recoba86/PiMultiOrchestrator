@@ -33,6 +33,22 @@ const clone = <T>(value: T): T => parse<T>(json(value), value);
 const idOf = (value: string | undefined, prefix: string, make: () => string): string =>
 	value && value.length > 0 ? value : `${prefix}-${make()}`;
 
+export const createCanonicalMission = (
+	store: Pick<MissionStoreAdapter, "createMission">,
+	goal: string,
+	options: { readonly repositoryCwd?: string; readonly acceptanceCriteria?: readonly string[] } = {},
+): MissionRecord => {
+	const normalizedGoal = goal.trim();
+	if (!normalizedGoal) throw new MissionValidationError([{ path: "goal", message: "goal is required" }]);
+	return store.createMission({
+		goal: normalizedGoal,
+		...(options.acceptanceCriteria && options.acceptanceCriteria.length > 0 ? { acceptanceCriteria: options.acceptanceCriteria } : {}),
+		...(options.repositoryCwd ? { repository: { cwd: options.repositoryCwd } } : {}),
+		status: "draft",
+		actor: "user",
+	});
+};
+
 const MISSION_POOL_IDS = new Set(["investigation", "implementation", "verification"]);
 
 export class SQLiteMissionStore implements MissionStoreAdapter {

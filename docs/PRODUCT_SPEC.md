@@ -335,3 +335,12 @@ M0 MUST NOT implement the extension, install Pi extensions/subagents, modify liv
 ## 18. Completion rule
 
 Product behavior is accepted only through measurable cases in [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md). Milestone ordering and explicit exit gates are defined in [ROADMAP.md](ROADMAP.md).
+
+## 19. M12.1 explicit Mission entry
+
+- `@orchestrator <goal>` is an explicit, one-step canonical Mission entry on Pi's normal input surface. The marker is recognized only at the supported beginning position, with surrounding whitespace and marker case handled by the documented parser contract.
+- Ordinary prompts, embedded mentions, quoted/code-fenced text, and extension-originated input remain ordinary Pi input. An empty explicit entry is handled with actionable feedback and never creates an empty Mission.
+- Explicit entry and the existing New Mission menu MUST call one authoritative Mission creation operation and persist through MissionStore with the normal draft/default/repository semantics.
+- The creation feedback MUST show the goal, current status, and next action before implementation identifiers.
+- Direct Workers are foreground/ad-hoc execution without canonical Mission lifecycle. A Direct Verification Worker MUST state that it does not create canonical M7 verification or quality state. `/verify-task` remains the canonical Mission/Task/Run quality path.
+- M12.1 MUST NOT add automatic prompt classification, smart routing, Routing Memory, background scheduling, or promotion of direct work into canonical state.

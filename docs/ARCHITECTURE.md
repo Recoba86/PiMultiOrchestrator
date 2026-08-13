@@ -700,6 +700,28 @@ M6 adds a separate, injected-root SQLite `MissionStore` (`mission.sqlite`) behin
 
 These limits reduce code while preserving an upgrade path and do not relax validation, safety, recovery, or acceptance gates.
 
+## 23.1 M12.1 Mission entry and worker terminology
+
+Pi `0.84.1` exposes raw user input through the extension `input` event before
+agent processing. The host handles only an explicit `@orchestrator <goal>` at
+the supported beginning position; ordinary or extension-originated input returns
+`continue`, while a valid explicit entry is `handled` so the goal is not sent
+to the model as an ordinary prompt.
+
+`createCanonicalMission` is the one host-facing creation operation used by both
+the input handler and the existing New Mission menu. It trims and validates the
+goal, applies the normal draft/user/repository defaults, and delegates durable
+persistence to MissionStore. Pi history receives only the existing mission
+pointer/status/revision entry; the MissionStore remains authoritative.
+
+`/subagent-run` is presented as Direct Workers. Its Investigation,
+Implementation, and Verification choices are foreground/ad-hoc workers and do
+not create a Mission task, M7 verification run, quality decision, or quality
+history. The Verification Pool remains shared route configuration for direct
+read-only workers and canonical Mission reviewers; `/verify-task` remains the
+canonical Mission/Task/Run → M7 path. M12.1 does not add classification,
+automatic routing, promotion, or scheduling.
+
 ## 23. M11 package and rescue boundary
 
 M11 packages the compiled host entrypoint through Pi's supported `pi-package`
