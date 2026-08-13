@@ -7,12 +7,12 @@ is not a live-provider or public-release claim.
 |---|---|---|
 | Pi | `@earendil-works/pi-coding-agent@0.84.1` | Other Pi versions |
 | Node.js | `v22.23.0` (`>=22.19.0`) | Older Node; standalone/Bun |
-| Package source | Verified contents extracted from the exact `0.1.0-rc.3` `.tgz` with checksum recorded in the generated manifest, then installed as a local directory with Pi `0.84.1` | Direct `.tgz` through `pi install` (Pi treats it as a loadable file), npm registry, git source, public publish |
+| Package source | Verified contents extracted from the exact `0.1.0-rc.4` `.tgz` with checksum recorded in the generated manifest, then installed as a local directory with Pi `0.84.1` | Direct `.tgz` through `pi install` (Pi treats it as a loadable file), npm registry, git source, public publish |
 | Extension load | Unpacked artifact without the source checkout | Live global/project settings |
 | Provider | Fake OpenAI-compatible 9Router only | Real 9Router, subscription/account metadata |
 | Persistence | Config schema 2, MissionStore schema 2, Analytics schema 1 retained across candidate install test | Schema migration introduced by M11: none |
 | Platform | Current macOS development host, isolated temporary roots | Other OSes/Termius/remote TUI |
-| Upgrade | PASS — real M10 implementation baseline commit `c65470c001e539c36f0a53cacd912f48eb05ff7f` → verified extracted `0.1.0-rc.3` directory in temporary roots; seeded Config/Mission/Analytics/Trust state and hashes recorded before and after | Public package-manager upgrade |
+| Upgrade | PASS — real M10 implementation baseline commit `c65470c001e539c36f0a53cacd912f48eb05ff7f` → verified extracted `0.1.0-rc.4` directory in temporary roots; M10 modules created non-empty Config/Mission/Analytics/Trust state and rc.4 modules read equal semantic snapshots | Public package-manager upgrade |
 | Rollback | PASS — candidate removal → reinstall of the real M10 compatibility baseline directory; before/after state hashes, package version, and seeded-state recovery recorded | Rollback across future schema changes |
 
 The package declares Pi as a peer dependency and has no runtime npm
@@ -21,7 +21,14 @@ paths, and session data are outside the package allowlist. A local RC is not a
 stable or public release. The release artifact is the immutable `.tgz`; the
 local RC install source is a fresh extracted directory derived from and
 checksum-verified against that artifact. The source checkout is never the
-installed package. rc.3 also binds the release manifest to clean Git/source/tree
-identity and trusted Node/npm/Pi executable identities; the integrated worker
-guard enforces role/profile/path/command policy before Pi executes tools, and
-the child session creates only its internal capture-only result protocol.
+installed package. rc.4 is built and independently tested from exact Git commit
+`ae39f24937988ef95975b2b45c018f4c45efd23c`; its artifact SHA-256 is
+`a1e14c83da374c5f6a1b849c589feb444002d46e8a0634c0bbd5d520a539572b`.
+The authentic M10 baseline artifact SHA-256 is
+`cdf0426b3e2e2024a5e18b6303bc287015432827184833b90a4dc9d75206295c`.
+Observed Config/Mission/Analytics/Trust snapshots were non-empty and equal
+before upgrade, under rc.4, and after M10 rollback; `dataLoss` was false. Actual
+`pi list` output was parsed to assert package name, version, source, and
+installed path. The recursive bundle rejects symlinks and is accepted only
+against a root digest supplied outside the bundle. The integrated worker guard
+and M5-owned capture-only result protocol remain unchanged and passing.

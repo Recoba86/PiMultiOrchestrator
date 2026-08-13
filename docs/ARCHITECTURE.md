@@ -720,3 +720,21 @@ isolated Pi settings/runtime roots. A rescue harness can remove or disable the
 package and restore a named M10 compatibility baseline without loading the
 extension. A local RC is not a public release, and no live route or publication
 is implied.
+
+M11-R8 makes the clean Git commit, not the mutable developer filesystem, the
+release-source authority. A detached local staging checkout of the exact
+commit supplies both the build and an independent execution-time rerun of the
+repository's bound `npm run check` definition. The manifest records commit,
+tree, source digest, script definition, non-zero observed TAP totals, and
+trusted Node/npm/TypeScript/Pi identities. Untracked and ignored developer
+files are outside that source; tracked or staged changes fail closed.
+
+Artifact, extracted source, compatibility trees, and review bundles are
+recursively inspected without following symlinks. The bundle manifest covers
+every regular file by deterministic relative path, size, and SHA-256, while an
+expected root digest is supplied separately by the handoff/reviewer. The
+bundle's internal claims are audit records and cannot authenticate coordinated
+tampering by themselves. Compatibility state is created and read with M10
+modules, then read with rc.4 modules, then read again with M10 modules after
+rollback; equality and data-loss results are derived from the observed
+machine-readable snapshots.

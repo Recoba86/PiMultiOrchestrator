@@ -13,7 +13,7 @@ This file records releasable product state. It does not promote development prog
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.3` — local release candidate only |
+| Development manifest version | `0.1.0-rc.4` — local release candidate only |
 | Release tag | NONE |
 | Release commit | NONE |
 | GitHub release | NONE |
@@ -37,7 +37,8 @@ Milestone acceptance does not itself create a product release.
 | M10 accepted verification | `3a6990d`; `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for release provenance, privacy, rescue, and integrated-worker safety gaps |
 | M11-R4 historical candidate | `0.1.0-rc.2`; `165/165 PASS`, release subtests `4/4 PASS`, and compatibility/rescue evidence PASS; rejected by Independent Review #3 for the custom-tool bypass |
-| M11-R6 candidate | `0.1.0-rc.3`; declarative capture-only worker protocols and fail-closed tool classification are implemented; `169/169` plus actual-Pi safety, release, compatibility, rescue, provenance, privacy, and bundle verification PASS; External Review #4 remains pending |
+| M11-R6 historical candidate | `0.1.0-rc.3`; worker/custom-tool safety independently passed, but External Review #4 rejected the candidate for release-evidence integrity defects |
+| M11-R8 candidate | `0.1.0-rc.4`; artifact SHA-256 `a1e14c83da374c5f6a1b849c589feb444002d46e8a0634c0bbd5d520a539572b`; exact-Git provenance, independent `169/169` rerun, `20/20` integrity attacks, Pi `0.84.1` install/upgrade/rollback/rescue, privacy, worker safety, deterministic rebuild, and external-root bundle verification PASS; External Review #5 pending |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -58,7 +59,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
 - M10's application-level policy is not an OS/kernel sandbox. M11 package/install/rollback/review/dogfood gates remain pending Planner acceptance; real-route smoke is unauthorized.
 - Pi `0.84.1` must be given the extracted `directory-source/` derived from the verified RC `.tgz`; direct `pi install <artifact>.tgz` is not a supported local workflow. The source checkout is never installed.
-- R4 evidence was generated from a clean commit with `dirty: false`; its manifest bound source/tree/build digests and trusted executable identities. Review #3 rejected rc.2 after reproducing arbitrary caller-supplied custom-tool execution. R6 generated a fresh clean rc.3 manifest and bundle with the same provenance/privacy guarantees plus actual-Pi tool-safety evidence. It remains external-review evidence, not acceptance or publication.
+- Review #3 rejected rc.2 after reproducing arbitrary caller-supplied custom-tool execution. R6 closed that bypass, but Review #4 rejected rc.3 for evidence-integrity weaknesses. R8 builds rc.4 only from commit `ae39f24937988ef95975b2b45c018f4c45efd23c`, binds source/test/tool identities, preserves authentic M10 state across upgrade and rollback, rejects all 20 required attacks, and anchors the recursively hashed review bundle to a separately supplied root digest. It remains external-review evidence, not acceptance or publication.
 
 ## Future release record
 

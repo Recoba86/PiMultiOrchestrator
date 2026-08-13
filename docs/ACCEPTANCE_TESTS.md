@@ -796,7 +796,7 @@ A milestone is complete only when every required case through that milestone pas
 
 - **Level:** U/I
 - **Action:** build the candidate and inspect `package.json`, `pi` manifest, peer/runtime dependencies, and the generated file list.
-- **Pass:** SemVer `0.1.0-rc.3`, explicit compiled entrypoint, `pi-package` keyword, Pi peer only, no runtime dependency confusion, and no source/runtime-state files.
+- **Pass:** SemVer `0.1.0-rc.4`, explicit compiled entrypoint, `pi-package` keyword, Pi peer only, no runtime dependency confusion, and no source/runtime-state files.
 
 ### RELEASE-02 — Artifact verification and source independence
 
@@ -826,7 +826,7 @@ A milestone is complete only when every required case through that milestone pas
 
 - **Level:** U/I
 - **Action:** run the release verifier with a fake executable earlier on `PATH`, alter source/build/evidence inputs in isolated copies, and verify the clean Git/tree/source/build identity, trusted Node/npm/Pi identities, strict test-total parsing, artifact/checksum binding, and machine-neutral evidence.
-- **Pass:** ambient `PATH` tools cannot forge release totals or Pi identity; stale, dirty, altered, or path-leaking evidence is rejected; the clean rc.3 bundle verifies as `EXTERNAL_REVIEW_PENDING`.
+- **Pass:** ambient `PATH` tools cannot forge release totals or Pi identity; zero/forged totals fail; stale, dirty, altered, or path-leaking evidence is rejected; source and tests are rerun from exact Git content; the clean rc.4 bundle verifies as `EXTERNAL_REVIEW_PENDING` only with the externally supplied root digest.
 
 ### RELEASE-07 — Integrated worker safety enforcement
 
@@ -839,3 +839,9 @@ A milestone is complete only when every required case through that milestone pas
 - **Level:** I/P, Pi `0.84.1`, fake gateway
 - **Action:** attempt the former caller-supplied `submit_evil` handler, enumerate effective child tools, submit malicious-looking protocol payloads, and try protocol names colliding with `read`, `write`, `edit`, and `bash`.
 - **Pass:** executable custom handlers cannot enter a child session; only declarative capture-only protocols are exposed; unknown and colliding tools fail closed; the exact `submit_evil` fixture remains unchanged under untrusted project state; protocol payloads are never interpreted as commands or paths.
+
+### RELEASE-09 — Recursive integrity and authentic compatibility
+
+- **Level:** I/P, Pi `0.84.1`, fake gateway only
+- **Action:** run the 20 mandatory release-integrity attacks; recursively enumerate regular bundle files; reject all symlinks and type changes; verify against a separately supplied root digest; build the named M10 commit, create non-empty Config/Mission/Analytics/Trust state with its modules, read the same state with rc.4 modules, and read it again after M10 rollback.
+- **Pass:** all `20/20` attacks are rejected; every bundle file, review document, root package, and nested M10 file is bound; wrong external roots fail; M10/candidate/rollback provenance is explicit; all four semantic domains are non-empty and equal; `dataLoss` is false; actual `pi list` identity/version/source assertions pass; live calls and paid inference remain zero.
