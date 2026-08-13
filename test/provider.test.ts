@@ -570,7 +570,7 @@ describe("Pi 9Router host adapter", () => {
 				notify: () => {},
 			},
 		} as unknown as ExtensionCommandContext);
-		assert.deepEqual(titles, ["Pi Multi-Orchestrator", "Context & Mission Settings"]);
+		assert.deepEqual(titles, ["Pi Multi-Orchestrator", "Context & Mission Settings", "Pi Multi-Orchestrator"]);
 	});
 
 	it("[U][fixture-pi-0.84.1] opens all three pool sections from orchestrator", async () => {
