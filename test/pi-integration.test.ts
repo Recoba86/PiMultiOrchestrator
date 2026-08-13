@@ -694,6 +694,7 @@ test("[P][fixture-v1] Pi M7 quality loop persists reject, repair, and re-verific
 			assert.equal(reviewerRequests.length, 4, result.stdout);
 			assert.equal(repairRequests.length, 2, result.stdout);
 			assert.equal(reviewerRequests.every((request) => request.toolNames?.includes("delegate_agent") !== true), true);
+			assert.equal(reviewerRequests.every((request) => request.toolNames?.includes("bash") !== true), true);
 
 			const reopened = createMissionStore({ root: orchestratorRoot });
 			const status = reopened.getTaskQualityStatus("task-m7");

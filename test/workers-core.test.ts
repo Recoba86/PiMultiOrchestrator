@@ -46,7 +46,7 @@ const policy: RoutingPolicy = {
 describe("M5 worker core", () => {
 	it("keeps per-pool tools hard-limited and classifies unknown tools as mutating", () => {
 		assert.deepEqual(toolProfileForPool("investigation"), ["read", "grep", "find", "ls"]);
-		assert.deepEqual(toolProfileForPool("verification"), ["read", "grep", "find", "ls", "bash"]);
+		assert.deepEqual(toolProfileForPool("verification"), ["read", "grep", "find", "ls"]);
 		assert.deepEqual(toolProfileForPool("implementation"), ["read", "grep", "find", "ls", "bash", "edit", "write"]);
 		assert.equal(WORKER_TOOL_PROFILES.investigation.includes("edit"), false);
 		assert.equal(WORKER_TOOL_PROFILES.verification.includes("write"), false);
@@ -204,6 +204,30 @@ describe("M5 worker core", () => {
 			assert.equal(result.terminalStatus, "completed");
 			assert.equal((result.protocolResult as { verdict?: string } | undefined)?.verdict, "pass");
 			assert.equal(result.structuredResult, undefined);
+			assert.equal(result.attempts[0]?.toolNamesUsed.includes("submit_verification_result"), true);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("exposes only executable read-only tools to the Verification reviewer", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-worker-verification-surface-"));
+		try {
+			let visibleTools: readonly string[] | undefined;
+			const adapter = adapterFor([candidate("route-a", 0)]);
+			const executor = createSubagentExecutorForTesting({
+				routeAdapter: adapter,
+				resultProtocolFactory: () => createVerificationResultProtocol(),
+			}, {
+				create: async (options) => {
+					visibleTools = options.toolNames;
+					return fakeSessionHandle(options.resultProtocol, "verification");
+				},
+			});
+			const result = await executor.run(request(root, "verification"));
+			assert.equal(result.terminalStatus, "completed");
+			assert.deepEqual(visibleTools, ["read", "grep", "find", "ls"]);
+			assert.equal(visibleTools?.includes("bash"), false);
 			assert.equal(result.attempts[0]?.toolNamesUsed.includes("submit_verification_result"), true);
 		} finally {
 			await rm(root, { recursive: true, force: true });

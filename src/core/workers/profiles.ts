@@ -5,7 +5,7 @@ import type { WorkerToolName } from "./types.js";
 export const WORKER_TOOL_PROFILES: Readonly<Record<PoolId, readonly WorkerToolName[]>> = {
 	investigation: ["read", "grep", "find", "ls"],
 	implementation: ["read", "grep", "find", "ls", "bash", "edit", "write"],
-	verification: ["read", "grep", "find", "ls", "bash"],
+	verification: ["read", "grep", "find", "ls"],
 };
 
 export type WorkerProfileId = PoolId | "recommendation-analyst";

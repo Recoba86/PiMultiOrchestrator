@@ -301,7 +301,7 @@ export function getCapabilityMatrix(): readonly CapabilityRow[] {
 	return [
 		{ profile: "investigation", tools: ["read", "grep", "find", "ls"], mutation: false, bash: false, trustRequired: false, protectedPathRestrictions: "protected reads denied" },
 		{ profile: "implementation", tools: ["read", "grep", "find", "ls", "edit", "write", "bash"], mutation: true, bash: true, trustRequired: true, protectedPathRestrictions: "trusted root only; internal/credential paths denied" },
-		{ profile: "verification", tools: ["read", "grep", "find", "ls", "bash"], mutation: false, bash: true, trustRequired: false, protectedPathRestrictions: "read-only; bash remains policy-guarded" },
+		{ profile: "verification", tools: ["read", "grep", "find", "ls"], mutation: false, bash: false, trustRequired: false, protectedPathRestrictions: "read-only; shell execution unavailable" },
 		{ profile: "recommendation-analyst", tools: ["submit_recommendation_analysis"], mutation: false, bash: false, trustRequired: false, protectedPathRestrictions: "analytics packet only; no source/transcript/secret" },
 	];
 }

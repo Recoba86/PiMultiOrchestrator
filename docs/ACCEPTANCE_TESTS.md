@@ -635,7 +635,7 @@ M8 acceptance note: STATE-8 records `134/134 PASS` and the actual Pi/fake-gatewa
 
 - **Level:** U/I, fixture-v1
 - **Action:** create fresh children for Investigation, Implementation, and Verification with an exact route/model.
-- **Pass:** session storage is in memory; parent extensions/delegate tool are absent; allowlists are read/grep/find/ls; read/grep/find/ls/bash; and read/grep/find/ls/bash respectively.
+- **Pass:** session storage is in memory; parent extensions/delegate tool are absent; Investigation and Verification expose only read/grep/find/ls; Implementation exposes read/grep/find/ls/bash/edit/write; and each child receives only its bounded result tool.
 
 ### WORK-06 — Structured result protocol
 

@@ -197,7 +197,7 @@ const main = async () => {
 			effectiveTools: {
 				investigation: ["read", "grep", "find", "ls", "submit_agent_result"],
 				implementation: ["read", "grep", "find", "ls", "bash", "edit", "write", "submit_agent_result"],
-				verification: ["read", "grep", "find", "ls", "bash", "submit_agent_result"],
+				verification: ["read", "grep", "find", "ls", "submit_verification_result"],
 				analyst: ["read", "grep", "find", "ls", "submit_recommendation_analysis"],
 				unknown: "FAIL_CLOSED",
 			},

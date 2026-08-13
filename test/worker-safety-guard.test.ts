@@ -38,8 +38,8 @@ test("worker profiles cannot expand into mutation or unsafe shell execution", as
 	try {
 		const verification = new WorkerSafetyGuard({ projectRoot: root, profile: "verification", trusted: true, requestedTools: ["read", "bash", "edit", "write"] });
 		assert.equal(verification.authorize("edit", { path: "file.txt" }).code, "TOOL_NOT_ACTIVE");
-		assert.equal(verification.authorize("bash", { command: "rm -rf ." }).code, "PROFILE_MUTATION_DENIED");
-		assert.equal(verification.authorize("bash", { command: "npm test" }).code, "PROFILE_MUTATION_DENIED");
+		assert.equal(verification.authorize("bash", { command: "rm -rf ." }).code, "TOOL_NOT_ACTIVE");
+		assert.equal(verification.authorize("bash", { command: "npm test" }).code, "TOOL_NOT_ACTIVE");
 		const analyst = new WorkerSafetyGuard({ projectRoot: root, profile: "recommendation-analyst", trusted: true, requestedTools: ["read", "edit", "write", "bash"], resultToolName: "submit_recommendation_analysis" });
 		assert.equal(analyst.authorize("edit", { path: "file.txt" }).code, "TOOL_NOT_ACTIVE");
 		assert.equal(analyst.authorize("bash", { command: "git status" }).code, "TOOL_NOT_ACTIVE");
