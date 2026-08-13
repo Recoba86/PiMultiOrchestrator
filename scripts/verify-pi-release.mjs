@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { access, constants, realpath, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { trustedNpm, trustedPi, trustedSystemExecutable, verifyReleaseDirectory } from "./release-candidate.mjs";
+import { trustedNpm, trustedPi, trustedSystemExecutable, trustedToolEnvironment, trustedTypeScript, verifyReleaseDirectory } from "./release-candidate.mjs";
 
 const fail = (message) => { throw new Error(message); };
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -86,8 +86,10 @@ const hashTree = async (root) => {
 		for (const entry of await readdir(join(root, prefix), { withFileTypes: true })) {
 			const path = join(prefix, entry.name);
 			if (entry.isDirectory()) await walk(path);
-			else if (entry.isFile()) entries.push({ path: path.split("\\").join("/"), sha256: createHash("sha256").update(await readFile(join(root, path))).digest("hex") });
-			else if (entry.isSymbolicLink()) entries.push({ path: path.split("\\").join("/"), symlink: "rejected" });
+			else if (entry.isFile()) {
+				const fullPath = join(root, path);
+				entries.push({ path: path.split("\\").join("/"), size: (await stat(fullPath)).size, sha256: createHash("sha256").update(await readFile(fullPath)).digest("hex") });
+			} else fail(`compatibility tree contains a symlink or non-regular entry: ${path}`);
 		}
 	};
 	await walk();
@@ -143,10 +145,10 @@ async function seedCompatibilityState(source, configRoot, cwd) {
 	const trustStore = new security.TrustStore({ root: join(configRoot, "trust") });
 	trustStore.trust(trustedProject, "seeded trusted project");
 	trustStore.revoke(untrustedProject);
-	return { trustedProject, untrustedProject };
+	return { missionId: missionRecord.missionId, taskId: task.taskId, attemptId: attempt.attemptId, evidenceId: evidence.evidenceId };
 }
 
-async function captureSemanticState(source, configRoot) {
+async function captureSemanticState(source, configRoot, provenance, seedIds) {
 	const config = await moduleAt(source, "dist/core/config/index.js");
 	const mission = await moduleAt(source, "dist/core/mission/index.js");
 	const analytics = await moduleAt(source, "dist/core/analytics/index.js");
@@ -157,6 +159,7 @@ async function captureSemanticState(source, configRoot) {
 	const missions = missionStore.listMissions().map((record) => ({
 		record,
 		tasks: missionStore.listTasks(record.missionId),
+		attempts: seedIds?.attemptId ? [missionStore.getAttempt(seedIds.attemptId)].filter(Boolean) : [],
 		canonicalItems: missionStore.listCanonicalItems(record.missionId),
 		evidence: missionStore.listEvidence(record.missionId),
 		checkpoints: missionStore.listCheckpoints(record.missionId),
@@ -168,8 +171,51 @@ async function captureSemanticState(source, configRoot) {
 	const analyticsSummary = analyticsStore.summary();
 	analyticsStore.close();
 	const trust = new security.TrustStore({ root: join(configRoot, "trust") }).list().map((record) => ({ ...record, projectRoot: basename(record.projectRoot) }));
-	const state = { config: loaded.snapshot?.config ?? null, mission: missions, analytics: { events: analyticsEvents, summary: analyticsSummary }, trust };
-	return { hash: semanticHash(state), state };
+	const domains = { config: loaded.snapshot?.config ?? null, mission: missions, analytics: { events: analyticsEvents, summary: analyticsSummary }, trust };
+	const counts = {
+		config: domains.config ? 1 : 0,
+		routes: domains.config ? Object.keys(domains.config.routes ?? {}).length : 0,
+		missions: missions.length,
+		tasks: missions.reduce((sum, item) => sum + item.tasks.length, 0),
+		attempts: missions.reduce((sum, item) => sum + item.attempts.length, 0),
+		evidence: missions.reduce((sum, item) => sum + item.evidence.length, 0),
+		canonicalItems: missions.reduce((sum, item) => sum + item.canonicalItems.length, 0),
+		checkpoints: missions.reduce((sum, item) => sum + item.checkpoints.length, 0),
+		missionEvents: missions.reduce((sum, item) => sum + item.events.length, 0),
+		analyticsEvents: analyticsEvents.length,
+		trustRecords: trust.length,
+	};
+	const hashes = {
+		config: semanticHash(domains.config),
+		mission: semanticHash(domains.mission),
+		analytics: semanticHash(domains.analytics),
+		trust: semanticHash(domains.trust),
+		all: semanticHash(domains),
+	};
+	const packageManifest = JSON.parse(await readFile(join(source, "package.json"), "utf8"));
+	return {
+		schemaVersion: 1,
+		source: {
+			role: provenance.role,
+			commit: provenance.commit,
+			package: { name: packageManifest.name, version: packageManifest.version },
+			modules: {
+				config: await hashFile(join(source, "dist/core/config/index.js")),
+				mission: await hashFile(join(source, "dist/core/mission/index.js")),
+				analytics: await hashFile(join(source, "dist/core/analytics/index.js")),
+				trust: await hashFile(join(source, "dist/core/security/index.js")),
+			},
+		},
+		domains,
+		counts,
+		hashes,
+		nonEmpty: {
+			config: counts.config === 1 && counts.routes >= 2,
+			mission: counts.missions > 0 && counts.tasks > 0 && counts.attempts > 0 && counts.evidence > 0 && counts.canonicalItems > 0 && counts.missionEvents > 0,
+			analytics: counts.analyticsEvents > 0,
+			trust: counts.trustRecords >= 2,
+		},
+	};
 }
 
 async function buildM10Baseline(targetRoot, npmExecutable, gitExecutable, tarExecutable) {
@@ -179,7 +225,7 @@ async function buildM10Baseline(targetRoot, npmExecutable, gitExecutable, tarExe
 		if (archive.code !== 0) fail(`could not archive M10 commit: ${text(archive.stderr)}`);
 		const extracted = await run(tarExecutable.path, ["-xf", "-", "-C", work], { input: archive.stdout });
 		if (extracted.code !== 0) fail(`could not extract M10 commit: ${text(extracted.stderr)}`);
-		await cp(join(repoRoot, "node_modules"), join(work, "node_modules"), { recursive: true });
+		await symlink(await realpath(join(repoRoot, "node_modules")), join(work, "node_modules"), "dir");
 		const packageJsonPath = join(work, "package.json");
 		const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
 		packageJson.pi = { extensions: ["./dist/host/pi-extension.js"] };
@@ -193,7 +239,7 @@ async function buildM10Baseline(targetRoot, npmExecutable, gitExecutable, tarExe
 		for (const name of ["dist", "README.md", "docs", "package.json"]) await cp(join(work, name), join(baselineDir, name), { recursive: true });
 		const packRoot = await mkdtemp(join(tmpdir(), "pi-m11-r4-m10-pack-"));
 		try {
-			const npm = await run(npmExecutable.node.realpath, [npmExecutable.cli.realpath, "pack", "--json", "--ignore-scripts", "--offline", "--pack-destination", packRoot], { cwd: work, env: { ...process.env, npm_config_cache: join(packRoot, "npm-cache"), npm_config_audit: "false", npm_config_fund: "false", npm_config_update_notifier: "false" } });
+			const npm = await run(npmExecutable.node.realpath, [npmExecutable.cli.realpath, "pack", "--json", "--ignore-scripts", "--offline", "--pack-destination", packRoot], { cwd: work, env: await trustedToolEnvironment(join(packRoot, "npm-cache"), work) });
 			if (npm.code !== 0) fail(`M10 baseline pack failed: ${text(npm.stderr)}`);
 			const packed = (JSON.parse(text(npm.stdout))[0] ?? {}).filename;
 			if (typeof packed !== "string") fail("M10 baseline pack did not report an artifact");
@@ -201,7 +247,17 @@ async function buildM10Baseline(targetRoot, npmExecutable, gitExecutable, tarExe
 		} finally { await rm(packRoot, { recursive: true, force: true }); }
 		const artifactPath = join(targetRoot, M10_BASELINE_ARTIFACT);
 		await writeFile(join(targetRoot, M10_BASELINE_SHA), `${await hashFile(artifactPath)}  ${M10_BASELINE_ARTIFACT}\n`, "utf8");
-		return { commit: M10_COMMIT, directorySource: M10_BASELINE_DIR, artifact: M10_BASELINE_ARTIFACT, sha256: await hashFile(artifactPath), sourceDigest: semanticHash(await hashTree(baselineDir)) };
+		const gitTree = await run(gitExecutable.path, ["ls-tree", "-r", "-z", "--full-tree", M10_COMMIT], { cwd: repoRoot });
+		if (gitTree.code !== 0) fail("could not bind the M10 Git tree");
+		return {
+			commit: M10_COMMIT,
+			directorySource: M10_BASELINE_DIR,
+			artifact: M10_BASELINE_ARTIFACT,
+			sha256: await hashFile(artifactPath),
+			sourceDigest: semanticHash(await hashTree(baselineDir)),
+			gitSourceDigest: createHash("sha256").update(gitTree.stdout).digest("hex"),
+			package: { name: packageJson.name, version: packageJson.version, pi: packageJson.pi },
+		};
 	} finally { await rm(work, { recursive: true, force: true }); }
 }
 
@@ -215,6 +271,7 @@ const rpcControlCenter = async (piPath, env, cwd) => new Promise((resolvePromise
 	let dashboard = false;
 	let diagnostics = false;
 	let untrusted = false;
+	let packageIdentity;
 	let settled = false;
 	const timeout = setTimeout(() => { child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 500).unref(); finish(new Error("Pi RPC startup timed out")); }, 45_000);
 	const finish = (error, result) => { if (settled) return; settled = true; clearTimeout(timeout); if (error) reject(error); else resolvePromise({ ...result, stdout: stdout.slice(-4_000), stderr: stderr.slice(-2_000) }); };
@@ -245,6 +302,8 @@ const rpcControlCenter = async (piPath, env, cwd) => new Promise((resolvePromise
 				const message = typeof event.message === "string" ? event.message : "";
 				if (message.includes("Pi Multi-Orchestrator — Home")) dashboard = true;
 				if (message.includes("Diagnostics")) diagnostics = true;
+				const packageMatch = /package: (?<name>[^@\s]+)@(?<version>[^\s]+) \((?<status>[^)]+)\)/u.exec(message);
+				if (packageMatch?.groups) packageIdentity = packageMatch.groups;
 				if (/state: UNTRUSTED/u.test(message)) untrusted = true;
 				if (dashboard && sections && untrusted) child.stdin.end();
 			}
@@ -252,9 +311,41 @@ const rpcControlCenter = async (piPath, env, cwd) => new Promise((resolvePromise
 	});
 	child.stderr.on("data", (chunk) => { stderr += chunk; });
 	child.once("error", (error) => finish(error));
-	child.once("close", (code, signal) => finish(undefined, { code, signal, commandNames, sections, dashboard, diagnostics, untrusted }));
+	child.once("close", (code, signal) => finish(undefined, { code, signal, commandNames, sections, dashboard, diagnostics, untrusted, packageIdentity }));
 	send({ type: "get_commands", id: "m11-r4-commands" });
 });
+
+const stripAnsi = (value) => value.replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "");
+
+async function assertInstalledPackageList(piPath, env, cwd, directory, expectedPackage, label) {
+	const result = await run(piPath, ["list"], { cwd, env });
+	if (result.code !== 0 || result.signal !== null) fail(`pi list failed for ${label}`);
+	const output = stripAnsi(text(result.stdout));
+	const expectedSource = relative(env.PI_CODING_AGENT_DIR, resolve(directory)) || ".";
+	const lines = output.split(/\r?\n/u).map((line) => line.trimEnd());
+	if (!lines.includes("User packages:") || !lines.includes(`  ${expectedSource}`) || !lines.includes(`    ${resolve(directory)}`)) fail(`pi list did not report the expected ${label} local source and installed path`);
+	const packageManifest = JSON.parse(await readFile(join(directory, "package.json"), "utf8"));
+	if (packageManifest.name !== expectedPackage.name || packageManifest.version !== expectedPackage.version || JSON.stringify(packageManifest.pi?.extensions) !== JSON.stringify(expectedPackage.pi?.extensions)) fail(`pi list source package identity/version is wrong for ${label}`);
+	return {
+		code: result.code,
+		signal: result.signal,
+		asserted: true,
+		scope: "user",
+		sourceKind: "local-directory",
+		sourceLabel: label,
+		configuredSourceMatches: true,
+		installedPathMatches: true,
+		stdoutSha256: createHash("sha256").update(result.stdout).digest("hex"),
+		package: { name: packageManifest.name, version: packageManifest.version, pi: packageManifest.pi },
+	};
+}
+
+async function assertEmptyPackageList(piPath, env, cwd) {
+	const result = await run(piPath, ["list"], { cwd, env });
+	const output = stripAnsi(text(result.stdout)).trim();
+	if (result.code !== 0 || result.signal !== null || output !== "No packages installed.") fail("final pi list is not empty");
+	return { code: result.code, signal: result.signal, empty: true, stdoutSha256: createHash("sha256").update(result.stdout).digest("hex") };
+}
 
 const parseArgs = (argv) => {
 	let releaseDir;
@@ -284,90 +375,107 @@ const main = async () => {
 	const npm = await trustedNpm();
 	const git = await trustedSystemExecutable("git");
 	const tar = await trustedSystemExecutable("tar");
-	const root = await mkdtemp(join(tmpdir(), "pi-m11-r4-install-"));
-	const configRoot = join(root, "orchestrator");
-	const sessionsRoot = join(root, "sessions");
-	const env = isolatedEnv(root, configRoot, sessionsRoot);
-	const cwd = join(root, "empty-project");
-	await cp(source, join(root, "source"), { recursive: true });
-	await mkdir(cwd, { recursive: true });
-	const sourceCopy = join(root, "source");
-	const seeded = await seedCompatibilityState(sourceCopy, configRoot, cwd);
-	const beforeState = await captureSemanticState(sourceCopy, configRoot);
-	const baseline = await buildM10Baseline(args.releaseDir, npm, git, tar);
-	const baselineSource = join(args.releaseDir, baseline.directorySource);
-	const install = async (directory) => safeResult(await run(pi.path, ["install", directory, "--no-approve"], { cwd, env }));
-	const remove = async (directory) => safeResult(await run(pi.path, ["remove", directory], { cwd, env }));
-	const list = async () => safeResult(await run(pi.path, ["list"], { cwd, env }));
-	const startup = async (extra = []) => safeResult(await run(pi.path, ["--offline", "--no-session", "--no-context-files", ...extra, "--mode", "rpc"], { cwd, env, input: Buffer.alloc(0) }));
-	const expectedSections = ["Models & 9Router", "Investigation Pool", "Implementation Pool", "Verification Pool", "Boss / Orchestrator Profiles", "Routing & Fallback", "Health & Quotas", "Budget / Quality Profiles", "Context & Mission Settings", "Statistics & Analytics", "Diagnostics", "Backup / Restore"];
+	const typeScript = await trustedTypeScript(repoRoot);
+	const root = await mkdtemp(join(tmpdir(), "pi-m11-r8-install-"));
+	try {
+		const configRoot = join(root, "orchestrator");
+		const sessionsRoot = join(root, "sessions");
+		const env = isolatedEnv(root, configRoot, sessionsRoot);
+		const cwd = join(root, "empty-project");
+		await cp(source, join(root, "source"), { recursive: true });
+		await mkdir(cwd, { recursive: true });
+		const sourceCopy = join(root, "source");
+		const baseline = await buildM10Baseline(args.releaseDir, npm, git, tar);
+		const baselineSource = join(args.releaseDir, baseline.directorySource);
+		const seeded = await seedCompatibilityState(baselineSource, configRoot, cwd);
+		const m10Provenance = { role: "m10", commit: M10_COMMIT };
+		const candidateProvenance = { role: "candidate", commit: manifest.gitCommit };
+		const beforeState = await captureSemanticState(baselineSource, configRoot, m10Provenance, seeded);
+		const install = async (directory) => safeResult(await run(pi.path, ["install", directory, "--no-approve"], { cwd, env }));
+		const remove = async (directory) => safeResult(await run(pi.path, ["remove", directory], { cwd, env }));
+		const startup = async (extra = []) => safeResult(await run(pi.path, ["--offline", "--no-session", "--no-context-files", ...extra, "--mode", "rpc"], { cwd, env, input: Buffer.alloc(0) }));
+		const expectedSections = ["Models & 9Router", "Investigation Pool", "Implementation Pool", "Verification Pool", "Boss / Orchestrator Profiles", "Routing & Fallback", "Health & Quotas", "Budget / Quality Profiles", "Context & Mission Settings", "Statistics & Analytics", "Diagnostics", "Backup / Restore"];
 
-	const baselineInstall = await install(baselineSource);
-	const baselineList = await list();
-	const baselineRpc = await rpcControlCenter(pi.path, env, cwd);
-	const baselineState = await captureSemanticState(sourceCopy, configRoot);
-	const baselineRemoval = await remove(baselineSource);
-	const candidateInstall = await install(source);
-	const candidateList = await list();
-	const candidateRpc = await rpcControlCenter(pi.path, env, cwd);
-	const candidateState = await captureSemanticState(sourceCopy, configRoot);
-	const candidateRemoval = await remove(source);
-	const broken = join(root, "broken-rc3");
-	await cp(source, broken, { recursive: true });
-	const entrypoint = join(broken, "dist/host/pi-extension.js");
-	await writeFile(entrypoint, `throw new Error("intentional rc.3 rescue fixture failure");\n`, "utf8");
-	const brokenInstall = await install(broken);
-	const brokenStartup = await startup();
-	const disabledStartup = await startup(["--no-extensions"]);
-	const brokenRemoval = await remove(broken);
-	const rollbackInstall = await install(baselineSource);
-	const rollbackRpc = await rpcControlCenter(pi.path, env, cwd);
-	const rollbackState = await captureSemanticState(sourceCopy, configRoot);
-	const rollbackStartup = await startup();
-	const rollbackRemoval = await remove(baselineSource);
-	const rescueList = await list();
+		const baselineInstall = await install(baselineSource);
+		const baselineList = await assertInstalledPackageList(pi.path, env, cwd, baselineSource, baseline.package, "m10-baseline");
+		const baselineRpc = await rpcControlCenter(pi.path, env, cwd);
+		const baselineState = await captureSemanticState(baselineSource, configRoot, m10Provenance, seeded);
+		const baselineRemoval = await remove(baselineSource);
+		const candidateInstall = await install(source);
+		const candidateList = await assertInstalledPackageList(pi.path, env, cwd, source, manifest.package, manifest.directorySource);
+		const candidateRpc = await rpcControlCenter(pi.path, env, cwd);
+		const candidateState = await captureSemanticState(sourceCopy, configRoot, candidateProvenance, seeded);
+		const candidateRemoval = await remove(source);
+		const broken = join(root, "broken-rc4");
+		await cp(source, broken, { recursive: true });
+		const entrypoint = join(broken, "dist/host/pi-extension.js");
+		await writeFile(entrypoint, `throw new Error("intentional rc.4 rescue fixture failure");\n`, "utf8");
+		const brokenInstall = await install(broken);
+		const brokenStartup = await startup();
+		const disabledStartup = await startup(["--no-extensions"]);
+		const brokenRemoval = await remove(broken);
+		const rollbackInstall = await install(baselineSource);
+		const rollbackList = await assertInstalledPackageList(pi.path, env, cwd, baselineSource, baseline.package, "m10-baseline");
+		const rollbackRpc = await rpcControlCenter(pi.path, env, cwd);
+		const rollbackState = await captureSemanticState(baselineSource, configRoot, m10Provenance, seeded);
+		const rollbackStartup = await startup();
+		const rollbackRemoval = await remove(baselineSource);
+		const finalList = await assertEmptyPackageList(pi.path, env, cwd);
 
-	const result = {
-		schemaVersion: 2,
-		status: "PASS",
-		artifact: release.artifact,
-		sha256: release.sha256,
-		piVersion: piIdentity.version,
-		installSource: "directory-source",
-		directTgzInstallSupported: false,
-		sourceCheckoutRequired: false,
-		executableProvenance: {
-			pi: piIdentity,
-			npm: { node: { file: basename(npm.node.realpath), sha256: npm.node.sha256, version: process.version }, cli: { file: basename(npm.cli.realpath), sha256: npm.cli.sha256 } },
-			git: await executableIdentity({ ...git, requested: "git" }),
-			tar: await executableIdentity({ ...tar, requested: "tar" }),
-		},
-		m10Baseline: baseline,
-		seed: { config: true, mission: true, analytics: true, trust: true, trustedProject: "trusted-fixture", untrustedProject: "untrusted-fixture" },
-		commands: { install: `pi install ${manifest.directorySource} --no-approve`, list: "pi list", remove: "pi remove <installed-directory>", startup: "pi --offline --no-session --no-context-files --mode rpc" },
-		controlCenter: { sections: candidateRpc.sections, expectedSections, allTwelve: JSON.stringify(candidateRpc.sections) === JSON.stringify(expectedSections), dashboard: candidateRpc.dashboard, diagnostics: candidateRpc.diagnostics, commands: candidateRpc.commandNames },
-		installResults: { baselineInstall, baselineList, baselineRemoval, candidateInstall, candidateList, candidateRemoval, brokenInstall, brokenRemoval, rollbackInstall, rollbackRemoval, rescueList },
-		piRuns: { baseline: baselineRpc.code === 0, candidate: candidateRpc.code === 0, rollback: rollbackRpc.code === 0 },
-		startup: { broken: brokenStartup, disabled: disabledStartup, rollback: rollbackStartup },
-		upgradeRollback: {
-			before: beforeState,
-			baseline: baselineState,
-			candidate: candidateState,
-			rollback: rollbackState,
-			semanticStatePreserved: beforeState.hash === baselineState.hash && beforeState.hash === candidateState.hash && beforeState.hash === rollbackState.hash,
-			configMissionAnalyticsTrustPreserved: beforeState.hash === candidateState.hash && beforeState.hash === rollbackState.hash,
-			dataLoss: false,
-		},
-		trust: candidateRpc.untrusted ? "UNTRUSTED by default (no project trust was imported)" : "UNKNOWN",
-		rescue: { brokenCandidateSimulated: brokenInstall.code === 0 && brokenStartup.code !== 0, extensionIndependentRecovery: disabledStartup.code === 0, realM10Restore: brokenRemoval.code === 0 && rollbackInstall.code === 0 && rollbackStartup.code === 0, seededStateRecovered: rollbackState.hash === beforeState.hash, finalListEmpty: rescueList.code === 0 },
-	};
-	const operations = Object.values(result.installResults).every((operation) => operation.code === 0);
-	const rescuePass = Object.values(result.rescue).every(Boolean);
-	if (!operations || !result.controlCenter.allTwelve || !result.controlCenter.dashboard || !result.controlCenter.diagnostics || !result.piRuns.baseline || !result.piRuns.candidate || !result.piRuns.rollback || !result.upgradeRollback.semanticStatePreserved || !result.upgradeRollback.configMissionAnalyticsTrustPreserved || result.trust === "UNKNOWN" || !rescuePass) result.status = "FAIL";
-	await writeFile(args.output, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-	await rm(root, { recursive: true, force: true });
-	if (result.status !== "PASS") fail(`Pi release verification failed; see ${args.output}`);
-	console.log(JSON.stringify({ ...result, evidence: args.output }, null, 2));
+		const snapshots = [beforeState, baselineState, candidateState, rollbackState];
+		const equality = Object.fromEntries(["config", "mission", "analytics", "trust"].map((domain) => [domain, snapshots.every((snapshot) => snapshot.hashes[domain] === beforeState.hashes[domain])]));
+		const semanticStatePreserved = Object.values(equality).every(Boolean);
+		const nonEmptyState = snapshots.every((snapshot) => Object.values(snapshot.nonEmpty).every(Boolean));
+		const dataLoss = !semanticStatePreserved || !nonEmptyState;
+		const packageIdentityMatches = candidateRpc.packageIdentity?.name === manifest.package.name && candidateRpc.packageIdentity?.version === manifest.package.version;
+		const result = {
+			schemaVersion: 3,
+			status: "PASS",
+			artifact: release.artifact,
+			sha256: release.sha256,
+			piVersion: piIdentity.version,
+			installSource: "directory-source",
+			directTgzInstallSupported: false,
+			sourceCheckoutRequired: false,
+			executableProvenance: {
+				pi: piIdentity,
+				npm: { node: { file: basename(npm.node.realpath), sha256: npm.node.sha256, version: process.version }, cli: { file: basename(npm.cli.realpath), sha256: npm.cli.sha256 } },
+				typeScript,
+				git: await executableIdentity({ ...git, requested: "git" }),
+				tar: await executableIdentity({ ...tar, requested: "tar" }),
+			},
+			m10Baseline: baseline,
+			seed: { ...beforeState.nonEmpty, trustedProject: "trusted-fixture", untrustedProject: "untrusted-fixture" },
+			commands: { install: `pi install ${manifest.directorySource} --no-approve`, list: "pi list", remove: "pi remove <installed-directory>", startup: "pi --offline --no-session --no-context-files --mode rpc" },
+			controlCenter: { sections: candidateRpc.sections, expectedSections, allTwelve: JSON.stringify(candidateRpc.sections) === JSON.stringify(expectedSections), dashboard: candidateRpc.dashboard, diagnostics: candidateRpc.diagnostics, commands: candidateRpc.commandNames, packageIdentity: candidateRpc.packageIdentity, packageIdentityMatches },
+			packageLists: { baseline: baselineList, candidate: candidateList, rollback: rollbackList, final: finalList },
+			installResults: { baselineInstall, baselineRemoval, candidateInstall, candidateRemoval, brokenInstall, brokenRemoval, rollbackInstall, rollbackRemoval },
+			piRuns: { baseline: baselineRpc.code === 0, candidate: candidateRpc.code === 0, rollback: rollbackRpc.code === 0 },
+			startup: { broken: brokenStartup, disabled: disabledStartup, rollback: rollbackStartup },
+			upgradeRollback: {
+				before: beforeState,
+				baseline: baselineState,
+				candidate: candidateState,
+				rollback: rollbackState,
+				equality,
+				semanticStatePreserved,
+				configMissionAnalyticsTrustPreserved: semanticStatePreserved,
+				dataLoss,
+			},
+			trust: candidateRpc.untrusted ? "UNTRUSTED by default (no project trust was imported)" : "UNKNOWN",
+			rescue: { brokenCandidateSimulated: brokenInstall.code === 0 && brokenStartup.code !== 0, extensionIndependentRecovery: disabledStartup.code === 0, realM10Restore: brokenRemoval.code === 0 && rollbackInstall.code === 0 && rollbackStartup.code === 0, seededStateRecovered: rollbackState.hashes.all === beforeState.hashes.all, finalListEmpty: finalList.empty === true },
+		};
+		const operations = Object.values(result.installResults).every((operation) => operation.code === 0);
+		const listPass = [baselineList, candidateList, rollbackList].every((item) => item.asserted) && finalList.empty;
+		const provenancePass = beforeState.source.role === "m10" && baselineState.source.role === "m10" && candidateState.source.role === "candidate" && rollbackState.source.role === "m10";
+		const rescuePass = Object.values(result.rescue).every(Boolean);
+		if (!operations || !listPass || !provenancePass || !result.controlCenter.allTwelve || !result.controlCenter.dashboard || !result.controlCenter.diagnostics || !result.controlCenter.packageIdentityMatches || !result.piRuns.baseline || !result.piRuns.candidate || !result.piRuns.rollback || !result.upgradeRollback.semanticStatePreserved || result.upgradeRollback.dataLoss || result.trust === "UNKNOWN" || !rescuePass) result.status = "FAIL";
+		await writeFile(args.output, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+		if (result.status !== "PASS") fail(`Pi release verification failed; see ${args.output}`);
+		console.log(JSON.stringify({ ...result, evidence: args.output }, null, 2));
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, constants, copyFile, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { access, constants, copyFile, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -57,6 +57,8 @@ const run = (command, args, options = {}) => new Promise((resolvePromise, reject
 const hashBytes = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 const sha256 = async (path) => {
+	const details = await lstat(path);
+	if (details.isSymbolicLink() || !details.isFile()) fail(`cannot hash a non-regular file: ${basename(path)}`);
 	const digest = createHash("sha256");
 	digest.update(await readFile(path));
 	return digest.digest("hex");
@@ -111,6 +113,16 @@ export const trustedNpm = async () => {
 	fail("could not locate npm CLI next to process.execPath");
 };
 
+export const trustedTypeScript = async (projectRoot = REPO_ROOT) => {
+	const packageRoot = join(projectRoot, "node_modules", "typescript");
+	const manifestPath = join(packageRoot, "package.json");
+	const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+	if (manifest.name !== "typescript" || manifest.version !== "5.9.3") fail("validated TypeScript dependency must be typescript@5.9.3");
+	const packageJson = await fileInfo(manifestPath, "TypeScript package manifest");
+	const cli = await fileInfo(join(packageRoot, "lib", "tsc.js"), "TypeScript CLI");
+	return { package: "typescript", version: manifest.version, packageJsonSha256: packageJson.sha256, cliSha256: cli.sha256 };
+};
+
 export const trustedPi = async () => {
 	const packageManifestPath = join(PI_PACKAGE_ROOT, "package.json");
 	const packageManifest = JSON.parse(await readFile(packageManifestPath, "utf8"));
@@ -131,14 +143,16 @@ export const trustedPi = async () => {
 	};
 };
 
-const safeEnvironment = (nodePath, cacheDir) => {
-	const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:PATH|PI_BIN|npm_|NPM_CONFIG_)/u.test(key)));
+const safeEnvironment = (nodePath, cacheDir, projectRoot = REPO_ROOT) => {
 	const nodeDir = dirname(nodePath);
 	return {
-		...inherited,
-		PATH: [join(REPO_ROOT, "node_modules", ".bin"), nodeDir, "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"].join(delimiter),
+		PATH: [join(projectRoot, "node_modules", ".bin"), nodeDir, "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"].join(delimiter),
+		HOME: cacheDir ?? tmpdir(),
+		TMPDIR: process.env.TMPDIR ?? tmpdir(),
 		LANG: "C",
 		LC_ALL: "C",
+		NO_COLOR: "1",
+		PI_OFFLINE: "1",
 		GIT_CONFIG_NOSYSTEM: "1",
 		GIT_CONFIG_GLOBAL: "/dev/null",
 		...(cacheDir ? {
@@ -152,27 +166,47 @@ const safeEnvironment = (nodePath, cacheDir) => {
 	};
 };
 
-export const trustedToolEnvironment = async (cacheDir) => safeEnvironment((await trustedNode()).realpath, cacheDir);
+export const trustedToolEnvironment = async (cacheDir, projectRoot = REPO_ROOT) => safeEnvironment((await trustedNode()).realpath, cacheDir, projectRoot);
 
-const walkTree = async (root, prefix = "") => {
+const pathCompare = (left, right) => left < right ? -1 : left > right ? 1 : 0;
+
+export const inspectTree = async (root, prefix = "") => {
 	const entries = await readdir(join(root, prefix), { withFileTypes: true });
 	const files = [];
+	const directories = [];
 	const symlinks = [];
+	const special = [];
 	for (const entry of entries) {
 		const path = join(prefix, entry.name).split("\\").join("/");
 		if (entry.isSymbolicLink()) symlinks.push(path);
 		else if (entry.isDirectory()) {
-			const nested = await walkTree(root, path);
+			directories.push(path);
+			const nested = await inspectTree(root, path);
 			files.push(...nested.files);
+			directories.push(...nested.directories);
 			symlinks.push(...nested.symlinks);
+			special.push(...nested.special);
 		} else if (entry.isFile()) files.push(path);
+		else special.push(path);
 	}
-	return { files, symlinks };
+	return {
+		files: files.sort(pathCompare),
+		directories: directories.sort(pathCompare),
+		symlinks: symlinks.sort(pathCompare),
+		special: special.sort(pathCompare),
+	};
 };
 
-const walkFiles = async (root) => (await walkTree(root)).files;
+const walkFiles = async (root) => {
+	const details = await lstat(root);
+	if (details.isSymbolicLink() || !details.isDirectory()) fail("tree root must be a real directory");
+	const tree = await inspectTree(root);
+	if (tree.symlinks.length > 0) fail(`tree contains symlinks: ${tree.symlinks.join(", ")}`);
+	if (tree.special.length > 0) fail(`tree contains non-regular entries: ${tree.special.join(", ")}`);
+	return tree.files;
+};
 
-const sortUnique = (values) => [...new Set(values)].sort((left, right) => left.localeCompare(right));
+const sortUnique = (values) => [...new Set(values)].sort(pathCompare);
 
 const readChecksum = async (checksumPath, artifactName) => {
 	const value = (await readFile(checksumPath, "utf8")).trim();
@@ -182,6 +216,10 @@ const readChecksum = async (checksumPath, artifactName) => {
 };
 
 export const verifyArtifactChecksum = async (artifactPath, checksumPath = `${artifactPath}.sha256`) => {
+	for (const [path, label] of [[artifactPath, "artifact"], [checksumPath, "checksum"]]) {
+		const details = await lstat(path);
+		if (details.isSymbolicLink() || !details.isFile()) fail(`${label} must be a regular file`);
+	}
 	const artifactName = artifactPath.split(/[\\/]/u).pop();
 	if (!artifactName) fail("artifact path has no filename");
 	const expected = await readChecksum(checksumPath, artifactName);
@@ -203,8 +241,8 @@ const privacyTextPatterns = [
 	{ name: "credential-assignment-unquoted", pattern: /\b(?:api[_-]?key|access[_-]?key|authorization|password|passwd|secret|token|private[_-]?key|client[_-]?secret|credential|auth)\b\s*[:=]\s*[A-Za-z0-9+\/_~=-]{16,}\b/iu },
 	{ name: "credential-url", pattern: /\bhttps?:\/\/[^\s/@]+:[^\s/@]+@/iu },
 ];
-const privacyRuleNames = [...privacyTextPatterns.map((item) => item.name), "local-absolute-path", "runtime-state-filename", "sqlite-signature", "nul-byte", "symlink"];
-const localPathPattern = /(?:^|["'`\s(])(?:\/(?:Users|private|home|tmp|var\/folders)\/|[A-Z]:[\\/]Users[\\/])/u;
+const privacyRuleNames = [...privacyTextPatterns.map((item) => item.name), "local-absolute-path", "runtime-state-filename", "sqlite-signature", "nul-byte", "symlink", "non-regular-file"];
+const localPathPattern = /(?:^|[="'`\s:([{,])(?:\/(?:Users|private|home|var\/folders)\/|[A-Z]:[\\/]+Users[\\/]+)/u;
 const runtimeDatabaseName = /(?:^|\/)(?:[^/]+\.(?:sqlite(?:[-.][^/]*)?|sqlite3|db(?:[-.][^/]*)?|log)|(?:state|history|sessions?)(?:\/|$))/iu;
 
 export const scanPrivacy = async (root) => {
@@ -224,9 +262,10 @@ export const scanPrivacy = async (root) => {
 		addIssue(".", "symlink");
 	} else if (!rootStat.isDirectory()) addIssue(".", "root-not-directory");
 	else {
-		const tree = await walkTree(root);
+		const tree = await inspectTree(root);
 		report.symlinks.push(...tree.symlinks);
 		for (const path of tree.symlinks) addIssue(path, "symlink");
+		for (const path of tree.special) addIssue(path, "non-regular-file");
 		for (const path of tree.files) {
 			report.filesScanned += 1;
 			if (runtimeDatabaseName.test(path)) addIssue(path, "runtime-state-filename");
@@ -241,8 +280,8 @@ export const scanPrivacy = async (root) => {
 			for (const pattern of privacyTextPatterns) if (pattern.pattern.test(text)) addIssue(path, pattern.name);
 		}
 	}
-	report.symlinks.sort((left, right) => left.localeCompare(right));
-	report.issues.sort((left, right) => left.path.localeCompare(right.path) || left.kind.localeCompare(right.kind));
+	report.symlinks.sort(pathCompare);
+	report.issues.sort((left, right) => pathCompare(left.path, right.path) || pathCompare(left.kind, right.kind));
 	return { ...report, clean: report.issues.length === 0 };
 };
 
@@ -286,8 +325,8 @@ const assertManifest = (manifest) => {
 };
 
 const verifyUnpacked = async ({ packageRoot, packageManifest, files }) => {
-	const actualFiles = (await walkFiles(packageRoot)).sort();
-	const expectedFiles = files.map((file) => file.path).sort();
+	const actualFiles = (await walkFiles(packageRoot)).sort(pathCompare);
+	const expectedFiles = files.map((file) => file.path).sort(pathCompare);
 	if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) fail("unpacked files differ from npm pack file list");
 	if (!actualFiles.includes("package.json")) fail("unpacked artifact is missing package.json");
 	const packageFiles = actualFiles.filter((path) => path !== "package.json");
@@ -347,8 +386,13 @@ const verifyUnpacked = async ({ packageRoot, packageManifest, files }) => {
 };
 
 const archiveEntries = async (artifactPath) => {
+	const artifact = await lstat(artifactPath);
+	if (artifact.isSymbolicLink() || !artifact.isFile()) fail("release artifact must be a regular file");
 	const tar = await trustedSystemExecutable("tar");
-	const listing = await commandOutput(tar.realpath, ["-tzf", artifactPath], { env: safeEnvironment((await trustedNode()).realpath) });
+	const env = safeEnvironment((await trustedNode()).realpath);
+	const listing = await commandOutput(tar.realpath, ["-tzf", artifactPath], { env });
+	const verbose = await commandOutput(tar.realpath, ["-tvzf", artifactPath], { env });
+	for (const line of verbose.split(/\r?\n/u).filter(Boolean)) if (!line.startsWith("-") && !line.startsWith("d")) fail("release artifact contains a symlink or non-regular archive entry");
 	const entries = listing.split(/\r?\n/u).map((entry) => entry.replace(/\/$/u, "")).filter(Boolean);
 	for (const entry of entries) {
 		if (entry.startsWith("/") || entry.split("/").includes("..") || !entry.startsWith("package/")) {
@@ -366,35 +410,84 @@ const assertSameFiles = async (leftRoot, rightRoot, paths) => {
 	}
 };
 
-const captureSourceIdentity = async () => {
+export const captureSourceIdentity = async (repoRoot = REPO_ROOT) => {
 	const git = await trustedSystemExecutable("git");
 	const node = await trustedNode();
-	const env = safeEnvironment(node.realpath);
-	const commit = await commandOutput(git.realpath, ["rev-parse", "HEAD"], { cwd: REPO_ROOT, env });
-	const tree = await commandOutput(git.realpath, ["rev-parse", "HEAD^{tree}"], { cwd: REPO_ROOT, env });
+	const env = safeEnvironment(node.realpath, undefined, repoRoot);
+	const commit = await commandOutput(git.realpath, ["rev-parse", "HEAD"], { cwd: repoRoot, env });
+	const tree = await commandOutput(git.realpath, ["rev-parse", "HEAD^{tree}"], { cwd: repoRoot, env });
+	const commitTimestamp = await commandOutput(git.realpath, ["show", "-s", "--format=%cI", commit], { cwd: repoRoot, env });
 	if (!/^[0-9a-f]{40}$/u.test(commit) || !/^[0-9a-f]{40}$/u.test(tree)) fail("Git source identity is not a full commit/tree SHA");
-	const status = await commandOutput(git.realpath, ["status", "--porcelain=v1", "--untracked-files=all"], { cwd: REPO_ROOT, env });
+	const status = await commandOutput(git.realpath, ["status", "--porcelain=v1", "--untracked-files=all"], { cwd: repoRoot, env });
 	const trackedChanges = status.split(/\r?\n/u).filter((line) => line && !line.startsWith("?? "));
 	if (trackedChanges.length > 0) fail(`source checkout has tracked changes; commit the release inputs first (${trackedChanges.length} change${trackedChanges.length === 1 ? "" : "s"})`);
-	const tracked = await run(git.realpath, ["ls-files", "--stage", "-z"], { cwd: REPO_ROOT, env });
+	const tracked = await run(git.realpath, ["ls-tree", "-r", "-z", "--full-tree", commit], { cwd: repoRoot, env });
+	const entries = tracked.stdout.split("\0").filter(Boolean);
+	for (const entry of entries) {
+		const match = /^(?<mode>\d+) (?<type>\S+) [0-9a-f]+\t/u.exec(entry);
+		if (!match || match.groups?.type !== "blob" || !["100644", "100755"].includes(match.groups.mode)) fail("release source contains a symlink, submodule, or unsupported Git entry");
+	}
 	return {
 		gitCommit: commit,
 		gitTree: tree,
+		gitCommitTimestamp: commitTimestamp,
 		trackedClean: true,
 		sourceDigest: hashBytes(Buffer.from(tracked.stdout, "utf8")),
+		sourceDigestAlgorithm: "sha256(git ls-tree -r -z --full-tree <commit>)",
+		trackedFileCount: entries.length,
 		untrackedCount: status.split(/\r?\n/u).filter((line) => line.startsWith("?? ")).length,
+		untrackedIncluded: false,
 	};
+};
+
+export const createGitSourceStage = async ({ repoRoot = REPO_ROOT } = {}) => {
+	const sourceIdentity = await captureSourceIdentity(repoRoot);
+	const git = await trustedSystemExecutable("git");
+	const node = await trustedNode();
+	const temporaryRoot = await mkdtemp(join(tmpdir(), "pi-multi-orchestrator-git-source-"));
+	const sourceRoot = join(temporaryRoot, "source");
+	try {
+		const env = safeEnvironment(node.realpath, undefined, repoRoot);
+		await run(git.realpath, ["clone", "--no-hardlinks", "--no-checkout", "--no-tags", repoRoot, sourceRoot], { env });
+		await run(git.realpath, ["-c", "advice.detachedHead=false", "checkout", "--detach", "--force", sourceIdentity.gitCommit], { cwd: sourceRoot, env });
+		const stagedIdentity = await captureSourceIdentity(sourceRoot);
+		if (stagedIdentity.gitCommit !== sourceIdentity.gitCommit || stagedIdentity.gitTree !== sourceIdentity.gitTree || stagedIdentity.sourceDigest !== sourceIdentity.sourceDigest || stagedIdentity.untrackedCount !== 0) fail("detached Git source does not match the release commit");
+		const dependencyRoot = await realpath(join(repoRoot, "node_modules")).catch(() => fail("release dependencies are unavailable"));
+		await symlink(dependencyRoot, join(sourceRoot, "node_modules"), "dir");
+		return { temporaryRoot, sourceRoot: await realpath(sourceRoot), sourceIdentity };
+	} catch (error) {
+		await rm(temporaryRoot, { recursive: true, force: true });
+		throw error;
+	}
+};
+
+export const captureTestDefinition = async (sourceRoot) => {
+	const packageBytes = await readFile(join(sourceRoot, "package.json"));
+	const lockBytes = await readFile(join(sourceRoot, "package-lock.json"));
+	const manifest = JSON.parse(packageBytes.toString("utf8"));
+	if (typeof manifest.scripts?.check !== "string" || manifest.scripts.check.length === 0) fail("package has no check script");
+	const definition = {
+		command: "npm run check",
+		packageJsonSha256: hashBytes(packageBytes),
+		packageLockSha256: hashBytes(lockBytes),
+		scripts: manifest.scripts,
+	};
+	return { ...definition, digest: digestJson(definition) };
 };
 
 const assertSourceIdentity = (manifest) => {
 	if (!/^[0-9a-f]{40}$/u.test(manifest.gitCommit) || !/^[0-9a-f]{40}$/u.test(manifest.gitTree)) fail("release manifest has an invalid Git identity");
 	if (manifest.dirty !== false || manifest.trackedClean !== true) fail("release manifest does not prove a clean tracked source state");
 	if (!/^[0-9a-f]{64}$/u.test(manifest.sourceDigest)) fail("release manifest has no deterministic source digest");
+	if (manifest.sourceDigestAlgorithm !== "sha256(git ls-tree -r -z --full-tree <commit>)" || !Number.isSafeInteger(manifest.trackedFileCount) || manifest.trackedFileCount <= 0 || manifest.untrackedIncluded !== false || manifest.buildSource !== "detached-git-commit") fail("release manifest does not bind an exact Git-derived source tree");
+	const definition = manifest.testDefinition;
+	if (!definition || definition.command !== "npm run check" || typeof definition.packageJsonSha256 !== "string" || typeof definition.packageLockSha256 !== "string" || !definition.scripts || definition.digest !== digestJson({ command: definition.command, packageJsonSha256: definition.packageJsonSha256, packageLockSha256: definition.packageLockSha256, scripts: definition.scripts })) fail("release manifest test definition is invalid");
 };
 
 const buildDigestFor = (manifest) => digestJson({
 	sourceDigest: manifest.sourceDigest,
 	gitTree: manifest.gitTree,
+	testDefinition: manifest.testDefinition,
 	nodeVersion: manifest.nodeVersion,
 	piIdentity: manifest.piIdentity,
 	package: manifest.package,
@@ -405,29 +498,63 @@ const validateEvidenceRecord = (record, name) => {
 	if (!record || record.file !== name || !/^[0-9a-f]{64}$/u.test(record.sha256)) fail(`release evidence binding is invalid for ${name}`);
 };
 
+export const releaseBindingFor = (manifest) => ({
+	gitCommit: manifest.gitCommit,
+	gitTree: manifest.gitTree,
+	sourceDigest: manifest.sourceDigest,
+	buildDigest: manifest.buildDigest,
+	testDefinition: manifest.testDefinition,
+	artifact: manifest.artifact,
+	piIdentity: manifest.piIdentity,
+});
+
+export const validateTestEvidence = (evidence, manifest) => {
+	if (evidence?.schemaVersion !== 3 || evidence.status !== "PASS" || evidence.authority !== "execution-time-independent-rerun") fail("test evidence is not execution-time release proof");
+	if (JSON.stringify(evidence.release) !== JSON.stringify(releaseBindingFor(manifest))) fail("test evidence is not bound to the copied release");
+	const expectedSource = { gitCommit: manifest.gitCommit, gitTree: manifest.gitTree, sourceDigest: manifest.sourceDigest, testDefinition: manifest.testDefinition };
+	if (JSON.stringify(evidence.source) !== JSON.stringify(expectedSource)) fail("test evidence source or script definition differs from the release source");
+	if (evidence.commands?.check !== "npm run check" || evidence.commands?.packDryRun !== "npm pack --dry-run --ignore-scripts --json") fail("test evidence commands are not strict release commands");
+	const tests = evidence.check?.tests;
+	const values = tests && [tests.total, tests.passed, tests.failed, tests.cancelled, tests.skipped, tests.todo];
+	if (!values || values.some((value) => !Number.isSafeInteger(value) || value < 0) || evidence.check.code !== 0 || evidence.check.signal !== null || tests.total <= 0 || tests.passed <= 0 || tests.failed !== 0 || tests.cancelled !== 0 || tests.total !== tests.passed + tests.failed + tests.cancelled + tests.skipped + tests.todo) fail("test evidence TAP totals are not a non-empty passing complete summary");
+	for (const digest of [evidence.check?.stdoutSha256, evidence.check?.stderrSha256, evidence.pack?.stdoutSha256, evidence.pack?.stderrSha256]) if (!/^[0-9a-f]{64}$/u.test(digest ?? "")) fail("test evidence is missing output digests");
+	if (evidence.pack?.code !== 0 || evidence.pack?.signal !== null || !evidence.pack?.evidence?.filename || !Number.isSafeInteger(evidence.pack.evidence.fileCount) || evidence.pack.evidence.fileCount <= 0) fail("pack evidence is incomplete");
+	return tests;
+};
+
 const verifyEvidenceBinding = async (root, manifest, verification) => {
 	if (!manifest.evidence) {
 		if (verification.evidence !== undefined) fail("verification contains evidence without a manifest binding");
 		return null;
 	}
-	if (manifest.evidence.schemaVersion !== 1 || !manifest.evidence.test || !manifest.evidence.pi || !manifest.evidence.safety) fail("release evidence binding is incomplete");
+	if (manifest.evidence.schemaVersion !== 2 || !manifest.evidence.test || !manifest.evidence.pi || !manifest.evidence.safety || !manifest.evidence.integrity) fail("release evidence binding is incomplete");
 	validateEvidenceRecord(manifest.evidence.test, "test-evidence.json");
 	validateEvidenceRecord(manifest.evidence.pi, "pi-install-evidence.json");
 	validateEvidenceRecord(manifest.evidence.safety, "worker-safety-evidence.json");
+	validateEvidenceRecord(manifest.evidence.integrity, "release-integrity-evidence.json");
 	if (JSON.stringify(verification.evidence) !== JSON.stringify(manifest.evidence)) fail("verification evidence binding differs from release manifest");
-	for (const record of [manifest.evidence.test, manifest.evidence.pi, manifest.evidence.safety]) {
+	for (const record of [manifest.evidence.test, manifest.evidence.pi, manifest.evidence.safety, manifest.evidence.integrity]) {
 		const digest = await sha256(join(root, record.file));
 		if (digest !== record.sha256) fail(`release evidence checksum mismatch for ${record.file}`);
 	}
+	validateTestEvidence(JSON.parse(await readFile(join(root, "test-evidence.json"), "utf8")), manifest);
+	const integrity = JSON.parse(await readFile(join(root, "release-integrity-evidence.json"), "utf8"));
+	if (integrity.schemaVersion !== 1 || integrity.status !== "PASS" || integrity.total !== 20 || integrity.passed !== 20 || integrity.failed !== 0 || !Array.isArray(integrity.attacks) || integrity.attacks.length !== 20 || integrity.attacks.some((attack) => attack.status !== "PASS")) fail("release integrity attack evidence is incomplete");
 	return manifest.evidence;
 };
 
 export async function verifyReleaseDirectory(directory) {
 	const root = resolve(directory);
+	const rootDetails = await lstat(root);
+	if (rootDetails.isSymbolicLink() || !rootDetails.isDirectory()) fail("release directory must be a real directory");
+	for (const name of ["release-manifest.json", "verification.json", "artifact-files.txt", "privacy-report.json"]) {
+		const details = await lstat(join(root, name));
+		if (details.isSymbolicLink() || !details.isFile()) fail(`release metadata must be a regular file: ${name}`);
+	}
 	const manifest = JSON.parse(await readFile(join(root, "release-manifest.json"), "utf8"));
 	const verification = JSON.parse(await readFile(join(root, "verification.json"), "utf8"));
 	assertSourceIdentity(manifest);
-	if (manifest.schemaVersion !== 2 || manifest.releaseStatus !== "candidate") fail("release manifest schema/status is not the hardened candidate format");
+	if (manifest.schemaVersion !== 3 || manifest.releaseStatus !== "candidate") fail("release manifest schema/status is not the hardened candidate format");
 	if (!manifest.piIdentity || manifest.piIdentity.package !== PI_PACKAGE || manifest.piIdentity.version !== "0.84.1" || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.packageJsonSha256) || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.cliSha256)) fail("release manifest has no bound Pi identity");
 	const artifactName = manifest.artifact?.file;
 	if (typeof artifactName !== "string" || artifactName !== artifactName.split(/[\\/]/u).pop() || !artifactName.endsWith(".tgz")) fail("release manifest has an invalid artifact filename");
@@ -441,10 +568,10 @@ export async function verifyReleaseDirectory(directory) {
 		if (!record || typeof record.path !== "string" || record.path.startsWith("/") || record.path.split("/").includes("..") || !/^[0-9a-f]{64}$/u.test(record.sha256) || !Number.isSafeInteger(record.size) || record.size < 0) fail("release manifest has an unsafe file record");
 	}
 	const listed = (await readFile(join(root, "artifact-files.txt"), "utf8")).trim().split(/\r?\n/u).filter(Boolean);
-	const expectedPaths = records.map((record) => record.path).sort((left, right) => left.localeCompare(right));
+	const expectedPaths = records.map((record) => record.path).sort(pathCompare);
 	if (JSON.stringify(listed) !== JSON.stringify(expectedPaths)) fail("artifact file list differs from release manifest");
-	if (verification.schemaVersion !== 2 || verification.verified !== true || JSON.stringify(verification.checks) !== JSON.stringify(manifest.checks)) fail("verification evidence is not deterministic or complete");
-	if (verification.gitCommit !== manifest.gitCommit || verification.gitTree !== manifest.gitTree || verification.dirty !== manifest.dirty || verification.sourceDigest !== manifest.sourceDigest || verification.buildDigest !== manifest.buildDigest || JSON.stringify(verification.piIdentity) !== JSON.stringify(manifest.piIdentity)) fail("verification evidence is not bound to the release source/build identity");
+	if (verification.schemaVersion !== 3 || verification.verified !== true || JSON.stringify(verification.checks) !== JSON.stringify(manifest.checks)) fail("verification evidence is not deterministic or complete");
+	if (verification.gitCommit !== manifest.gitCommit || verification.gitTree !== manifest.gitTree || verification.dirty !== manifest.dirty || verification.sourceDigest !== manifest.sourceDigest || verification.buildDigest !== manifest.buildDigest || JSON.stringify(verification.testDefinition) !== JSON.stringify(manifest.testDefinition) || JSON.stringify(verification.piIdentity) !== JSON.stringify(manifest.piIdentity)) fail("verification evidence is not bound to the release source/build identity");
 	if (manifest.buildDigest !== buildDigestFor(manifest)) fail("release build digest does not match its source, Pi, or artifact records");
 	await verifyEvidenceBinding(root, manifest, verification);
 	const privacyReport = JSON.parse(await readFile(join(root, "privacy-report.json"), "utf8"));
@@ -454,15 +581,16 @@ export async function verifyReleaseDirectory(directory) {
 	const directoryPrivacy = await scanPrivacy(directorySourcePath);
 	if (!directoryPrivacy.clean) fail(`directory source privacy scan failed: ${directoryPrivacy.issues.map((issue) => `${issue.path}: ${issue.kind}`).join(", ")}`);
 	if (digestJson(privacyReport.directorySource) !== digestJson(directoryPrivacy)) fail("directory privacy report does not match the scanned directory source");
-	const directoryFiles = (await walkFiles(directorySourcePath)).sort((left, right) => left.localeCompare(right));
+	const directoryFiles = (await walkFiles(directorySourcePath)).sort(pathCompare);
 	if (JSON.stringify(directoryFiles) !== JSON.stringify(expectedPaths)) fail("directory source files differ from release manifest");
+	if (await sha256(join(directorySourcePath, "package.json")) !== manifest.testDefinition.packageJsonSha256) fail("release test definition is not bound to the packaged package.json");
 	for (const record of records) {
 		const path = join(directorySourcePath, record.path);
 		const digest = await sha256(path);
 		if (digest !== record.sha256 || (await stat(path)).size !== record.size) fail(`directory source record mismatch for ${record.path}`);
 	}
 	const archiveList = await archiveEntries(artifactPath);
-	const archivePaths = archiveList.filter((entry) => entry !== "package").map((entry) => entry.slice("package/".length)).sort((left, right) => left.localeCompare(right));
+	const archivePaths = archiveList.filter((entry) => entry !== "package").map((entry) => entry.slice("package/".length)).sort(pathCompare);
 	if (JSON.stringify(archivePaths) !== JSON.stringify(expectedPaths)) fail("artifact archive files differ from release manifest");
 	const staging = await mkdtemp(join(tmpdir(), "pi-multi-orchestrator-release-verify-"));
 	try {
@@ -506,12 +634,13 @@ export async function bindReleaseEvidence(directory) {
 	const verification = JSON.parse(await readFile(verificationPath, "utf8"));
 	await verifyReleaseDirectory(root);
 	const records = {};
-	for (const name of ["test-evidence.json", "pi-install-evidence.json", "worker-safety-evidence.json"]) {
+	for (const name of ["test-evidence.json", "pi-install-evidence.json", "worker-safety-evidence.json", "release-integrity-evidence.json"]) {
 		const details = await lstat(join(root, name));
-		if (!details.isFile()) fail(`release evidence must be a regular file: ${name}`);
-		records[name === "test-evidence.json" ? "test" : name === "pi-install-evidence.json" ? "pi" : "safety"] = { file: name, sha256: await sha256(join(root, name)) };
+		if (details.isSymbolicLink() || !details.isFile()) fail(`release evidence must be a regular file: ${name}`);
+		const key = name === "test-evidence.json" ? "test" : name === "pi-install-evidence.json" ? "pi" : name === "worker-safety-evidence.json" ? "safety" : "integrity";
+		records[key] = { file: name, sha256: await sha256(join(root, name)) };
 	}
-	const evidence = { schemaVersion: 1, test: records.test, pi: records.pi, safety: records.safety };
+	const evidence = { schemaVersion: 2, test: records.test, pi: records.pi, safety: records.safety, integrity: records.integrity };
 	const nextManifest = { ...manifest, evidence };
 	const nextVerification = { ...verification, evidence };
 	await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");
@@ -523,7 +652,6 @@ export async function bindReleaseEvidence(directory) {
 export async function buildReleaseCandidate({ output, force = false } = {}) {
 	const target = resolve(output ?? DEFAULT_OUTPUT);
 	if (isPathInside(REPO_ROOT, target)) fail("release output must be outside the source checkout");
-	const sourceIdentity = await captureSourceIdentity();
 	const pi = await trustedPi();
 	const npm = await trustedNpm();
 	const targetEntries = await readdir(target).catch((error) => {
@@ -534,19 +662,22 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 	if (targetEntries.length > 0 && force) await rm(target, { recursive: true, force: true });
 	await mkdir(target, { recursive: true });
 
-	const sourceManifest = JSON.parse(await readFile(join(REPO_ROOT, "package.json"), "utf8"));
-	assertManifest(sourceManifest);
-	const staging = await mkdtemp(join(tmpdir(), "pi-multi-orchestrator-release-"));
+	const sourceStage = await createGitSourceStage();
+	const { sourceIdentity, sourceRoot } = sourceStage;
+	let staging;
 	try {
+		const sourceManifest = JSON.parse(await readFile(join(sourceRoot, "package.json"), "utf8"));
+		assertManifest(sourceManifest);
+		const testDefinition = await captureTestDefinition(sourceRoot);
+		staging = await mkdtemp(join(tmpdir(), "pi-multi-orchestrator-release-"));
 		const npmCache = join(staging, "npm-cache");
-		const env = safeEnvironment(npm.node.realpath, npmCache);
-		await rm(join(REPO_ROOT, "dist"), { recursive: true, force: true });
+		const env = safeEnvironment(npm.node.realpath, npmCache, sourceRoot);
 		await run(npm.node.realpath, [npm.cli.realpath, "run", "build"], {
-			cwd: REPO_ROOT,
+			cwd: sourceRoot,
 			env,
 		});
 		const packed = await run(npm.node.realpath, [npm.cli.realpath, "pack", "--json", "--ignore-scripts", "--pack-destination", staging], {
-			cwd: REPO_ROOT,
+			cwd: sourceRoot,
 			env,
 		});
 		const packInfo = JSON.parse(packed.stdout.trim());
@@ -577,7 +708,7 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 		const artifactHash = await sha256(artifactPath);
 		const artifactSize = (await stat(artifactPath)).size;
 		const fileRecords = [];
-		for (const file of [...info.files].sort((left, right) => left.path.localeCompare(right.path))) {
+		for (const file of [...info.files].sort((left, right) => pathCompare(left.path, right.path))) {
 			const path = join(packageRoot, file.path);
 			fileRecords.push({ path: file.path, size: (await stat(path)).size, sha256: await sha256(path) });
 		}
@@ -589,19 +720,25 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 		const verificationName = "verification.json";
 		const buildTimestamp = process.env.SOURCE_DATE_EPOCH
 			? new Date(Number(process.env.SOURCE_DATE_EPOCH) * 1000).toISOString()
-			: new Date().toISOString();
+			: new Date(sourceIdentity.gitCommitTimestamp).toISOString();
 		const testResult = "not-run-by-release-script";
 		await writeFile(join(target, filesName), `${fileRecords.map((file) => file.path).join("\n")}\n`, "utf8");
 		await writeFile(join(target, checksumName), `${artifactHash}  ${info.filename}\n`, "utf8");
 		const manifest = {
-			schemaVersion: 2,
+			schemaVersion: 3,
 			releaseStatus: "candidate",
 			gitCommit: sourceIdentity.gitCommit,
 			gitTree: sourceIdentity.gitTree,
+			gitCommitTimestamp: sourceIdentity.gitCommitTimestamp,
 			dirty: false,
 			trackedClean: true,
 			untrackedCount: finalSourceIdentity.untrackedCount,
+			untrackedIncluded: false,
 			sourceDigest: sourceIdentity.sourceDigest,
+			sourceDigestAlgorithm: sourceIdentity.sourceDigestAlgorithm,
+			trackedFileCount: sourceIdentity.trackedFileCount,
+			buildSource: "detached-git-commit",
+			testDefinition,
 			buildTimestamp,
 			nodeVersion: process.version,
 			piVersion: "0.84.1",
@@ -628,7 +765,7 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 		manifest.buildDigest = buildDigestFor(manifest);
 		await writeFile(join(target, manifestName), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 		const verification = {
-			schemaVersion: 2,
+			schemaVersion: 3,
 			verified: Object.values(checks).every(Boolean),
 			artifact: info.filename,
 			sha256: artifactHash,
@@ -638,6 +775,7 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 			trackedClean: true,
 			sourceDigest: sourceIdentity.sourceDigest,
 			buildDigest: manifest.buildDigest,
+			testDefinition,
 			piIdentity: pi.identity,
 			checks,
 		};
@@ -645,7 +783,8 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 		await verifyReleaseDirectory(target);
 		return { output: target, artifact: artifactPath, directorySource: directorySourcePath, version: sourceManifest.version, sha256: artifactHash, checks };
 	} finally {
-		await rm(staging, { recursive: true, force: true });
+		if (staging) await rm(staging, { recursive: true, force: true });
+		await rm(sourceStage.temporaryRoot, { recursive: true, force: true });
 	}
 }
 
