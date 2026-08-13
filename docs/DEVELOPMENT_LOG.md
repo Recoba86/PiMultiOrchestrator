@@ -239,6 +239,18 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Real-route evidence:** historical Investigation PASS `9router/cx/gpt-5.6-luna`; historical Implementation PASS `9router/ag/claude-opus-4-6-thinking`; RC.7 M7 Verification PASS on explicit `9router/ag/claude-opus-4-6-thinking` with 3 provider requests, valid structured submission, M7 decision `pass`, and no mutation. Tabi became schema-valid but rejected after reporting one failed exploratory mechanical check. DeepSeek Flash stopped at the explicit 8-request cap without submission. Prior DeepSeek Pro and cx/gpt-5.6-sol compatibility remain unproven.
 - **Safety and boundary:** fallback, retry, repair, analyst, and hidden inference were disabled; credentials remained in-memory only; main Pi config, models/auth files, fixtures, and source repository were unchanged by real-route runs. M11 remains local, not accepted, not production-ready, and unpublished; Planner/External Review #5 and Stage 4 human/manual dogfood remain separate gates.
 
+### M11 Stage 4A — autonomous Computer-Use dogfood and final M7 evidence closeout
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED; Stage 4A autonomous closeout PASS.
+- **Starting/final HEAD:** RC.8 was already installed from clean tracked commit `aa622eef7256b447b456699dd80e10697fe94dc5`; no production source change was needed. The documentation closeout is the only change in this entry.
+- **Purpose:** Prove the real product path end to end after the earlier non-M7 dogfood blocker: normal Mission creation, Task creation, real Implementation execution, and normal M7 Verification with durable structured quality evidence.
+- **Major outcomes:** In disposable `/private/tmp/pi-m11-stage4-dogfood`, Mission `mission-049cbd67-01d6-40bf-a103-3c31267d71ec` and Task `task-e44240e9-a662-45fc-9a48-2e7c9dab31e1` were created through the visible Pi TUI. Implementation attempt `attempt-8c6df7fb-68c9-471b-9246-33e038af3a34` completed on the explicit `ag/claude-opus-4-6-thinking` route and created the requested deterministic JSON fixture. Normal Verify then completed verification `verification-a4855595-3a1f-4d10-925c-d30d523d98eb` and persisted pass decision `decision-e87d80b4-8654-4368-86af-987465bbe521`.
+- **Tests/evidence:** RC.8 manifest evidence remains `175/175 PASS`, `20/20` integrity attacks, artifact SHA-256 `8fd4b233f7ee3d22ac0ac5703078ab165b55ba11a3978ae94a1f21039b746f28`; deterministic fixture validation passed; MissionStore showed one succeeded attempt, one completed verification, one pass decision, zero escalations; visible task detail/Quality history/Diagnostics reflected the same state.
+- **Important decisions:** No source repair or RC.9 was justified. Trust, WorkerToolSafetyGuard, protected-path/command policy, Verification read-only tool filtering, bounded structured submission, and M7 persistence were preserved. The route result is scoped to the explicitly tested `9router/ag/claude-opus-4-6-thinking` path.
+- **Deferred work:** final human keyboard sanity smoke, fully independent External Review #5, Planner acceptance, and any publication.
+- **Live environment impact:** Two bounded real provider requests were made through Termius/Pi using the disposable root; during dogfood no live Pi configuration, source code, personal files, credentials, Keychain, 9Router configuration, tag, remote, npm publication, or GitHub release was modified. The only post-run change is this tracked documentation closeout.
+- **Next authorized milestone:** Human sanity and independent acceptance gates only; do not publish or claim M11 accepted without those gates.
+
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED
 - **Starting HEAD:**

@@ -1,6 +1,6 @@
 # Current project state
 
-Last updated: 2026-08-13
+Last updated: 2026-08-14
 
 Read this first for a fast operational snapshot. Git and verification evidence take precedence if this file is stale; see [Project state policy](PROJECT_STATE_POLICY.md).
 
@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M11 rc.7 Stage 3 autonomous closeout PASS / acceptance pending |
+| Development phase | M10 accepted; M11 rc.8 Stage 4A autonomous Computer-Use dogfood PASS / human sanity and acceptance pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,12 +23,13 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M11 candidate | `0.1.0-rc.7` — local, not public |
+| M11 candidate | `0.1.0-rc.8` — local, not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
 | M11-R4 historical release evidence | rc.2 artifact and `165/165 PASS`; rejected by Independent Review #3 for the custom-tool bypass |
 | M11-R6 historical release evidence | rc.3 safety/remediation, release, compatibility, rescue, privacy, provenance, and bundle verification PASS; rejected by External Review #4 for release-evidence integrity defects |
 | M11-R8 release evidence | rc.4 exact-Git build/test provenance, authentic M10 compatibility, privacy/no-symlink enforcement, `20/20` adversarial rejection, deterministic rebuild, and externally anchored recursive bundle verification PASS; External Review #5 pending |
 | M11-R9/R10/R11 closeout evidence | rc.7; exact-Git `174/174 PASS`, `20/20` integrity attacks, artifact/review-bundle identity PASS, and real Stage 3 PASS on explicit supported routes; M11 acceptance remains pending |
+| M11 Stage 4A closeout evidence | rc.8; exact-Git `175/175 PASS`, `20/20` integrity attacks, artifact SHA-256 `8fd4b233f7ee3d22ac0ac5703078ab165b55ba11a3978ae94a1f21039b746f28`, and autonomous Computer-Use real-route Implementation + M7 Verification PASS; human sanity and M11 acceptance remain pending |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -179,7 +180,7 @@ The Node `node:sqlite` API is experimental; the adapter boundary isolates that c
 
 ### Human TUI smoke
 
-Automated Pi-native dialog callback and RPC tests passed for the M2 model manager and M3 pool editor. A real human keyboard-driven TUI smoke has not yet been performed. This remains explicit open validation.
+Automated Pi-native dialog callback and RPC tests passed for the M2 model manager and M3 pool editor. Authorized autonomous Computer-Use dogfood of the RC.8 TUI and canonical Mission → Task → Implementation → M7 Verification flow passed on 2026-08-14. A final human keyboard sanity smoke has not yet been performed and remains explicit open validation.
 
 ### Deferred capabilities
 
@@ -300,6 +301,16 @@ M10 remains the last Planner-accepted milestone.
 - **Real-route matrix:** Investigation PASS on historical `9router/cx/gpt-5.6-luna`; Implementation PASS on historical `9router/ag/claude-opus-4-6-thinking`; M7 Verification PASS on RC.7 `9router/ag/claude-opus-4-6-thinking` with 3 provider requests, valid structured submission, M7 `passed`, and no mutation. Tabi was schema-valid but rejected one reported failed exploratory mechanical check; DeepSeek Flash stopped at the explicit 8-request cap without submission; prior DeepSeek Pro and cx/gpt-5.6-sol compatibility remain unproven.
 - **Safety boundary:** Verification exposed only `read`, `grep`, `find`, `ls`, and `submit_verification_result`; no fallback, retry, repair, analyst, hidden inference, credential persistence, or live Pi configuration mutation was observed.
 - **Remaining gates:** External Review #5/Planner acceptance, human/manual Stage 4 dogfood, and any publication remain separate. M11 is not accepted or production-ready.
+
+### M11 Stage 4A — autonomous Computer-Use dogfood and final M7 evidence closeout
+
+- **Status:** Stage 4A autonomous closeout PASS; M11 remains IMPLEMENTED BUT NOT ACCEPTED.
+- **Final candidate and identity:** artifact-derived `0.1.0-rc.8`, built from clean tracked Git commit `aa622eef7256b447b456699dd80e10697fe94dc5`, tree `8104b7e1d5e40e4e2011c017acbf1bfa35203fd9`, source digest `d4f8b76c88e3e606b528d57571cf08e0553a0d43686c23489cba84a14f8fc234`, artifact SHA-256 `8fd4b233f7ee3d22ac0ac5703078ab165b55ba11a3978ae94a1f21039b746f28`.
+- **Offline evidence:** RC.8 release evidence records `175/175 PASS`, `20/20` integrity attacks, typecheck/build/check, Pi `0.84.1` compatibility/install/rollback/rescue, worker safety, privacy, and provenance. No source or package change was required during this closeout.
+- **Canonical Computer-Use flow:** in disposable `/private/tmp/pi-m11-stage4-dogfood`, Mission `mission-049cbd67-01d6-40bf-a103-3c31267d71ec` created Task `task-e44240e9-a662-45fc-9a48-2e7c9dab31e1`; the real Implementation run `attempt-8c6df7fb-68c9-471b-9246-33e038af3a34` completed on route `r9-ninerouter-ag-claude-opus-4-6-think-fe2f756e1d848cbb05ca` / model `ag/claude-opus-4-6-thinking` and created only the requested `m7-dogfood.json` fixture change.
+- **M7 evidence:** the normal task Verify action completed `verification-a4855595-3a1f-4d10-925c-d30d523d98eb` at round 0, persisted `decision-e87d80b4-8654-4368-86af-987465bbe521` with verdict `pass`, and left task quality status `passed`. The reviewer used the same explicit route/model, submitted the bounded structured verification result, and reported all six criteria satisfied with no unexpected mutation.
+- **Safety and observability:** the project root was TRUSTED only inside the disposable root; application-level protected-path and command policy remained active; Verification exposed only read-only inspection plus `submit_verification_result`; no fallback, retry, repair, analyst, hidden inference, credential persistence, main Pi configuration mutation, source-code change, or unrelated project mutation occurred during dogfood. The visible TUI showed the quality PASS and Diagnostics showed RC.8, Pi `0.84.1`, trusted project, healthy Mission/Analytics DBs, and healthy observed route.
+- **Remaining gates:** final human sanity smoke, fully independent External Review #5, Planner acceptance, and any publication remain separate. M11 is not accepted or production-ready.
 
 ## Accepted evidence history
 
