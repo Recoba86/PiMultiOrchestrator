@@ -3,17 +3,43 @@ import type { ResultProtocolSpec } from "../workers/types.js";
 import { parseVerificationResult } from "./gate.js";
 import type { VerificationResultV1 } from "./types.js";
 
+const TEXT = { type: "string", minLength: 1, maxLength: 4_000 };
+const TEXT_LIST = { type: "array", maxItems: 64, items: TEXT };
+const CRITERION_RESULT = {
+	type: "object",
+	additionalProperties: false,
+	properties: {
+		criterion: TEXT,
+		status: { type: "string", enum: ["satisfied", "failed", "not_verified"] },
+		evidenceSummary: TEXT,
+		mandatory: { type: "boolean" },
+	},
+	required: ["criterion", "status", "evidenceSummary"],
+};
+const MECHANICAL_CHECK = {
+	type: "object",
+	additionalProperties: false,
+	properties: {
+		command: TEXT,
+		exitStatus: { type: "integer", minimum: 0 },
+		outcome: { type: "string", enum: ["passed", "failed", "timed_out", "not_run"] },
+		summary: TEXT,
+		durationMs: { type: "integer", minimum: 0, maximum: 86_400_000 },
+		provenance: { type: "string", enum: ["orchestrator", "reviewer", "worker_claim"] },
+	},
+	required: ["command", "outcome", "provenance"],
+};
 const PARAMETERS = {
 	type: "object",
 	additionalProperties: false,
 	properties: {
 		verdict: { type: "string", enum: ["pass", "reject", "blocked"] },
-		criterionResults: { type: "array", maxItems: 64 },
-		mechanicalChecks: { type: "array", maxItems: 64 },
-		findings: { type: "array", maxItems: 64 },
-		requiredFixes: { type: "array", maxItems: 64 },
-		risks: { type: "array", maxItems: 64 },
-		summary: { type: "string", maxLength: 4_000 },
+		criterionResults: { type: "array", maxItems: 64, items: CRITERION_RESULT },
+		mechanicalChecks: { type: "array", maxItems: 64, items: MECHANICAL_CHECK },
+		findings: TEXT_LIST,
+		requiredFixes: TEXT_LIST,
+		risks: TEXT_LIST,
+		summary: TEXT,
 	},
 	required: ["verdict", "criterionResults", "mechanicalChecks", "findings", "requiredFixes", "risks", "summary"],
 } as unknown as ToolDefinition["parameters"];

@@ -20,6 +20,13 @@ test("verification result tool is bounded, one-shot, and terminating", async () 
 	assert.equal(state.protocolViolation, true);
 });
 
+test("verification protocol advertises parser-compatible nested schemas", () => {
+	const parameters = createVerificationResultProtocol().parameters as { readonly properties: Record<string, { readonly items?: { readonly required?: readonly string[] } }> };
+	assert.deepEqual(parameters.properties.criterionResults?.items?.required, ["criterion", "status", "evidenceSummary"]);
+	assert.deepEqual(parameters.properties.mechanicalChecks?.items?.required, ["command", "outcome", "provenance"]);
+	assert.deepEqual(parameters.properties.findings?.items, { type: "string", minLength: 1, maxLength: 4_000 });
+});
+
 test("verification protocol captures payloads without executing path or shell-shaped data", async () => {
 	const protocol = createVerificationResultProtocol();
 	const state = createProtocolCaptureState();
