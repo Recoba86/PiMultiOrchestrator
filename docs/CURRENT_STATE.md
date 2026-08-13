@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M11 rc.4 remediated / acceptance pending |
+| Development phase | M10 accepted; M11 rc.7 Stage 3 autonomous closeout PASS / acceptance pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,11 +23,12 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M11 candidate | `0.1.0-rc.4` — local, not public |
+| M11 candidate | `0.1.0-rc.7` — local, not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
 | M11-R4 historical release evidence | rc.2 artifact and `165/165 PASS`; rejected by Independent Review #3 for the custom-tool bypass |
 | M11-R6 historical release evidence | rc.3 safety/remediation, release, compatibility, rescue, privacy, provenance, and bundle verification PASS; rejected by External Review #4 for release-evidence integrity defects |
 | M11-R8 release evidence | rc.4 exact-Git build/test provenance, authentic M10 compatibility, privacy/no-symlink enforcement, `20/20` adversarial rejection, deterministic rebuild, and externally anchored recursive bundle verification PASS; External Review #5 pending |
+| M11-R9/R10/R11 closeout evidence | rc.7; exact-Git `174/174 PASS`, `20/20` integrity attacks, artifact/review-bundle identity PASS, and real Stage 3 PASS on explicit supported routes; M11 acceptance remains pending |
 | Configuration schema | Version 2 current; Version 1 imports migrate sequentially |
 | Most recently validated Pi | `@earendil-works/pi-coding-agent@0.84.1` (`pi --version` `0.84.1`) |
 | Most recently validated Node.js | `v22.23.0` |
@@ -290,6 +291,15 @@ and worker-safety evidence. A recursive no-symlink bundle manifest is checked
 against a separately supplied root digest. The bundle remains
 `EXTERNAL_REVIEW_PENDING`. No real-route smoke was authorized or performed.
 M10 remains the last Planner-accepted milestone.
+
+### M11-R9/R10/R11 autonomous Stage 3 closeout
+
+- **Status:** Stage 3 autonomous closeout PASS; M11 remains IMPLEMENTED BUT NOT ACCEPTED.
+- **Final candidate and identity:** `0.1.0-rc.7`, Git commit `d460319040a66a43016912034a9284225cc3d5a5`, tree `5a7b26f2927df8c58617aafe34e7cb9deb0eb3a4`, source digest `da16d55ff5915c026e80feb1e8c82228813835090b2f0ac82812d2de616da4ee`, artifact SHA-256 `3411e8bdbb5ab90769db32f30d4b0962a2fdefd47f22fd31d58d02716df6ff19`, external review-bundle root `50fd45bb9a1c68ab4077061d463a282ff3901c206afe52b7c7bc6c4d957d704f`.
+- **Offline evidence:** RC.7 release verification passed `174/174` tests and `20/20` integrity attacks; typecheck, build, Pi compatibility/install/rollback/rescue, worker safety, and privacy/provenance checks passed.
+- **Real-route matrix:** Investigation PASS on historical `9router/cx/gpt-5.6-luna`; Implementation PASS on historical `9router/ag/claude-opus-4-6-thinking`; M7 Verification PASS on RC.7 `9router/ag/claude-opus-4-6-thinking` with 3 provider requests, valid structured submission, M7 `passed`, and no mutation. Tabi was schema-valid but rejected one reported failed exploratory mechanical check; DeepSeek Flash stopped at the explicit 8-request cap without submission; prior DeepSeek Pro and cx/gpt-5.6-sol compatibility remain unproven.
+- **Safety boundary:** Verification exposed only `read`, `grep`, `find`, `ls`, and `submit_verification_result`; no fallback, retry, repair, analyst, hidden inference, credential persistence, or live Pi configuration mutation was observed.
+- **Remaining gates:** External Review #5/Planner acceptance, human/manual Stage 4 dogfood, and any publication remain separate. M11 is not accepted or production-ready.
 
 ## Accepted evidence history
 

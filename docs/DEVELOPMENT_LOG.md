@@ -228,6 +228,17 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Evidence:** local `0.1.0-rc.4`; build commit `ae39f24937988ef95975b2b45c018f4c45efd23c`; source digest `b91432b23b9fa44b3f1e750ff852ca78369f4f3d4808242841124364a510868b`; artifact SHA-256 `a1e14c83da374c5f6a1b849c589feb444002d46e8a0634c0bbd5d520a539572b`; independent `169/169 PASS`; mandatory attacks `20/20 PASS`; deterministic second build SHA equal; Pi `0.84.1` directory-source install, `/orchestrator`, Diagnostics, twelve sections, authentic M10 upgrade/rollback, non-empty Config/Mission/Analytics/Trust equality, broken-candidate rescue, privacy, and worker-safety regression PASS.
 - **Boundary:** fake gateway and temporary roots only; live calls `0`, paid inference `0`; no real-route smoke, publication, tag, push, live Pi configuration, or credentials. Stage 3 is NOT AUTHORIZED / NOT PERFORMED; Stage 4 remains pending.
 
+### M11-R9/R10/R11 — autonomous Stage 3 closeout and RC.7
+
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED; autonomous Stage 3 closeout PASS.
+- **Starting HEAD:** `e536045b2c74dcd233ebba484574a65a8d3ccdde` (RC.6).
+- **Final HEAD:** `d460319040a66a43016912034a9284225cc3d5a5` (`Fix verification result schema contract`).
+- **Purpose:** Resolve the real-route M7 blocker while preserving fail-closed safety, then establish a defensible real-route compatibility conclusion.
+- **Production changes:** RC.5 removed non-executable `bash` from Verification visibility; RC.6 made M7 finalization atomic, normalized criteria, and preserved reviewer route diversity; RC.7 aligned nested `submit_verification_result` schema requirements with the strict parser and stated the exact payload contract in the reviewer prompt.
+- **Offline evidence:** RC.7 release verification passed `174/174` tests, `20/20` integrity attacks, typecheck/build, Pi `0.84.1` compatibility/install/rollback/rescue, worker safety, privacy, provenance, artifact SHA-256 `3411e8bdbb5ab90769db32f30d4b0962a2fdefd47f22fd31d58d02716df6ff19`, and external bundle root `50fd45bb9a1c68ab4077061d463a282ff3901c206afe52b7c7bc6c4d957d704f`.
+- **Real-route evidence:** historical Investigation PASS `9router/cx/gpt-5.6-luna`; historical Implementation PASS `9router/ag/claude-opus-4-6-thinking`; RC.7 M7 Verification PASS on explicit `9router/ag/claude-opus-4-6-thinking` with 3 provider requests, valid structured submission, M7 decision `pass`, and no mutation. Tabi became schema-valid but rejected after reporting one failed exploratory mechanical check. DeepSeek Flash stopped at the explicit 8-request cap without submission. Prior DeepSeek Pro and cx/gpt-5.6-sol compatibility remain unproven.
+- **Safety and boundary:** fallback, retry, repair, analyst, and hidden inference were disabled; credentials remained in-memory only; main Pi config, models/auth files, fixtures, and source repository were unchanged by real-route runs. M11 remains local, not accepted, not production-ready, and unpublished; Planner/External Review #5 and Stage 4 human/manual dogfood remain separate gates.
+
 - **Milestone:**
 - **Status:** PLANNED / IN PROGRESS / IMPLEMENTED BUT NOT ACCEPTED / ACCEPTED / RELEASED / DEPRECATED
 - **Starting HEAD:**

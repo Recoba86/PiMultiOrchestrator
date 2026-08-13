@@ -13,7 +13,7 @@ This file records releasable product state. It does not promote development prog
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.4` — local release candidate only |
+| Development manifest version | `0.1.0-rc.7` — local release candidate only |
 | Release tag | NONE |
 | Release commit | NONE |
 | GitHub release | NONE |
@@ -39,14 +39,15 @@ Milestone acceptance does not itself create a product release.
 | M11-R4 historical candidate | `0.1.0-rc.2`; `165/165 PASS`, release subtests `4/4 PASS`, and compatibility/rescue evidence PASS; rejected by Independent Review #3 for the custom-tool bypass |
 | M11-R6 historical candidate | `0.1.0-rc.3`; worker/custom-tool safety independently passed, but External Review #4 rejected the candidate for release-evidence integrity defects |
 | M11-R8 candidate | `0.1.0-rc.4`; artifact SHA-256 `a1e14c83da374c5f6a1b849c589feb444002d46e8a0634c0bbd5d520a539572b`; exact-Git provenance, independent `169/169` rerun, `20/20` integrity attacks, Pi `0.84.1` install/upgrade/rollback/rescue, privacy, worker safety, deterministic rebuild, and external-root bundle verification PASS; External Review #5 pending |
+| M11-R9/R10/R11 candidate | `0.1.0-rc.7`; artifact SHA-256 `3411e8bdbb5ab90769db32f30d4b0962a2fdefd47f22fd31d58d02716df6ff19`; exact-Git `174/174 PASS`, `20/20` integrity attacks, external bundle root `50fd45bb9a1c68ab4077061d463a282ff3901c206afe52b7c7bc6c4d957d704f`, and real Stage 3 PASS on explicit supported routes; M11 acceptance pending |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
 | Tested Node.js version | `22.23.0`; package requires `>=22.19.0` |
 | Fake gateway integration | PASS |
 | Actual Pi with fake gateway | PASS — model list, completion, RPC commands, pool mutation/reload, routing preview, health reset, parent→child execution, mission→analytics telemetry, token provenance, fallback, quality reject→repair→re-review, recommendation controls, and native/RPC Control Center coverage |
-| Real live 9Router catalog | NOT VERIFIED — credential-gated probe was skipped |
-| Real paid inference | NOT PERFORMED |
+| Real live 9Router catalog | Controlled Stage 3 preflight verified HTTP 200 and catalog count 29 |
+| Real paid inference | Controlled bounded Stage 3 matrix performed; no live configuration changed |
 
 Fake-gateway behavior does not prove the live 9Router model count, metadata shape, resource/provider identity, subscription/account identity, or combo attribution.
 
@@ -57,7 +58,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 - Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and public release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
 - Human keyboard-driven TUI smoke remains pending as open validation, but is not an M10 acceptance blocker. M10 automated safety/recovery evidence is `159/159 PASS`.
 - A human keyboard-driven TUI smoke and live 9Router metadata verification remain open validation.
-- M10's application-level policy is not an OS/kernel sandbox. M11 package/install/rollback/review/dogfood gates remain pending Planner acceptance; real-route smoke is unauthorized.
+- M10's application-level policy is not an OS/kernel sandbox. Stage 3 real-route acceptance passed on supported routes; Stage 4 human/manual dogfood and Planner acceptance remain pending.
 - Pi `0.84.1` must be given the extracted `directory-source/` derived from the verified RC `.tgz`; direct `pi install <artifact>.tgz` is not a supported local workflow. The source checkout is never installed.
 - Review #3 rejected rc.2 after reproducing arbitrary caller-supplied custom-tool execution. R6 closed that bypass, but Review #4 rejected rc.3 for evidence-integrity weaknesses. R8 builds rc.4 only from commit `ae39f24937988ef95975b2b45c018f4c45efd23c`, binds source/test/tool identities, preserves authentic M10 state across upgrade and rollback, rejects all 20 required attacks, and anchors the recursively hashed review bundle to a separately supplied root digest. It remains external-review evidence, not acceptance or publication.
 
