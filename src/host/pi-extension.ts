@@ -1292,60 +1292,62 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			ctx.ui.notify("/orchestrator requires TUI or RPC UI mode", "error");
 			return;
 		}
-		await showControlCenterDashboard(ctx);
-		const choice = await ctx.ui.select("Pi Multi-Orchestrator", [
-			"Models & 9Router",
-			"Investigation Pool",
-			"Implementation Pool",
-			"Verification Pool",
-			"Boss / Orchestrator Profiles",
-			"Routing & Fallback",
-			"Health & Quotas",
-			"Budget / Quality Profiles",
-			"Context & Mission Settings",
-			"Statistics & Analytics",
-			"Diagnostics",
-			"Backup / Restore",
-		]);
-		switch (choice) {
-			case "Models & 9Router":
-				await openModels(ctx);
-			return;
-			case "Investigation Pool":
-				await openPoolEditor(ctx, "investigation");
-				return;
-			case "Implementation Pool":
-				await openPoolEditor(ctx, "implementation");
-				return;
-			case "Verification Pool":
-				await openPoolEditor(ctx, "verification");
-				return;
-			case "Boss / Orchestrator Profiles":
-				await showBossProfiles(ctx);
-				return;
-			case "Routing & Fallback":
-				await showRoutingStatus(ctx);
-				return;
-			case "Health & Quotas":
-				await showRouteHealth(ctx);
-				return;
-			case "Budget / Quality Profiles":
-				await showBudgetQualityProfiles(ctx);
-				return;
-			case "Context & Mission Settings":
-				await openMissionControl(ctx);
-				return;
-			case "Statistics & Analytics":
-				await showAnalytics(ctx);
-				return;
-			case "Diagnostics":
-				await showDiagnostics(ctx);
-				return;
-			case "Backup / Restore":
-				await showBackupRestore(ctx);
-				return;
-			default:
-				return;
+		while (true) {
+			await showControlCenterDashboard(ctx);
+			const choice = await ctx.ui.select("Pi Multi-Orchestrator", [
+				"Models & 9Router",
+				"Investigation Pool",
+				"Implementation Pool",
+				"Verification Pool",
+				"Boss / Orchestrator Profiles",
+				"Routing & Fallback",
+				"Health & Quotas",
+				"Budget / Quality Profiles",
+				"Context & Mission Settings",
+				"Statistics & Analytics",
+				"Diagnostics",
+				"Backup / Restore",
+			]);
+			switch (choice) {
+				case "Models & 9Router":
+					await openModels(ctx);
+					continue;
+				case "Investigation Pool":
+					await openPoolEditor(ctx, "investigation");
+					continue;
+				case "Implementation Pool":
+					await openPoolEditor(ctx, "implementation");
+					continue;
+				case "Verification Pool":
+					await openPoolEditor(ctx, "verification");
+					continue;
+				case "Boss / Orchestrator Profiles":
+					await showBossProfiles(ctx);
+					continue;
+				case "Routing & Fallback":
+					await showRoutingStatus(ctx);
+					continue;
+				case "Health & Quotas":
+					await showRouteHealth(ctx);
+					continue;
+				case "Budget / Quality Profiles":
+					await showBudgetQualityProfiles(ctx);
+					continue;
+				case "Context & Mission Settings":
+					await openMissionControl(ctx);
+					continue;
+				case "Statistics & Analytics":
+					await showAnalytics(ctx);
+					continue;
+				case "Diagnostics":
+					await showDiagnostics(ctx);
+					continue;
+				case "Backup / Restore":
+					await showBackupRestore(ctx);
+					continue;
+				default:
+					return;
+			}
 		}
 	};
 

@@ -154,14 +154,15 @@ async function openCenter(
 	host: ReturnType<typeof createPiHost>,
 	pi: PiFixture,
 	selection: string | undefined,
-	options: { readonly mode?: "tui" | "rpc"; readonly titles?: SelectCall[]; readonly notifications?: string[] } = {},
+	options: { readonly mode?: "tui" | "rpc"; readonly titles?: SelectCall[]; readonly notifications?: string[]; readonly rootSelections?: readonly (string | undefined)[] } = {},
 ): Promise<void> {
 	const calls = options.titles ?? [];
 	const notifications = options.notifications ?? [];
+	const rootSelections = [...(options.rootSelections ?? [selection])];
 	const contextOptions = {
 		select: async (title: string, choices: readonly string[]) => {
 			calls.push({ title, options: [...choices] });
-			if (title === "Pi Multi-Orchestrator") return selection;
+			if (title === "Pi Multi-Orchestrator") return rootSelections.shift();
 			// Existing and M9 nested screens all expose Back. Returning it is the
 			// deterministic keyboard escape path and prevents a test from hanging.
 			return choices.includes("Back") ? "Back" : undefined;
@@ -225,8 +226,23 @@ describe("M9 Control Center contract", () => {
 		await openCenter(host, pi, "Implementation Pool", { titles: calls, notifications });
 		await openCenter(host, pi, undefined, { titles: calls, notifications });
 		assert.equal(pools.mutationCalls, 0);
-		assert.equal(calls.filter((call) => call.title === "Pi Multi-Orchestrator").length, 2);
+		assert.equal(calls.filter((call) => call.title === "Pi Multi-Orchestrator").length, 3);
 		assert.ok(calls.some((call) => call.options.includes("Back")));
+	});
+
+	it("[U][fixture-pi-0.84.1] returns one logical level for repeated nested Back and still exits at the root", async () => {
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(), poolManager: poolFixture() });
+		host.registerCommands();
+		const calls: SelectCall[] = [];
+		await openCenter(host, pi, undefined, {
+			titles: calls,
+			rootSelections: ["Investigation Pool", "Implementation Pool", "Verification Pool", undefined],
+		});
+		const rootCalls = calls.filter((call) => call.title === "Pi Multi-Orchestrator");
+		assert.equal(rootCalls.length, 4);
+		assert.equal(calls.filter((call) => call.title.endsWith("Pool")).length, 3);
+		assert.ok(calls.every((call) => call.options.length > 0));
 	});
 
 	it("[U][fixture-pi-0.84.1] projects empty, stale, error, and busy states textually", async () => {
