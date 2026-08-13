@@ -41,6 +41,29 @@ test("quality decisions stay separate from execution and persist escalation stat
 	}
 });
 
+test("quality finalization rolls back decision, run, and task status together", async () => {
+	const root = await mkdtemp(join(tmpdir(), "pi-quality-atomic-"));
+	let fault = false;
+	try {
+		const store = createMissionStore({ root, hooks: { fault: (point) => { if (fault && point === "after-event") throw new Error("injected quality fault"); } } });
+		store.createMission({ missionId: "m-atomic", goal: "ship", acceptanceCriteria: ["tests"] });
+		const task = store.createTask({ missionId: "m-atomic", taskId: "t-atomic", roleId: "reviewer", executionClass: "implementation", objective: "verify" });
+		const quality = new QualityService(store);
+		const verification = quality.startVerification({ missionId: "m-atomic", taskId: task.taskId, targetRunId: "run-atomic", round: 0 });
+		const result = { verdict: "pass" as const, criterionResults: [{ criterion: "tests", status: "satisfied" as const, evidenceSummary: "observed" }], mechanicalChecks: [], findings: [], requiredFixes: [], risks: [], summary: "pass" };
+		fault = true;
+		assert.throws(() => quality.completeVerification(verification.verificationId, result, ["tests"]), /injected quality fault/u);
+		fault = false;
+		assert.equal(store.listQualityDecisions("m-atomic", task.taskId).length, 0);
+		assert.equal(store.getVerificationRun(verification.verificationId)?.status, "running");
+		assert.equal(store.getTaskQualityStatus(task.taskId)?.status, "verification_running");
+		assert.equal(quality.completeVerification(verification.verificationId, result, ["tests"]).status.status, "passed");
+		store.close();
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
 test("quality loop creates bounded escalation, repairs, and re-verifies without health fallback", async () => {
 	const root = await mkdtemp(join(tmpdir(), "pi-quality-loop-"));
 	try {

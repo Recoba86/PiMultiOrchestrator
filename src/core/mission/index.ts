@@ -17,6 +17,7 @@ import type {
 } from "./types.js";
 import type {
 	DiversityPreference, QualityDecisionInput, QualityDecisionRecord, QualityEscalationInput, QualityEscalationRequest,
+	QualityFailureFinalizationInput, QualityFailureFinalizationResult, QualityFinalizationInput, QualityFinalizationResult,
 	QualityStatus, TaskQualityStatus, VerificationRunInput, VerificationRunRecord, VerificationStatus,
 } from "../quality/types.js";
 
@@ -45,6 +46,7 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 	private readonly leaseTtlMs: number;
 	private readonly hooks: NonNullable<MissionStoreOptions["hooks"]>;
 	private eventSequence = 0;
+	private transactionDepth = 0;
 	private closed = false;
 
 	constructor(options: MissionStoreOptions) {
@@ -98,15 +100,19 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 	private ensureOpen(): void { if (this.closed) throw new MissionClosedError(); }
 	private tx<T>(fn: () => T): T {
 		this.ensureOpen();
+		if (this.transactionDepth > 0) return fn();
 		try {
 			this.hooks.fault?.("before-transaction");
 			this.db.exec("BEGIN IMMEDIATE");
+			this.transactionDepth = 1;
 			const result = fn();
 			this.db.exec("COMMIT");
 			return result;
 		} catch (error) {
 			try { this.db.exec("ROLLBACK"); } catch { /* preserve original failure */ }
 			throw error;
+		} finally {
+			this.transactionDepth = 0;
 		}
 	}
 	private bounded(value: unknown, path: string): string {
@@ -267,6 +273,24 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 			this.db.prepare("INSERT INTO quality_decisions(decision_id,mission_id,task_id,verification_id,target_run_id,target_packet_id,round,verdict,criterion_results_json,mechanical_checks_json,reviewer_summary,findings_json,required_fixes_json,risks_json,gate_reasons_json,reviewer_route_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(id, input.missionId, input.taskId, input.verificationId, this.text(input.targetRunId, "targetRunId"), input.targetPacketId ?? null, input.round, input.gate.verdict, this.bounded(input.gate.criterionResults, "quality.criterionResults"), this.bounded(input.gate.mechanicalChecks, "quality.mechanicalChecks"), summary, this.bounded(findings, "quality.findings"), this.bounded(requiredFixes, "quality.requiredFixes"), this.bounded(risks, "quality.risks"), this.bounded(input.gate.reasons, "quality.reasons"), input.reviewerRouteId ?? null, at);
 			this.db.prepare("UPDATE verification_runs SET quality_decision_id=? WHERE verification_id=?").run(id, input.verificationId); this.event(String(input.missionId), Number(mission.revision), `quality_${input.gate.verdict}`, "reviewer", { decisionId: id, verificationId: input.verificationId, round: input.round });
 			return this.decisionFrom(this.db.prepare("SELECT * FROM quality_decisions WHERE decision_id=?").get(id) as Row);
+		});
+	}
+	finalizeQualityVerification(input: QualityFinalizationInput): QualityFinalizationResult {
+		return this.tx(() => {
+			const decision = this.recordQualityDecision(input.decision);
+			const completed = this.updateVerificationRun(input.verificationId, { status: "completed", completedAt: decision.createdAt, qualityDecisionId: decision.decisionId });
+			const status: TaskQualityStatus = { taskId: completed.taskId, missionId: completed.missionId, status: decision.verdict === "pass" ? "passed" : decision.verdict === "reject" ? "rejected" : "blocked", qualityRound: completed.round, latestVerificationId: completed.verificationId, latestDecisionId: decision.decisionId, updatedAt: decision.createdAt };
+			return { run: completed, decision, status: this.setTaskQualityStatus(status) };
+		});
+	}
+	finalizeQualityFailure(input: QualityFailureFinalizationInput): QualityFailureFinalizationResult {
+		return this.tx(() => {
+			const current = this.getVerificationRun(input.verificationId);
+			if (!current) throw new MissionNotFoundError("verification", input.verificationId);
+			if (current.status !== "running") return { run: current, status: this.getTaskQualityStatus(String(current.taskId))! };
+			const updated = this.updateVerificationRun(input.verificationId, { status: input.status === "review_required" ? "interrupted" : "blocked", failureSummary: input.failureSummary });
+			const status: TaskQualityStatus = { taskId: updated.taskId, missionId: updated.missionId, status: input.status, qualityRound: updated.round, latestVerificationId: updated.verificationId, updatedAt: updated.completedAt ?? updated.startedAt };
+			return { run: updated, status: this.setTaskQualityStatus(status) };
 		});
 	}
 	createQualityEscalation(input: QualityEscalationInput): QualityEscalationRequest {

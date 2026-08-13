@@ -145,6 +145,28 @@ export interface QualityDecisionInput {
 	readonly reviewerRouteId?: string;
 }
 
+export interface QualityFinalizationInput {
+	readonly verificationId: string;
+	readonly decision: QualityDecisionInput;
+}
+
+export interface QualityFinalizationResult {
+	readonly run: VerificationRunRecord;
+	readonly decision: QualityDecisionRecord;
+	readonly status: TaskQualityStatus;
+}
+
+export interface QualityFailureFinalizationInput {
+	readonly verificationId: string;
+	readonly status: Extract<QualityStatus, "blocked" | "review_required">;
+	readonly failureSummary: string;
+}
+
+export interface QualityFailureFinalizationResult {
+	readonly run: VerificationRunRecord;
+	readonly status: TaskQualityStatus;
+}
+
 export interface QualityEscalationInput {
 	readonly escalationId?: string;
 	readonly missionId: MissionId | string;
@@ -167,6 +189,8 @@ export interface QualityPersistence {
 	getVerificationRun(verificationId: string): VerificationRunRecord | undefined;
 	updateVerificationRun(verificationId: string, patch: Partial<VerificationRunRecord>): VerificationRunRecord;
 	recordQualityDecision(input: QualityDecisionInput): QualityDecisionRecord;
+	finalizeQualityVerification(input: QualityFinalizationInput): QualityFinalizationResult;
+	finalizeQualityFailure(input: QualityFailureFinalizationInput): QualityFailureFinalizationResult;
 	createQualityEscalation(input: QualityEscalationInput): QualityEscalationRequest;
 	getTaskQualityStatus(taskId: TaskId | string): TaskQualityStatus | undefined;
 	setTaskQualityStatus(input: TaskQualityStatus): TaskQualityStatus;

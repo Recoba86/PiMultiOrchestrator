@@ -38,18 +38,14 @@ export class QualityService {
 			parsed = parseVerificationResult(result);
 		} catch {
 			try {
-				const blocked = this.store.updateVerificationRun(verificationId, { status: "blocked", failureSummary: "invalid verification result" });
-				this.store.setTaskQualityStatus({ taskId: run.taskId, missionId: run.missionId, status: "blocked", qualityRound: run.round, latestVerificationId: run.verificationId, updatedAt: blocked.completedAt ?? blocked.startedAt });
+				this.store.finalizeQualityFailure({ verificationId, status: "blocked", failureSummary: "invalid verification result" });
 			} catch { /* preserve the typed protocol error */ }
 			throw new QualityError("invalid-result", "Verification result is invalid");
 		}
 		const gate = evaluateQualityGate({ acceptanceCriteria, mechanicalChecks: parsed.mechanicalChecks, reviewerResult: parsed, policy: this.gatePolicy });
-		const decision = this.store.recordQualityDecision({ missionId: run.missionId, taskId: run.taskId, verificationId, targetRunId: run.targetRunId, ...(run.targetPacketId === undefined ? {} : { targetPacketId: run.targetPacketId }), round: run.round, gate, reviewerSummary: parsed.summary, findings: parsed.findings, requiredFixes: parsed.requiredFixes, risks: parsed.risks, ...(run.reviewerRouteId === undefined ? {} : { reviewerRouteId: run.reviewerRouteId }) });
-		const completed = this.store.updateVerificationRun(verificationId, { status: "completed", completedAt: decision.createdAt, qualityDecisionId: decision.decisionId });
-		const status: TaskQualityStatus = { taskId: run.taskId, missionId: run.missionId, status: decision.verdict === "pass" ? "passed" : decision.verdict === "reject" ? "rejected" : "blocked", qualityRound: run.round, latestVerificationId: run.verificationId, latestDecisionId: decision.decisionId, updatedAt: decision.createdAt };
-		this.store.setTaskQualityStatus(status);
+		const completed = this.store.finalizeQualityVerification({ verificationId, decision: { missionId: run.missionId, taskId: run.taskId, verificationId, targetRunId: run.targetRunId, ...(run.targetPacketId === undefined ? {} : { targetPacketId: run.targetPacketId }), round: run.round, gate, reviewerSummary: parsed.summary, findings: parsed.findings, requiredFixes: parsed.requiredFixes, risks: parsed.risks, ...(run.reviewerRouteId === undefined ? {} : { reviewerRouteId: run.reviewerRouteId }) } });
 		try { this.store.recordCheckpoint?.(run.missionId, "gate-evaluated"); } catch { /* checkpoint failure cannot rewrite a persisted decision */ }
-		return { run: completed, decision, status };
+		return completed;
 	}
 
 	/** Record reviewer/runner interruption without manufacturing a quality verdict. */
@@ -57,9 +53,7 @@ export class QualityService {
 		const run = this.store.getVerificationRun(verificationId);
 		if (!run) throw new Error("verification run not found");
 		if (run.status !== "running") return run;
-		const updated = this.store.updateVerificationRun(verificationId, { status, failureSummary: failureSummary.slice(0, 400) });
-		this.store.setTaskQualityStatus({ taskId: run.taskId, missionId: run.missionId, status: status === "interrupted" ? "review_required" : "blocked", qualityRound: run.round, latestVerificationId: run.verificationId, updatedAt: updated.completedAt ?? updated.startedAt });
-		return updated;
+		return this.store.finalizeQualityFailure({ verificationId, status: status === "interrupted" ? "review_required" : "blocked", failureSummary: failureSummary.slice(0, 400) }).run;
 	}
 
 	recordDecision(input: Parameters<QualityPersistence["recordQualityDecision"]>[0]): QualityDecisionRecord {

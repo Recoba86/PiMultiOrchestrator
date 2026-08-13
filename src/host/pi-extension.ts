@@ -1742,13 +1742,13 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		if (run) qualityStore?.updateVerificationRun(verificationId, { reviewerRunId: result.runId, ...(result.finalRouteId === undefined ? {} : { reviewerRouteId: result.finalRouteId }), ...(result.finalRemoteModelId === undefined ? {} : { reviewerRemoteModelId: result.finalRemoteModelId }) });
 	};
 
-	const runReviewer = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, verificationId: string, targetRunId: string): Promise<void> => {
+	const runReviewer = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, verificationId: string, targetRunId: string, implementationRouteId?: StableId): Promise<void> => {
 		if (!qualityService || !qualityExecutor) {
 			ctx.ui.notify(`Verification started: ${verificationId}; reviewer execution is unavailable`, "info");
 			return;
 		}
 		try {
-			const { result, criteria } = await executeReviewer(ctx, missionId, taskId, targetRunId);
+			const { result, criteria } = await executeReviewer(ctx, missionId, taskId, targetRunId, [], implementationRouteId);
 			recordReviewerRun(verificationId, result);
 			if (result.terminalStatus !== "completed") {
 				qualityService.failVerification(verificationId, result.potentialMutationObserved ? "interrupted" : "blocked", result.summary);
@@ -1843,7 +1843,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				...(targetAttempt?.routeId === undefined ? {} : { implementationRouteId: targetAttempt.routeId }),
 				...(task?.lastRunId ? {} : { potentialMutationObserved: false }),
 			});
-			if (qualityExecutor) await runReviewer(ctx, missionId, taskId, run.verificationId, targetRunId);
+			if (qualityExecutor) await runReviewer(ctx, missionId, taskId, run.verificationId, targetRunId, targetAttempt?.routeId);
 			else ctx.ui.notify(`Verification started: ${run.verificationId}; reviewer result is still required`, "info");
 		} catch (error) { notifyError(ctx, "Task verification failed", error); }
 	};

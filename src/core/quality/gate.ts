@@ -47,7 +47,7 @@ export function evaluateQualityGate(input: { readonly acceptanceCriteria: readon
 	const criteria = [...input.reviewerResult.criterionResults];
 	const byName = new Map(criteria.map((criterion) => [criterion.criterion, criterion]));
 	const reasons: string[] = [];
-	for (const criterion of input.acceptanceCriteria) {
+	for (const criterion of input.acceptanceCriteria.map((item) => item.trim()).filter(Boolean)) {
 		const result = byName.get(criterion);
 		if (!result || result.status === "not_verified") reasons.push(`criterion not verified: ${criterion}`);
 		else if (result.status === "failed") reasons.push(`criterion failed: ${criterion}`);

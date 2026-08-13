@@ -26,7 +26,7 @@ import { classifyFailure } from "../src/core/routing/index.js";
 import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/ninerouter/index.js";
 import type { StableId } from "../src/core/config/types.js";
 import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
-import type { SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
+import type { SubagentExecutionRequest, SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
 import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/types.js";
 import type { QualityPersistence, TaskQualityStatus, VerificationRunRecord } from "../src/core/quality/types.js";
 import { summarize, type AnalyticsEventV1, type AnalyticsRecommendation, type AnalyticsStoreAdapter } from "../src/core/analytics/index.js";
@@ -236,6 +236,12 @@ function qualityFixture(): {
 			const run = runs.find((item) => item.verificationId === id)!;
 			Object.assign(run, patch);
 			return run;
+		},
+		finalizeQualityFailure: (input: { verificationId: string; status: "blocked" | "review_required"; failureSummary: string }) => {
+			const run = runs.find((item) => item.verificationId === input.verificationId)!;
+			Object.assign(run, { status: input.status === "review_required" ? "interrupted" : "blocked", failureSummary: input.failureSummary });
+			Object.assign(status, { status: input.status, latestVerificationId: run.verificationId, updatedAt: run.completedAt ?? run.startedAt });
+			return { run, status };
 		},
 		recordQualityDecision: () => { throw new Error("not used by host fixture"); },
 		createQualityEscalation: () => { throw new Error("not used by host fixture"); },
@@ -477,6 +483,26 @@ describe("Pi 9Router host adapter", () => {
 		assert.equal(quality.runs.length, 1);
 		assert.equal(quality.status.status, "verification_running");
 		assert.ok(notifications.some((message) => /Verification started/.test(message)));
+	});
+
+	it("[U][fixture-pi-0.84.1] direct task verification prefers a different reviewer route", async () => {
+		const quality = qualityFixture();
+		const requests: SubagentExecutionRequest[] = [];
+		const missionStore = {
+			getTask: (taskId: string) => taskId === "task-1" ? { taskId: "task-1", missionId: "mission-1", acceptanceCriteria: [], lastRunId: "run-1" } : undefined,
+			getAttempt: (attemptId: string) => attemptId === "run-1" ? { routeId: "route-implementation" as StableId } : undefined,
+		} as unknown as MissionStoreAdapter;
+		const qualityExecutor = {
+			run: async (request: SubagentExecutionRequest): Promise<SubagentRunResult> => {
+				requests.push(request);
+				return { protocolVersion: 1, runId: "review-run", roleId: "quality-reviewer", poolId: "verification", terminalStatus: "infrastructure_stopped", attempts: [], potentialMutationObserved: false, fallbackCount: 0, summary: "blocked fixture" };
+			},
+		} as unknown as SubagentExecutor;
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore, qualityStore: quality.store, qualityExecutor });
+		host.registerCommands();
+		await pi.commands.get("verify-task")!.handler("mission-1 task-1 run-1", { mode: "tui", hasUI: true, isIdle: () => true, ui: { confirm: async () => true, notify: () => {} } } as unknown as ExtensionCommandContext);
+		assert.deepEqual(requests[0]?.diversity, { mode: "prefer", avoidRouteIds: ["route-implementation"] });
 	});
 
 	it("[U][fixture-pi-0.84.1] registers parent-only delegate tool and returns bounded child result", async () => {
