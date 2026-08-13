@@ -1,6 +1,6 @@
 {
   "name": "pi-multi-orchestrator",
-  "version": "0.1.0-rc.3",
+  "version": "0.1.0-rc.4",
   "description": "Pi control center for bounded 9Router model, pool, mission, quality, analytics, and safety workflows",
   "type": "module",
   "keywords": ["pi-package"],
