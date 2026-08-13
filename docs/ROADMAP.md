@@ -210,7 +210,7 @@ Deliverables:
 - clear `Direct Workers` and canonical Mission/M7 terminology without changing `/verify-task` semantics; and
 - deterministic parser, persistence, menu-equivalence, ordinary-input, and direct-worker regression coverage.
 
-Exit gate: local typecheck/build/full tests, release verification, focused UX review, and isolated Computer-Use checks pass; M10 remains the latest accepted milestone, with independent review and Planner/publication gates still separate.
+Exit gate: PASS — local typecheck/build/full tests, release verification, focused UX review, and isolated offline Pi `0.84.1` checks pass; M10 remains the latest accepted milestone, with independent review, Planner/manual acceptance, and publication gates still separate.
 
 ### M12.2 — Hybrid Smart Router
 

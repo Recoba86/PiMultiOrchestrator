@@ -9,12 +9,12 @@ candidates. rc.9 builds only from exact Git content,
 independently reruns the bound test definition, recursively authenticates the
 review bundle against an externally supplied root digest, and retains rc.3's
 independently passing worker-safety boundary. It remains local, not public or
-production-ready, pending final M12.1 verification, focused review, External
-Review #5, and Planner/manual gates.
+production-ready. M12.1's local verification and focused review pass; External
+Review #5 and Planner/manual acceptance gates remain pending.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2, M12.3, and the M12 final routing gate are not implemented. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox; human keyboard-driven TUI smoke remains open validation. M11's local RC is not public or production-ready; independent review, authorized real-route smoke, and applicable human/manual acceptance remain open. A quality PASS is not by itself mission completion, canonical evidence admission, or release readiness.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox; M12.1 isolated offline TUI smoke passed, while human/manual acceptance remains open validation. M11's local RC and M12.1's RC.9 are not public or production-ready; independent review, authorized real-route smoke, and applicable acceptance remain open. A quality PASS is not by itself mission completion, canonical evidence admission, or release readiness.
 
 The implementation contract is split across the repository files
 `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`,

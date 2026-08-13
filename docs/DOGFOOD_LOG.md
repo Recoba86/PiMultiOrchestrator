@@ -29,3 +29,13 @@ rollback or automatic rerun is implied.
 - **Independent checks:** `m7-dogfood.json` parsed exactly as `{"status":"ok","stage":"M11","verification":"m7"}`. The temporary root contained only the pre-existing files plus the requested fixture, and the reviewer reported no unexpected mutation. No fallback, retry, repair, analyst, hidden inference, or live Pi configuration mutation occurred.
 - **Visible result:** the normal Pi task detail and Quality history showed `quality status: passed`, one completed verification run, one pass decision, and zero escalations; Diagnostics showed candidate RC.8, TRUSTED disposable root, active application-level policy, healthy Mission/Analytics DBs, and healthy observed route.
 - **Final state:** autonomous Stage 4A is PASS. Human sanity smoke is still PENDING; M11 remains IMPLEMENTED BUT NOT ACCEPTED, not production-ready, local-only, and unpublished.
+
+## M12.1 — frictionless Mission entry closeout
+
+- **Date:** 2026-08-14.
+- **Candidate:** `pi-multi-orchestrator@0.1.0-rc.9`, implementation commit `ad39a8f`; the candidate remains local and unpublished.
+- **Environment:** real Pi `0.84.1`, offline mode, disposable project `/private/tmp/pi-m12-entry-dogfood`, and disposable config roots under `/private/tmp/pi-m12-ui-*`. The Computer Use connector could not target Terminal, so an equivalent isolated PTY run loaded the compiled extension; no live provider, credential, user Pi configuration, or external service was touched.
+- **Mission entry:** `@orchestrator` created English Mission `mission-68626594-683d-4b3a-a273-b9e1a9b83df5` and Persian Mission `mission-40224d4f-55d5-4cb6-9cad-0fe7c8eca6ea`; both persisted as `draft` with the disposable repository cwd. `/missions <id>` rendered the stored goal/status/repository, and the store contained exactly those two Missions with zero Tasks.
+- **Boundary checks:** an ordinary prompt continued to Pi and reached the expected no-API-key error in the offline/no-model environment; empty `@orchestrator` showed `Add a goal after @orchestrator.`; Control Center → Context & Mission Settings showed `Direct Workers`, and Back navigation returned to the parent menus. Deterministic tests covered the canonical M7/direct-worker boundary.
+- **Offline evidence:** final typecheck/build/check and full `177/177` tests passed; release verification passed with `20/20` integrity attacks and independent bundle verification reported `EXTERNAL_REVIEW_PENDING`.
+- **Final state:** M12.1 is COMPLETE / LOCAL PASS only. M10 remains the latest accepted milestone; independent review, Planner/manual acceptance, and publication remain open, and M12.2/M12.3/final routing gate are not started.

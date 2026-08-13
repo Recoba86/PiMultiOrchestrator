@@ -7,11 +7,12 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 ## M12.1 — Frictionless Mission Entry
 
 - **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.1 is not a public or production-ready release.
-- **Starting HEAD/candidate:** `22c6df3bd23b9c325a6e665af5da6de160a63f62`, `0.1.0-rc.8`.
+- **Starting HEAD/candidate:** `22c6df3bd23b9c325a6e665af5da6de160a63f62`, `0.1.0-rc.8`; implementation commit `ad39a8f`, candidate `0.1.0-rc.9`.
 - **Purpose:** Make explicit Mission entry available from normal Pi input while preserving ordinary prompts and clarifying Direct Workers versus canonical Mission/M7 verification.
 - **Major outcomes:** Pi `0.84.1` native `input` handling recognizes `@orchestrator <goal>`; empty/ordinary/extension input is bounded; English, Persian, mixed, whitespace, case, quoted, and embedded forms are covered; input and the existing New Mission menu reuse `createCanonicalMission`; MissionStore persistence and pointer-only session history remain canonical.
 - **UX boundary:** `/subagent-run` is labeled Direct Workers, including Direct Verification Worker; its UI and completion feedback state that no canonical Mission task, M7 verification run, quality decision, or quality history is created. Canonical `/verify-task` status/history are labeled Mission quality (M7) without changing their persistence or confirmation semantics.
-- **Evidence:** Focused provider tests passed for real temporary SQLite persistence, menu equivalence, ordinary-input isolation, empty input, and direct-worker labeling. Final RC.9 check, release verification, focused review, and isolated Computer-Use evidence are recorded when complete.
+- **Evidence:** Focused provider tests passed for real temporary SQLite persistence, menu equivalence, ordinary-input isolation, empty input, and direct-worker labeling. Final typecheck/build/check and the full `177/177` suite passed; release verification passed with `20/20` integrity attacks; bounded focused UX/release audits reported no blocking finding.
+- **Offline TUI evidence:** In disposable roots under `/private/tmp`, Pi `0.84.1` created English Mission `mission-68626594-683d-4b3a-a273-b9e1a9b83df5` and Persian Mission `mission-40224d4f-55d5-4cb6-9cad-0fe7c8eca6ea`, preserved ordinary-input behavior, showed `Add a goal after @orchestrator.`, rendered `/missions` state, and exposed `Direct Workers` with Back navigation. No live provider, credential, or user Pi configuration was used.
 - **Scope boundary:** No smart routing, automatic classification, Routing Memory, live Pi configuration, provider account, credential, public tag, push, npm publication, or GitHub release.
 
 ## M0 — Specification Freeze
