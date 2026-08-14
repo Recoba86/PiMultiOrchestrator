@@ -187,6 +187,7 @@ const LEARNED_MERGE_THRESHOLD = 0.8;
 const LEARNED_CONFIDENCE_THRESHOLD = 0.84;
 const MAX_EXPLICIT_RULES = 256;
 const MAX_TOTAL_RULES = MAX_EXPLICIT_RULES + DEFAULT_MAX_LEARNED_RULES;
+const MAX_LEARNED_RULES = MAX_TOTAL_RULES - MAX_EXPLICIT_RULES;
 const MAX_ACTIVE_BYTES = 1_000_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -575,7 +576,7 @@ export class RoutingMemoryStore {
 		if (!/^[a-zA-Z0-9._-]+\.json$/u.test(this.activeFile)) throw new TypeError("active-file-invalid");
 		this.historyDir = "routing-memory-history";
 		this.retention = Math.max(1, Math.min(100, options.retention ?? DEFAULT_ROUTING_MEMORY_RETENTION));
-		this.maxLearnedRules = Math.max(1, Math.min(1_000, options.maxLearnedRules ?? DEFAULT_MAX_LEARNED_RULES));
+		this.maxLearnedRules = Math.max(1, Math.min(MAX_LEARNED_RULES, options.maxLearnedRules ?? DEFAULT_MAX_LEARNED_RULES));
 		this.now = options.now ?? (() => new Date().toISOString());
 		this.nextId = options.id ?? (() => `rm-${randomUUID()}`);
 		this.policy = {
@@ -780,7 +781,11 @@ export class RoutingMemoryStore {
 				if (!Number.isSafeInteger(sourceOrGeneration) || sourceOrGeneration < 1) throw new ConfigRecoveryError("history-generation-not-found");
 				for (const stored of await this.readHistory()) if (stored.generation === sourceOrGeneration) { target = stored; break; }
 			} else {
-				try { target = parseStored(JSON.parse(await readFile(sourceOrGeneration, "utf8")) as unknown).stored; }
+				try {
+					const parsed = parseStored(JSON.parse(await readFile(sourceOrGeneration, "utf8")) as unknown);
+					if (parsed.diagnostics.length > 0) throw new Error("backup-contains-invalid-rules");
+					target = parsed.stored;
+				}
 				catch { throw new ConfigRecoveryError("backup-invalid"); }
 			}
 			if (!target) throw new ConfigRecoveryError("history-generation-not-found");

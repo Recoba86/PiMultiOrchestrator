@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, and M12.3 are implemented local-pass work; the M12 Final Gate is not started. M10 remains the latest accepted milestone.
+Status: IN PROGRESS. M12.1, M12.2, and M12.3 are implemented local-pass work; M12.3 detached RC.12 verification passed, but the M12 Final Gate is not started. M10 remains the latest accepted milestone.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -257,10 +257,11 @@ reset with explicit confirmation. Routing telemetry is allowlisted metadata;
 raw prompts, transcripts, tool output, provider responses, and credentials are
 excluded.
 
-Local evidence: Routing Memory `15/15`, Smart Router `27/27`, provider host
-`25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1` pass. The final
-RC.12 full validation/release verifier, focused independent review verdict,
-and M12 Final Routing Gate remain separate pending gates.
+Local evidence: Routing Memory `14/14`, Smart Router `28/28`, provider host
+`25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1` pass. The
+detached RC.12 verifier also passed `211/211` tests, `20/20` integrity attacks,
+Pi install/upgrade/rollback, privacy, and worker safety. Focused independent
+review and the M12 Final Routing Gate remain separate pending gates.
 
 ### M12 Final Gate — Routing Dogfood
 

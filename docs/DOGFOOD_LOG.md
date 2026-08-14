@@ -6,12 +6,13 @@ output, credentials, or live-provider data.
 ## M12.3 — Adaptive Routing Memory closeout
 
 - **Date:** 2026-08-14.
-- **Candidate:** `pi-multi-orchestrator@0.1.0-rc.12`, local source candidate only; final detached RC.12 verifier pending at this documentation point.
+- **Candidate:** `pi-multi-orchestrator@0.1.0-rc.12`, local source candidate only; detached RC.12 verifier passed against exact Git source commit `601e8f90e2086f252516d9d9dcbc8ad0bf130bdd`.
 - **Environment:** Pi `0.84.1`, `--offline`, fake 9Router fixture, disposable agent/session/project roots, and the compiled extension. No live Pi configuration, provider account, credential value, public release, or external provider call was used.
 - **Real isolated RPC/TUI path:** A complex English prompt selected `Always orchestrate similar tasks`, creating exactly one canonical Mission and an explicit rule. A semantically similar Persian prompt then auto-routed to one canonical Mission without a second confirmation. Routing & Fallback showed `Routing Memory (ON)` and `Learn from routing choices (ON)`; Learned Behaviors exposed the abstract rule, and disabling it persisted `enabled: false`. A risky escalation was not silently auto-routed, and a restart preserved the Mission/control-center path.
 - **Sanitized evidence IDs:** first Mission `mission-76f2c61b-859c-4b1a-8d86-a3e5a8bd4e4c`; follow-up Mission `mission-97a73bf2-6ea4-4e83-9c49-531b41f49846`; explicit rule `rm-1e0969ac-6c27-4597-82af-d218789cf787`. The stored sidecar contained neither tested prompt, Persian text, nor provider data; fake provider chat requests were `0`.
 - **Deterministic/host coverage:** Routing Memory `14/14`, Smart Router `28/28`, and provider host `25/25` cover repeated Mission/Normal learning, confidence/provenance, conflict and complexity gates, settings/persistence/migration/corruption, backup/restore, telemetry privacy, M12.1/M12.2 preservation, and canonical Mission/no-loop behavior.
-- **Result:** Isolated M12.3 dogfood `1/1 PASS`; M12.3 is COMPLETE / LOCAL PASS only. The M12 Final Routing Gate, final release verification, independent review, Planner/manual acceptance, and publication remain separate gates.
+- **Result:** Isolated M12.3 dogfood `1/1 PASS`; detached RC.12 verification passed `211/211` tests and `20/20` integrity attacks. M12.3 is COMPLETE / LOCAL PASS only. The M12 Final Routing Gate, focused independent review, Planner/manual acceptance, and publication remain separate gates.
+- **Detached verifier:** Artifact SHA-256 `d0c1db8637b753e3d21638c13a811be71c451744209c577e63d5a7f188ab7816`; source digest `5b1cc3af2fe2885bbc58dbecb7eb14513c3d2178a18dec6e8b23d020b744123c`; review-bundle root SHA-256 `6ce725205a55d55abbf2d014daa63d508f59f75b2bb37048d872280cccfa9d81`; Pi `0.84.1` install/upgrade/rollback, privacy, and worker-safety evidence passed with zero live/paid calls.
 
 | Stage | Result | Evidence / boundary |
 |---|---|---|

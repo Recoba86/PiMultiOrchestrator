@@ -1014,6 +1014,11 @@ The 53 mission criteria map to the tests above as follows: 1–7 → M12.3-01;
 8–11, 22, 42–43, 46 → M12.3-02; 12–18 → M12.3-03; 19–24, 37–38 →
 M12.3-04; 25–36 → M12.3-05; 39–41, 45, 47–48 → M12.3-06; 49–53 →
 M12.3-07. The M12.3 local focused evidence is Routing Memory `14/14`, Smart
-Router `28/28`, provider host `25/25`, and isolated Pi dogfood `1/1`; the final
-full validation/release evidence is recorded only after its clean exact-Git
-verifier completes.
+Router `28/28`, provider host `25/25`, and isolated Pi dogfood `1/1`; the
+detached exact-Git RC.12 verifier then passed `211/211` tests, `20/20`
+integrity attacks, Pi `0.84.1` install/upgrade/rollback, privacy, and worker
+safety. Artifact SHA-256 is
+`d0c1db8637b753e3d21638c13a811be71c451744209c577e63d5a7f188ab7816`; source
+commit is `601e8f90e2086f252516d9d9dcbc8ad0bf130bdd`; review-bundle root
+SHA-256 is `6ce725205a55d55abbf2d014daa63d508f59f75b2bb37048d872280cccfa9d81`.
+Focused independent review and the M12 Final Routing Gate remain separate.

@@ -300,6 +300,12 @@ test("history stays bounded and backup restore is atomic and private", async () 
 		await store.reset();
 		assert.equal((await store.match(complexPrompt)).kind, "none");
 		await assert.rejects(() => store.restore(1), /Configuration recovery failed/);
+		const invalidBackupPath = join(root, "invalid-backup.json");
+		const invalidBackup = JSON.parse(await readFile(backupPath, "utf8")) as { rules: Array<Record<string, unknown>> };
+		invalidBackup.rules.push({ ...invalidBackup.rules[0], id: "invalid-backup-rule", prompt: "RAW_BACKUP_PROMPT" });
+		await writeFile(invalidBackupPath, JSON.stringify(invalidBackup));
+		await assert.rejects(() => store.restore(invalidBackupPath), /Configuration recovery failed/);
+		assert.equal((await store.match(complexPrompt)).kind, "none");
 		await store.restore(backupPath);
 		assert.equal((await store.match(complexPrompt)).mode, "AUTO_MISSION");
 		const history = await readdir(join(root, "routing-memory-history"));
