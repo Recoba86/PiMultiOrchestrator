@@ -264,6 +264,10 @@ const safeAnalystText = (value: unknown, max = 512): string | undefined => {
 	const text = safeText(value, max);
 	return text && !/(?:prompt|transcript|tool[_ -]?output|session|raw input|user input|authorization|secret)/iu.test(text) ? text : undefined;
 };
+const safeMetadataText = (value: unknown, max = 512): string | undefined => {
+	const text = safeText(value, max);
+	return text && !/(?:prompt|transcript|tool[_ -]?output|session|raw input|user input|authorization|credential|secret|private|content|response)/iu.test(text) ? text : undefined;
+};
 const safeAnalystAnalysis = (value: unknown): StoredAnalystAnalysis | undefined => {
 	if (!isRecord(value)) return undefined;
 	const recommendationId = safeAnalystText(value.recommendationId, 160);
@@ -319,6 +323,11 @@ const safeCost = (cost: AnalyticsCost | undefined): AnalyticsCost | undefined =>
 		...(cost.billingMode === "metered_api" || cost.billingMode === "subscription" || cost.billingMode === "free" || cost.billingMode === "unknown" ? { billingMode: cost.billingMode } : {}),
 	};
 };
+const safeDimensions = (dimensions: AnalyticsEventV1["dimensions"]): AnalyticsEventV1["dimensions"] | undefined => {
+	if (!dimensions) return undefined;
+	const fallbackCount = numberValue(dimensions.fallbackCount);
+	return fallbackCount === undefined ? undefined : { fallbackCount };
+};
 
 export function estimateReferenceCost(usage: AnalyticsTokenUsage, pricing: ReferencePricingV1, billingMode: "metered_api" | "subscription" | "free" | "unknown" = "metered_api"): ReferenceCostEstimate {
   if (usage.provenance !== "observed" && usage.provenance !== "provider_reported" && usage.provenance !== "pi_runtime_reported") return {};
@@ -361,7 +370,7 @@ const safeJson = (event: AnalyticsEventV1): string => JSON.stringify({
 		conflict: boolValue(event.routing.memory.conflict),
 	} : undefined,
 	} : undefined,
-  dimensions: event.dimensions ? Object.fromEntries(Object.entries(event.dimensions).slice(0, 32).filter(([key]) => !/(?:prompt|transcript|source|secret|auth|header|content|output|argument|result|private|key)/iu.test(key)).map(([key, value]) => [safeText(key, 64), typeof value === "string" ? safeText(value, 128) : numberValue(value) ?? boolValue(value)])) : undefined,
+	  dimensions: safeDimensions(event.dimensions),
 });
 
 const parseEvent = (value: unknown): AnalyticsEventV1 | undefined => {
@@ -369,10 +378,37 @@ const parseEvent = (value: unknown): AnalyticsEventV1 | undefined => {
   try { const parsed: unknown = JSON.parse(value); return isAnalyticsEvent(parsed) ? JSON.parse(safeJson(parsed)) as AnalyticsEventV1 : undefined; } catch { return undefined; }
 };
 
-const safeRecommendation = (recommendation: AnalyticsRecommendation): AnalyticsRecommendation => {
-  const proposedDiff = Object.fromEntries(Object.entries(recommendation.proposedDiff).slice(0, 32).filter(([key]) => !/(?:prompt|transcript|source|secret|auth|header|content|output|argument|result|private|key)/iu.test(key)).map(([key, value]) => [safeText(key, 64), Array.isArray(value) ? value.slice(0, 32).map((item) => typeof item === "string" ? safeText(item, 128) : numberValue(item) ?? boolValue(item)).filter((item) => item !== undefined) : typeof value === "string" ? safeText(value, 128) : numberValue(value) ?? boolValue(value)]));
-  const baselineRouteId = safeText(recommendation.baselineRouteId, 64);
-  return { ...recommendation, recommendationId: safeText(recommendation.recommendationId, 160) ?? "invalid", poolId: safeText(recommendation.poolId, 64) ?? "invalid", proposedRouteId: safeText(recommendation.proposedRouteId, 64) ?? "invalid", ...(baselineRouteId === undefined ? {} : { baselineRouteId }), evidence: recommendation.evidence.slice(0, 16).map((item) => safeText(item, 256)).filter((item): item is string => item !== undefined), limitations: recommendation.limitations.slice(0, 16).map((item) => safeText(item, 256)).filter((item): item is string => item !== undefined), proposedDiff };
+const safeRecommendation = (recommendation: AnalyticsRecommendation): AnalyticsRecommendation | undefined => {
+  const recommendationId = safeMetadataText(recommendation.recommendationId, 160);
+  const poolId = safeMetadataText(recommendation.poolId, 64);
+  const proposedRouteId = safeMetadataText(recommendation.proposedRouteId, 64);
+  const sampleSize = numberValue(recommendation.sampleSize);
+  const score = numberValue(recommendation.score);
+  const formulaVersion = safeMetadataText(recommendation.formulaVersion, 64);
+  const status = recommendation.status === "proposed" || recommendation.status === "ignored" || recommendation.status === "applied" ? recommendation.status : undefined;
+  if (!recommendationId || !poolId || !proposedRouteId || sampleSize === undefined || score === undefined || !formulaVersion || !status) return undefined;
+  const list = (value: unknown, max: number): readonly string[] => Array.isArray(value) ? value.slice(0, 16).map((item) => safeMetadataText(item, max)).filter((item): item is string => item !== undefined) : [];
+  const proposedDiff: Record<string, unknown> = {};
+  const diff = isRecord(recommendation.proposedDiff) ? recommendation.proposedDiff : {};
+  for (const key of ["poolId", "routeId"] as const) {
+    const value = safeMetadataText(diff[key], 64);
+    if (value !== undefined) proposedDiff[key] = value;
+  }
+  const baselineOrder = Array.isArray(diff.baselineOrder) ? diff.baselineOrder.slice(0, 32).map((item) => safeMetadataText(item, 64)).filter((item): item is string => item !== undefined) : undefined;
+  if (baselineOrder !== undefined) proposedDiff.baselineOrder = baselineOrder;
+  for (const key of ["currentPosition", "suggestedPosition"] as const) {
+    const value = numberValue(diff[key]);
+    if (value !== undefined) proposedDiff[key] = value;
+  }
+  const baselineRouteId = safeMetadataText(recommendation.baselineRouteId, 64);
+  const from = safeMetadataText(recommendation.from, 64);
+  const to = safeMetadataText(recommendation.to, 64);
+  return {
+    recommendationId, poolId, proposedRouteId, sampleSize, score, formulaVersion, status,
+    ...(baselineRouteId === undefined ? {} : { baselineRouteId }),
+    ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }),
+    evidence: list(recommendation.evidence, 256), limitations: list(recommendation.limitations, 256), proposedDiff,
+  };
 };
 
 function analyticsIntegrityIssues(db: DatabaseSync): string[] {
@@ -437,7 +473,7 @@ export class SQLiteAnalyticsStore implements AnalyticsStoreAdapter, AnalyticsSin
   summary(range?: AnalyticsRange): AnalyticsSummary { return summarize(this.list(range), range); }
   saveRecommendation(recommendation: AnalyticsRecommendation): void {
     if (!this.enabled || this.closed || !this.db) return;
-    const safe = safeRecommendation(recommendation); if (safe.recommendationId === "invalid") return;
+    const safe = safeRecommendation(recommendation); if (!safe) return;
     try { this.db.prepare("INSERT OR IGNORE INTO analytics_recommendations(recommendation_id,created_at,status,payload_json) VALUES (?,?,?,?)").run(safe.recommendationId, new Date().toISOString(), safe.status, JSON.stringify(safe)); } catch { /* analytics is non-critical */ }
   }
   listRecommendations(): readonly AnalyticsRecommendation[] { if (this.closed || !this.db) return []; try { return (this.db.prepare("SELECT payload_json FROM analytics_recommendations ORDER BY created_at,recommendation_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { return [JSON.parse(row.payload_json) as AnalyticsRecommendation]; } catch { return []; } }); } catch { return []; } }

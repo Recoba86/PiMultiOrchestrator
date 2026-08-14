@@ -24,7 +24,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | M12.2 candidate | `0.1.0-rc.11` — local, not public; implementation commit `8219c083577bc21a31046ade4ee1f982fe28abc6`; RC.10 superseded |
-| M12.3 candidate | `0.1.0-rc.12` — local, not public; detached verifier bound to source commit `601e8f90e2086f252516d9d9dcbc8ad0bf130bdd` |
+| M12.3 candidate | `0.1.0-rc.12` — local, not public; detached verifier bound to source commit `f077ae90ffe95187f821a64dd08cc8cc7e15b166` |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
 | M11 candidate | `0.1.0-rc.8` — historical local candidate; not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
@@ -81,17 +81,17 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - Local evidence: Routing Memory `14/14`, Smart Router `28/28`, provider host
   `25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1` pass. The real
   disposable run created first Mission
-  `mission-76f2c61b-859c-4b1a-8d86-a3e5a8bd4e4c`, follow-up Mission
-  `mission-97a73bf2-6ea4-4e83-9c49-531b41f49846`, and explicit rule
-  `rm-1e0969ac-6c27-4597-82af-d218789cf787`; the run verified cross-language
+  `mission-32c154d2-8105-46c0-a16c-0d009ec12c73`, follow-up Mission
+  `mission-acfb193b-aee9-4938-bafa-f579b41203e7`, and explicit rule
+  `rm-1b480f08-0135-4d40-a870-155835a95f9d`; the run verified cross-language
   auto-routing, disable, restart persistence, abstract-only storage, and zero
   provider calls. The detached RC.12 verifier passed `211/211` tests, `20/20`
   integrity attacks, Pi `0.84.1` install/upgrade/rollback, privacy, and worker
   safety; artifact SHA-256 is
-  `d0c1db8637b753e3d21638c13a811be71c451744209c577e63d5a7f188ab7816`, source
-  digest is `5b1cc3af2fe2885bbc58dbecb7eb14513c3d2178a18dec6e8b23d020b744123c`,
+  `b5de508bf7c47cccd894a12c4c74c6e123f292d7b8e839471c70f51073446670`, source
+  digest is `ebc5aa2bd3969c6e13155f9e264bbd8e33bf1e01a34cdbde033deec668ace657`,
   and review-bundle root SHA-256 is
-  `6ce725205a55d55abbf2d014daa63d508f59f75b2bb37048d872280cccfa9d81`.
+  `c02c72dc5042d3dc02c6b66cb03afa1f8e0a89f2f1a477bae05e3e28dba58cfe`.
   Focused independent review and the M12 Final Routing Gate remain separate.
 - No live Pi configuration, provider account, credential, public tag, push,
   npm publication, or GitHub release was modified. M10 remains the latest

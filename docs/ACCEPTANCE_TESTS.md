@@ -1018,7 +1018,7 @@ Router `28/28`, provider host `25/25`, and isolated Pi dogfood `1/1`; the
 detached exact-Git RC.12 verifier then passed `211/211` tests, `20/20`
 integrity attacks, Pi `0.84.1` install/upgrade/rollback, privacy, and worker
 safety. Artifact SHA-256 is
-`d0c1db8637b753e3d21638c13a811be71c451744209c577e63d5a7f188ab7816`; source
-commit is `601e8f90e2086f252516d9d9dcbc8ad0bf130bdd`; review-bundle root
-SHA-256 is `6ce725205a55d55abbf2d014daa63d508f59f75b2bb37048d872280cccfa9d81`.
+`b5de508bf7c47cccd894a12c4c74c6e123f292d7b8e839471c70f51073446670`; source
+commit is `f077ae90ffe95187f821a64dd08cc8cc7e15b166`; review-bundle root
+SHA-256 is `c02c72dc5042d3dc02c6b66cb03afa1f8e0a89f2f1a477bae05e3e28dba58cfe`.
 Focused independent review and the M12 Final Routing Gate remain separate.

@@ -1932,15 +1932,20 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		`Mission ID: ${mission.missionId}`,
 	].join("\n");
 
-	const appendMissionPointer = (mission: MissionRecord): void => {
+	const appendMissionPointer = (mission: MissionRecord): boolean => {
 		// The session entry is only a pointer/status hint. Canonical state remains in
 		// MissionStore and is never copied into Pi's LLM context.
-		if (typeof (pi as unknown as { appendEntry?: unknown }).appendEntry !== "function") return;
-		pi.appendEntry("pi-multi-orchestrator:mission", {
-			missionId: mission.missionId,
-			status: mission.status,
-			revision: mission.revision,
-		});
+		if (typeof (pi as unknown as { appendEntry?: unknown }).appendEntry !== "function") return true;
+		try {
+			pi.appendEntry("pi-multi-orchestrator:mission", {
+				missionId: mission.missionId,
+				status: mission.status,
+				revision: mission.revision,
+			});
+			return true;
+		} catch {
+			return false;
+		}
 	};
 
 	const missionStoreUnavailable = (ctx: ExtensionContext | ExtensionCommandContext): void => {
@@ -2461,7 +2466,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				repositoryCwd: ctx.cwd,
 				...(criteriaText?.trim() ? { acceptanceCriteria: criteriaText.split(";").map((value) => value.trim()).filter(Boolean) } : {}),
 			}));
-			appendMissionPointer(mission);
+			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission), "info");
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
@@ -2475,7 +2480,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 		try {
 			const mission = createCanonicalMission(options.missionStore, goal, { repositoryCwd: ctx.cwd });
-			appendMissionPointer(mission);
+			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission), "info");
 			return mission;
 		} catch (error) {
@@ -2597,17 +2602,26 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					recordRoutingDecision(decision, "failed", decision.memory);
 					return { action: "continue" };
 				}
+				let explicitRuleId: string | undefined;
+				let explicitRuleCreated = false;
+				try {
+					const saved = routingMemoryRecord(await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature)));
+					explicitRuleId = typeof saved?.id === "string" ? saved.id : undefined;
+					explicitRuleCreated = saved?.created === true;
+				} catch {
+					ctx.ui.notify("The explicit routing preference could not be saved; no Mission was created.", "warning");
+					recordRoutingDecision(decision, "failed", decision.memory);
+					return { action: "handled" };
+				}
 				const mission = createInputMission(ctx, event.text);
 				if (!mission) {
+					if (explicitRuleCreated && explicitRuleId) {
+						try { await Promise.resolve(routingMemory.deleteRule(explicitRuleId)); } catch { ctx.ui.notify("The new routing preference could not be rolled back.", "warning"); }
+					}
 					recordRoutingDecision(decision, "failed", decision.memory);
 					return { action: "continue" };
 				}
-				try {
-					await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature));
-					recordRoutingDecision(decision, "rule_created_explicit", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
-				} catch {
-					ctx.ui.notify("The Mission was created, but the explicit routing preference could not be saved.", "warning");
-				}
+				if (explicitRuleCreated) recordRoutingDecision(decision, "rule_created_explicit", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
 				recordRoutingDecision(decision, "run_as_mission", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
 				return { action: "handled" };
 			}

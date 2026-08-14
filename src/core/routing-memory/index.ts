@@ -72,6 +72,7 @@ export interface RoutingMemoryRule {
 }
 
 export type RoutingMemoryRuleView = RoutingMemoryRule;
+export type RoutingMemoryRuleWrite = RoutingMemoryRuleView & { readonly created: boolean };
 
 export interface RoutingLocalSignals {
 	readonly missionScore?: number;
@@ -651,11 +652,11 @@ export class RoutingMemoryStore {
 		});
 	}
 
-	addExplicitMissionRule(input: string | RoutingSignature, options: RoutingMemoryCallOptions & { readonly id?: string } = {}): Promise<RoutingMemoryRuleView> {
+	addExplicitMissionRule(input: string | RoutingSignature, options: RoutingMemoryCallOptions & { readonly id?: string } = {}): Promise<RoutingMemoryRuleWrite> {
 		return this.addExplicitRule(input, "mission", options);
 	}
 
-	addExplicitRule(input: string | RoutingSignature, action: RoutingAction, options: RoutingMemoryCallOptions & { readonly id?: string } = {}): Promise<RoutingMemoryRuleView> {
+	addExplicitRule(input: string | RoutingSignature, action: RoutingAction, options: RoutingMemoryCallOptions & { readonly id?: string } = {}): Promise<RoutingMemoryRuleWrite> {
 		if (action !== "mission" && action !== "normal") return Promise.reject(new TypeError("action-invalid"));
 		const signature = this.inputSignature(input);
 		return this.enqueue(async () => {
@@ -668,12 +669,14 @@ export class RoutingMemoryStore {
 				.filter((item) => item.similarity >= EXPLICIT_MERGE_THRESHOLD)
 				.sort((left, right) => right.similarity - left.similarity)[0];
 			let rule: RoutingMemoryRule;
+			let created = false;
 			if (existing) {
 				const index = rules.findIndex((item) => item.id === existing.rule.id);
 				const updated = { ...existing.rule, enabled: true, confidence: 1, observations: Math.min(MAX_OBSERVATIONS, existing.rule.observations + 1), updatedAt: now, lastObservedAt: now };
 				rules[index] = updated;
 				rule = updated;
 			} else {
+				created = true;
 				if (rules.filter((item) => item.source === "explicit").length >= MAX_EXPLICIT_RULES) throw new ConfigValidationError([{ code: "routing-memory-limit", path: "$.rules", message: "Explicit routing rule limit reached" }]);
 				const id = options.id ?? this.nextId();
 				if (!ID_PATTERN.test(id)) throw new ConfigValidationError([{ code: "routing-memory-rule", path: "$.id", message: "Rule ID is invalid" }]);
@@ -681,7 +684,7 @@ export class RoutingMemoryStore {
 				rules.push(rule);
 			}
 			await this.commit(rules, current, options.expectedGeneration);
-			return toPublicRule(rule);
+			return { ...toPublicRule(rule), created };
 		});
 	}
 

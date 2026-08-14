@@ -10,13 +10,14 @@ const event = (id: string, patch: Partial<AnalyticsEventV1> = {}): AnalyticsEven
 test("analytics store is privacy-minimal and idempotent across reopen", () => {
 	const root = mkdtempSync(join(tmpdir(), "pmo-analytics-"));
 	const first = new SQLiteAnalyticsStore({ root, enabled: true });
-	assert.equal(first.append(event("run-1", { dimensions: { safe: true, Authorization: "Bearer secret-analytics-token", prompt: "private task text" }, tokenUsage: { inputTokens: 3, outputTokens: 2, provenance: "observed" } })), true);
+	assert.equal(first.append(event("run-1", { dimensions: { safe: true, innocuous: "RAW_DIMENSION_MARKER", Authorization: "Bearer secret-analytics-token", prompt: "private task text" }, tokenUsage: { inputTokens: 3, outputTokens: 2, provenance: "observed" } })), true);
 	assert.equal(first.append(event("run-1", { outcome: "failed" })), false);
 	first.close();
 	const second = new SQLiteAnalyticsStore({ root, enabled: true });
 	assert.equal(second.list().length, 1);
 	assert.equal(JSON.stringify(second.list()).includes("prompt"), false);
 	assert.equal(JSON.stringify(second.list()).includes("secret-analytics-token"), false);
+	assert.equal(JSON.stringify(second.list()).includes("RAW_DIMENSION_MARKER"), false);
 	second.close();
 });
 
@@ -33,6 +34,28 @@ test("analytics runtime sanitizes provenance fields", () => {
 	assert.equal(saved?.cost, undefined);
 	assert.equal(JSON.stringify(saved).includes("private prompt text"), false);
 	assert.equal(JSON.stringify(saved).includes("credential payload"), false);
+	store.close();
+});
+
+test("analytics recommendation persistence is allowlisted", () => {
+	const root = mkdtempSync(join(tmpdir(), "pmo-analytics-recommendation-"));
+	const store = new SQLiteAnalyticsStore({ root, enabled: true });
+	store.saveRecommendation({
+		recommendationId: "rec-safe",
+		poolId: "implementation",
+		proposedRouteId: "route-a",
+		sampleSize: 10,
+		score: 0.9,
+		formulaVersion: "quality-v1",
+		evidence: ["prompt: RAW_RECOMMENDATION_PROMPT"],
+		limitations: ["fixture"],
+		proposedDiff: { baselineOrder: ["route-a"], innocuous: "RAW_RECOMMENDATION_FIELD" },
+		status: "proposed",
+	});
+	const stored = JSON.stringify(store.listRecommendations());
+	assert.equal(stored.includes("RAW_RECOMMENDATION_PROMPT"), false);
+	assert.equal(stored.includes("RAW_RECOMMENDATION_FIELD"), false);
+	assert.equal(stored.includes("baselineOrder"), true);
 	store.close();
 });
 
