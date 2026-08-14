@@ -4,8 +4,8 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The current local candidate is `0.1.0-rc.10`; rc.1 through rc.9 are historical
-candidates. rc.10 builds only from exact Git content,
+The current local candidate is `0.1.0-rc.11`; rc.1 through rc.10 are historical
+candidates. rc.11 builds only from exact Git content,
 independently reruns the bound test definition, recursively authenticates the
 review bundle against an externally supplied root digest, and retains rc.3's
 independently passing worker-safety boundary. It remains local, not public or

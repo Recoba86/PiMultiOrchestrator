@@ -139,7 +139,7 @@ export interface AnalyticsSummary {
   readonly estimatedCostMicros?: number;
   readonly avoidedCostMicros?: number;
 	readonly unknownCostEvents: number;
-	readonly routing: {
+	readonly routing?: {
 		readonly decisions: number;
 		readonly normal: number;
 		readonly suggestions: number;
@@ -492,7 +492,7 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
     if (event.cost) { const amount = event.cost.amountMicros; const currency = event.cost.currency?.trim().toUpperCase(); if (amount === undefined || event.cost.provenance === "unknown" || event.cost.provenance === "unavailable" || !currency) unknownCostEvents++; else { const c = costByCurrency[currency] ??= {}; if (event.cost.kind === "actual" && (event.cost.provenance === "observed" || event.cost.provenance === "provider_reported")) { actualCostMicros += amount; hasActual = true; c.actualMicros = (c.actualMicros ?? 0) + amount; } else if (event.cost.kind === "avoided" && (event.cost.provenance === "estimated" || event.cost.provenance === "configured")) { avoidedCostMicros += amount; hasAvoided = true; c.avoidedMicros = (c.avoidedMicros ?? 0) + amount; } else if ((event.cost.kind === "equivalent" || event.cost.provenance === "estimated" || event.cost.provenance === "configured") && event.cost.kind !== "actual") { estimatedCostMicros += amount; hasEstimate = true; c.estimatedMicros = (c.estimatedMicros ?? 0) + amount; } else unknownCostEvents++; } } else if (isCanonicalSample(event)) unknownCostEvents++;
   }
   const currencies = Object.keys(costByCurrency);
-  return { ...(range?.from ? { from: range.from } : {}), ...(range?.to ? { to: range.to } : {}), eventCount: events.length, runs, attempts, successes, failures, fallbacks, qualityPasses, qualityRejects, qualityBlocked, firstPassSuccesses, repairRounds, durationMs, tokens, unknownTokenAttempts, ...(hasActual && currencies.length <= 1 ? { actualCostMicros } : {}), ...(hasEstimate && currencies.length <= 1 ? { estimatedCostMicros } : {}), ...(hasAvoided && currencies.length <= 1 ? { avoidedCostMicros } : {}), unknownCostEvents, routing, byPool, byRoute, byMission, byRole, byPoolRoute, fallbackTransitions, qualityByPool, qualityByRoute, costByCurrency };
+  return { ...(range?.from ? { from: range.from } : {}), ...(range?.to ? { to: range.to } : {}), eventCount: events.length, runs, attempts, successes, failures, fallbacks, qualityPasses, qualityRejects, qualityBlocked, firstPassSuccesses, repairRounds, durationMs, tokens, unknownTokenAttempts, ...(hasActual && currencies.length <= 1 ? { actualCostMicros } : {}), ...(hasEstimate && currencies.length <= 1 ? { estimatedCostMicros } : {}), ...(hasAvoided && currencies.length <= 1 ? { avoidedCostMicros } : {}), unknownCostEvents, ...(routing.decisions === 0 ? {} : { routing }), byPool, byRoute, byMission, byRole, byPoolRoute, fallbackTransitions, qualityByPool, qualityByRoute, costByCurrency };
 };
 
 export { AnalyticsQueryService as AnalyticsService };

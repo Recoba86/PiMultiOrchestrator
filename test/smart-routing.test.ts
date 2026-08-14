@@ -175,9 +175,9 @@ test("M12.2 routing telemetry stores bounded metadata only", async () => {
 		const events = store.list();
 		assert.equal(events.length, 1);
 		assert.deepEqual(events[0]?.routing?.reasonCodes, ["investigation"]);
-		assert.equal(store.summary().routing.fallbackCalls, 1);
+		assert.equal(store.summary().routing?.fallbackCalls, 1);
 		assert.equal(JSON.stringify(events).includes("prompt contents"), false);
-		assert.equal(summarize(events).routing.decisions, 1);
+		assert.equal(summarize(events).routing?.decisions, 1);
 		store.close();
 	} finally {
 		await rm(root, { recursive: true, force: true });

@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M12.2 local RC.10 verification PASS / M11 acceptance, independent review, Planner, live-route, and publication gates pending |
+| Development phase | M10 accepted; M12.2 local RC.11 verification PASS / M11 acceptance, independent review, Planner, live-route, and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,7 +23,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M12.2 candidate | `0.1.0-rc.10` — local, not public; M12.1 RC.9 is historical; implementation commit pending local closeout commit |
+| M12.2 candidate | `0.1.0-rc.11` — local, not public; M12.1 RC.9 and M12.2 RC.10 are historical local candidates |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
 | M11 candidate | `0.1.0-rc.8` — historical local candidate; not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |

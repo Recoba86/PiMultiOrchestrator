@@ -7,7 +7,7 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 ## M12.2 — Hybrid Smart Router
 
 - **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.2 is not a public or production-ready release.
-- **Candidate:** `0.1.0-rc.10`; M12.1 RC.9 remains historical local evidence.
+- **Candidate:** `0.1.0-rc.11`; M12.1 RC.9 and superseded M12.2 RC.10 remain historical local evidence.
 - **Purpose:** Add frictionless ordinary-prompt routing with deterministic bilingual local signals, bounded optional AI Triage for ambiguity, and an explicit Mission-or-normal user choice.
 - **Major outcomes:** Clear simple prompts continue with no AI/banner; clear multi-stage prompts offer `Run as Mission` or `Run Normally`; ambiguous prompts use only configured Primary/optional capability-only Fallback routes; strict triage JSON, stale route visibility, local degradation, and original-prompt preservation are enforced.
 - **Persistence and privacy:** Smart Routing uses a versioned atomic rollback-capable `smart-routing.json` sidecar separate from legacy ConfigV1 route semantics. Typed routing telemetry stores only decision/path/reason/action/call/fallback/failure metadata; raw prompts, transcripts, tool output, provider responses, and secrets are excluded. Analyst persistence was bounded at the same trust boundary.
