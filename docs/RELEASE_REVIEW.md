@@ -1,6 +1,7 @@
 # M12 final external release review — RC16
 
-Status: `EXTERNAL_REVIEW_PASS` for the exact detached RC16 local candidate.
+Status: `EXTERNAL_REVIEW_PASS`; final Planner/manual acceptance attempt
+`HARD_BLOCKED` for the exact detached RC16 local candidate.
 RC16 is not an accepted, public, or production-ready release.
 
 The reviewer must inspect the exact detached candidate identified by
@@ -50,6 +51,16 @@ Evidence binding:
 - artifact SHA-256: `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`
 - independently verified bundle-root SHA-256: `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`
 - results: `231/231` tests, `20/20` integrity attacks, worker-safety `1/1`, privacy clean, Pi `0.84.1`, live calls `0`, paid inference `0`
+
+Final Planner/manual acceptance attempt on 2026-08-15: HARD BLOCKED. In a
+disposable root, the single configured Implementation/Verification route
+completed the Implementation leg and created the exact smoke JSON, but two
+same-route canonical M7 reviewer attempts stopped before a valid
+`submit_verification_result` capture. Both were blocked without observed
+mutation or a quality decision. Isolated offline Pi `0.84.1` technical TUI
+sanity passed, and no live Pi configuration or provider account was modified.
+This result does not alter the detached RC16 identity above and does not
+authorize publication.
 
 Historical M11 and earlier RC evidence remains in Git history and the
 append-only development log. It is intentionally not copied into this current

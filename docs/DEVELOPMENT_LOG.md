@@ -1,8 +1,42 @@
 # Development log
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
+
+## M12 final Planner/manual acceptance attempt — RC16 HARD BLOCKED
+
+- **Date:** 2026-08-15.
+- **Status:** `PMO_FINAL_PLANNER_ACCEPTANCE_HARD_BLOCK`; M10 remains the latest
+  accepted milestone. RC16 is not accepted, public, or production-ready.
+- **Identity:** all candidate claims remain bound to source commit
+  `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`, tree
+  `0e7e01ff02abf269891fc55556d57e64d5a1f111`, artifact SHA-256
+  `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`, and
+  bundle-root SHA-256
+  `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`; the
+  current handoff HEAD remains a separate docs-only state.
+- **Offline validation:** current `npm run check` passed `231/231` across 13
+  suites with zero failed/cancelled/skipped/todo; typecheck and build passed.
+- **Live Triage:** one captured ambiguous case in a disposable root returned a
+  structured fallback recommendation after two bounded real-provider calls;
+  no credential was displayed or persisted.
+- **Canonical live path:** in disposable root
+  `/private/tmp/pi-rc16-final-live-smoke-canonical.A8f3e1`, Mission
+  `mission-c40f24a2-9b39-4340-9495-ca016d938eec` and Task
+  `task-f6914ed1-61fc-4c48-8026-28b46379e029` used only
+  `r9-ninerouter-ag-claude-opus-4-6-think-fe2f756e1d848cbb05ca`; the
+  Implementation run succeeded and created exact `rc16-smoke.json` with no
+  unexpected file. The two canonical M7 Verification runs stopped before a
+  valid `submit_verification_result` capture, leaving M7 blocked with no
+  quality decision and no observed reviewer mutation.
+- **Technical TUI:** isolated offline Pi `0.84.1` RPC passed launch, nested
+  Control Center, Smart Routing settings, Missions, Back navigation, clean
+  exit, and credential-display checks.
+- **Boundary:** no source/package/live Pi configuration/provider account/
+  Keychain/public tag/push/npm publication/GitHub release/production install
+  was modified. The blocker is current route/protocol compatibility; no
+  source defect or successor release was established.
 
 ## M12.1 autonomous mission entry and RC16 candidate
 

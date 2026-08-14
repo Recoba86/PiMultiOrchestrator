@@ -1,10 +1,34 @@
 # Local dogfooding log
 
 Historical M11 and earlier candidate rows below are retained for traceability;
-they are not current RC15 release evidence.
+they are not current RC16 acceptance evidence.
 
-This is an auditable local record. It contains no prompts, transcripts, tool
-output, credentials, or live-provider data.
+This is an auditable local record. It contains no raw prompts, transcripts, tool
+output, credentials, or provider response bodies.
+
+## RC16 final Planner/manual acceptance attempt — HARD BLOCKED
+
+- **Date:** 2026-08-15; local-only and unpublished. The exact RC16 candidate is
+  bound to source commit `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99` and artifact
+  SHA-256 `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`.
+- **Live Triage:** one disposable-root ambiguous case produced a structured
+  fallback recommendation after two bounded calls; raw prompt/provider data
+  was not persisted.
+- **Canonical Mission:** disposable root
+  `/private/tmp/pi-rc16-final-live-smoke-canonical.A8f3e1`; one pinned
+  Implementation/Verification route. The Mission/Task Implementation run
+  succeeded and created exactly `rc16-smoke.json` with
+  `{"status":"ok","candidate":"rc16"}`; the disposable project contained
+  only its README and that file.
+- **M7 result:** two same-route Verification attempts stopped before valid
+  `submit_verification_result` capture. Both were blocked without observed
+  mutation or a quality decision. No alternate route was tested.
+- **Technical TUI:** isolated offline Pi `0.84.1` launch, nested Control
+  Center, Smart Routing settings, Missions, Back navigation, and credential
+  display checks passed.
+- **Boundary:** no live Pi configuration, provider account, Keychain value,
+  source checkout, tag, push, npm publication, or GitHub release was modified.
+  Final Planner/manual acceptance is hard-blocked; no publication was done.
 
 ## M12 Final Routing Gate — RC13 local closeout
 

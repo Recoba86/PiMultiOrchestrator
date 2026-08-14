@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC16 is the exact locally verified candidate after entry, Mission/M7, recovery, and provenance repairs. M10 remains the latest accepted milestone; Planner/manual acceptance and publication remain pending.
+Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC16 is the exact locally verified candidate after entry, Mission/M7, recovery, and provenance repairs. The 2026-08-15 final Planner/manual acceptance attempt is HARD-BLOCKED at the current live canonical M7 structured-result gate. M10 remains the latest accepted milestone; publication remains pending.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -321,3 +321,12 @@ artifact SHA-256
 `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`,
 and bundle-root SHA-256
 `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`.
+
+Final Planner/manual acceptance attempt on 2026-08-15: HARD BLOCKED. The
+disposable live canonical Mission Implementation leg succeeded on the pinned
+`9router/ag/claude-opus-4-6-thinking` route and created the exact smoke JSON;
+the same Verification route stopped before valid `submit_verification_result`
+capture in two bounded attempts, leaving M7 blocked with no decision. The
+isolated offline Pi `0.84.1` technical TUI path passed. This is not an RC16
+acceptance or publication handoff; no source change or RC17 is justified by
+the evidence currently available.
