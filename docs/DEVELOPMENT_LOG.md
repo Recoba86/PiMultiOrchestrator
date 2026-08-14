@@ -7,10 +7,10 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 ## M12 Final External Release Review — RC15 candidate
 
 - **Date:** 2026-08-14.
-- **Status:** FINAL EXTERNAL REVIEW IN PROGRESS; exact source checks pass. M10 remains the latest accepted milestone; RC15 is local-only and not production-ready.
+- **Status:** FINAL EXTERNAL REVIEW PASS on the exact detached local candidate. M10 remains the latest accepted milestone; RC15 is local-only and not production-ready.
 - **Baseline:** source-review commit `3101fd7` followed the RC13/RC14 review surface. RC13 remains historical; RC15 is the next candidate identity.
 - **Repairs:** in addition to the prior release, routing, recovery, and Mission/M7 fixes, the worker boundary now rejects shell expansion/globs and recursive shell reads, scans bounded recursive built-in reads for credential-like descendants and symlinks, removes npm lifecycle commands from the allowlist, and blocks worker Git content inspection.
-- **Validation:** focused worker-safety tests `7/7 PASS`; clean-checkout full suite `227/227 PASS` across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build PASS. The detached RC15 artifact, Pi compatibility/install/rollback/rescue, privacy, worker safety, and review-bundle integrity remain the final release gates.
+- **Validation:** focused worker-safety tests `7/7 PASS`; clean-checkout full suite `227/227 PASS` across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build PASS. The final detached verifier passed exact source/artifact binding, privacy, Pi `0.84.1` install/upgrade/rollback/rescue, worker safety, and `20/20` integrity attacks. The generated packet records the artifact and bundle identities; the embedded bundle marker remains audit-only `EXTERNAL_REVIEW_PENDING`.
 - **Boundary:** no live Pi configuration, provider account, Keychain, credential value, public tag, push, npm publication, GitHub release, or production-ready claim was made. Planner/manual acceptance and publication remain separate and unauthorized.
 
 ## M12 Final Routing Gate — local RC13 pass

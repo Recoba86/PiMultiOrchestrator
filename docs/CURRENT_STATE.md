@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; RC15 final external-review candidate after M12 routing/release repairs; exact source checks pass; detached release evidence and acceptance/publication gates pending |
+| Development phase | M10 accepted; RC15 final external review PASS on an exact detached local candidate; Planner/manual acceptance and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -64,9 +64,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 
 ## RC15 final external-review candidate
 
-- **Status:** local candidate; source review and exact-checkout validation pass;
-  detached release evidence is pending. M10 remains the latest accepted
-  milestone.
+- **Status:** final external review PASS on the exact detached local candidate;
+  M10 remains the latest accepted milestone. RC15 is not public or
+  production-ready.
 - **Source-review baseline:** commit `3101fd7` closes the residual worker
   safety paths for shell expansion, recursive built-in reads, npm lifecycle
   commands, and Git content inspection. Recursive reads scan bounded
@@ -76,9 +76,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   todo; typecheck and build PASS. No live Pi configuration, provider account,
   credential, public tag, push, npm publication, or GitHub release was
   modified.
-- **Release boundary:** RC15 remains local until the detached release verifier
-  binds the exact candidate and the remaining Planner/manual acceptance,
-  publication, and production gates are separately authorized.
+- **Release boundary:** the detached verifier bound the exact candidate and
+  passed. Planner/manual acceptance, publication, and production gates remain
+  separate and require authorization.
 
 ## M12.3 current implementation
 

@@ -1,8 +1,7 @@
 # M12 final external release review — RC15
 
-Status: `EXTERNAL_REVIEW_PENDING`. RC15 source review is locally green, but the
-detached packet gate is still pending. RC15 is local-only and is not an accepted,
-public, or production-ready release.
+Status: `EXTERNAL_REVIEW_PASS` for the exact detached local candidate. RC15 is
+not an accepted, public, or production-ready release.
 
 The reviewer must inspect the exact detached candidate identified by
 `release-manifest.json`, `verification.json`, the artifact checksum sidecar,
@@ -31,10 +30,16 @@ extracted `directory-source/` directory; direct `.tgz` installation is not a
 supported claim. The review bundle is audit material, not its own trust root:
 the expected bundle-root digest must arrive independently.
 
-Record reviewer identity, separate context/process, result, blocker/high and
-medium findings, dispositions, and residual uncertainty in a separate
-handoff. Planner/manual acceptance, publication, and production readiness are
-separate gates.
+Final disposition on 2026-08-14: PASS. The exact detached verifier passed the
+source-bound check, artifact/package binding, privacy scan, Pi `0.84.1`
+install/upgrade/rollback/rescue, worker-safety regression, and `20/20`
+integrity attacks. No blocker, high, or medium finding remains open. The
+embedded bundle review marker remains `EXTERNAL_REVIEW_PENDING` by design: the
+bundle is audit material and its root digest is checked separately; it is not
+the trust root. Residual limitations are application-level safety, a bounded
+recursive scan, check/use race exposure, other OS/Pi versions, human TUI
+smoke, real-provider smoke, Planner acceptance, and publication. These do not
+promote RC15 to public or production-ready status.
 
 Historical M11 and earlier RC evidence remains in Git history and the
 append-only development log. It is intentionally not copied into this current

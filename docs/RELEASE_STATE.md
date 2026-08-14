@@ -50,7 +50,7 @@ Milestone acceptance does not itself create a product release.
 | M12.3 focused independent review | Exact source commit `56dbbb150fd184240db55e58e4bffc20efdd5c5f`; PASS with no unresolved blocker/high findings; optional medium/low limitations recorded separately and do not block local evidence |
 | M12 final routing gate local evidence | RC13 source commit `8d8e36a9526c6edd106d36fa8cb5069cda517405`; `214/214 PASS`, `20/20` integrity attacks, balanced `360`-case bilingual corpus, isolated Pi lifecycle dogfood, bounded real 9Router Triage, privacy, worker safety, latency, and clean worktree; local-only |
 | M12 final RC13 verifier | Artifact SHA-256 `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`; source tree `d5d06e16e4a2266d9b04d3afd79c6dd181df9345`; source digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`; review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`; External Review #5 remains pending |
-| M12 RC15 final-review candidate | Source-review baseline `3101fd7`; focused worker-safety tests `7/7 PASS`; clean-checkout full suite `227/227 PASS` across 13 suites with zero failed/cancelled/skipped/todo; typecheck/build PASS; detached artifact and bundle identities are recorded only after final verification |
+| M12 RC15 final-review candidate | Final external review PASS on the exact detached local candidate; source-review baseline `3101fd7`; focused worker-safety tests `7/7 PASS`; clean-checkout full suite `227/227 PASS` across 13 suites with zero failed/cancelled/skipped/todo; typecheck/build, privacy, Pi `0.84.1`, and `20/20` integrity evidence PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |

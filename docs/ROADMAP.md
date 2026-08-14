@@ -294,8 +294,8 @@ unauthorized.
 
 ### M12 Final External Release Review — RC15
 
-Status: FINAL EXTERNAL REVIEW IN PROGRESS; exact source checks pass; detached
-evidence is pending. RC15 is not accepted, public, or production-ready.
+Status: FINAL EXTERNAL REVIEW PASS on the exact detached local candidate. RC15
+is not accepted, public, or production-ready.
 
 The RC15 source-review baseline is commit `3101fd7`. It closes the adversarial
 findings carried forward from the RC13 review surface and the final worker
@@ -310,7 +310,9 @@ and worker Git content inspection. Clean-checkout validation is `227/227 PASS`
 across 13 suites with zero failed/cancelled/skipped/todo; focused worker-safety
 validation is `7/7 PASS`; typecheck and build are PASS.
 
-The final detached verifier must bind the exact RC15 artifact and review bundle
-before this section can record PASS. No live Pi
-configuration, provider account, credential, public tag, push, npm publication,
-or GitHub release is authorized by this local candidate.
+The final detached verifier bound the exact RC15 artifact and review bundle,
+with clean source/build identity, privacy, Pi `0.84.1`, worker-safety, and
+`20/20` integrity evidence. No live Pi configuration, provider account,
+credential, public tag, push, npm publication, or GitHub release is authorized
+by this local candidate. Planner/manual acceptance and publication remain
+separate gates.
