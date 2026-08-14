@@ -281,3 +281,19 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   restore is validation- and confirmation-gated. M12.3 does not add mid-run
   promotion, procedural skill generation, benchmark model selection, Boss
   optimization, or background scheduling.
+
+## ADR-037 — RC15 closes recursive worker read and content-command bypasses
+
+- **Decision:** Treat shell expansion, recursive shell reads, npm lifecycle
+  commands, and worker Git content inspection as non-allowlisted. Built-in
+  `grep` and `find` use a bounded recursive descendant scan that fails closed
+  on credential-like names, symlinks, enumeration errors, or oversized trees.
+- **Rationale:** Review of the integrated Pi hook found that a command-level
+  allowlist alone did not prevent glob expansion, recursive descendant reads,
+  npm child-process execution, or Git commands that expose arbitrary tracked
+  content. The shared WorkerSafetyGuard is the smallest common enforcement
+  point for these paths.
+- **Consequences:** Read-only worker capabilities remain application-level,
+  not an OS sandbox. The bounded scan has a deliberate finite ceiling and
+  check/use race window; other platforms, real providers, human TUI smoke,
+  Planner acceptance, and publication remain separate gates.

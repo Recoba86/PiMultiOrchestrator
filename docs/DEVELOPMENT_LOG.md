@@ -7,10 +7,10 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 ## M12 Final External Release Review — RC15 candidate
 
 - **Date:** 2026-08-14.
-- **Status:** FINAL EXTERNAL REVIEW IN PROGRESS; M10 remains the latest accepted milestone. RC15 is local-only and not production-ready.
-- **Baseline:** repair commit `4416a85` (`fix: close final external review findings`) followed the RC13/RC14 review surface. RC13 remains historical; RC15 is the next candidate identity.
-- **Repairs:** release and review-bundle force modes now refuse unrelated non-output directories; release manifests bind the expected package version and artifact filename; TAP skipped/todo counts fail closed; bundle privacy is scanned recursively; trusted Implementation bash rejects network/publication/remote-shell commands and direct Node script execution; learned NORMAL is bypassed for sensitive/high-risk work; verification targets must be terminal attempts belonging to the selected Mission/Task; corrupt Smart Routing settings fail closed; triage input and cancellation are bounded; malformed Routing Memory history rejects restore; Mission text is normalized; and the Always preference path creates the Mission before persisting its rule.
-- **Validation:** focused safety/routing/host/mission tests `69/69 PASS`; clean-checkout full suite `221/221 PASS` across 13 suites; typecheck PASS. The detached RC15 artifact, Pi compatibility/install/rollback/rescue, privacy, worker safety, and review-bundle integrity remain the final external-review gates.
+- **Status:** FINAL EXTERNAL REVIEW IN PROGRESS; exact source checks pass. M10 remains the latest accepted milestone; RC15 is local-only and not production-ready.
+- **Baseline:** source-review commit `3101fd7` followed the RC13/RC14 review surface. RC13 remains historical; RC15 is the next candidate identity.
+- **Repairs:** in addition to the prior release, routing, recovery, and Mission/M7 fixes, the worker boundary now rejects shell expansion/globs and recursive shell reads, scans bounded recursive built-in reads for credential-like descendants and symlinks, removes npm lifecycle commands from the allowlist, and blocks worker Git content inspection.
+- **Validation:** focused worker-safety tests `7/7 PASS`; clean-checkout full suite `227/227 PASS` across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build PASS. The detached RC15 artifact, Pi compatibility/install/rollback/rescue, privacy, worker safety, and review-bundle integrity remain the final release gates.
 - **Boundary:** no live Pi configuration, provider account, Keychain, credential value, public tag, push, npm publication, GitHub release, or production-ready claim was made. Planner/manual acceptance and publication remain separate and unauthorized.
 
 ## M12 Final Routing Gate — local RC13 pass

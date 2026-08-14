@@ -1,6 +1,7 @@
 # M12 final external release review — RC15
 
-Status: `EXTERNAL_REVIEW_PENDING`. RC15 is local-only and is not an accepted,
+Status: `EXTERNAL_REVIEW_PENDING`. RC15 source review is locally green, but the
+detached packet gate is still pending. RC15 is local-only and is not an accepted,
 public, or production-ready release.
 
 The reviewer must inspect the exact detached candidate identified by
@@ -19,6 +20,9 @@ Required independent checks:
   preservation against the authentic M10 baseline;
 - routing, Mission/M7 target binding, cancellation, recovery, Unicode, and
   Direct Worker versus canonical Mission boundaries;
+- exact worker safety at the Pi hook: shell/glob/recursive-read rejection,
+  bounded descendant privacy/symlink scanning, no npm lifecycle allowlist, and
+  no worker Git content inspection;
 - no live Pi/provider/Keychain access, public tag/push, npm publication, or
   GitHub release as part of this local review.
 

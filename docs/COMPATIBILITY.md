@@ -18,6 +18,7 @@ release evidence.
 
 The package has no runtime npm dependencies and declares Pi as a peer
 dependency. Runtime databases, credentials, sessions, `.git`, source paths,
-and live configuration are outside the package allowlist. M10 remains the
-latest accepted milestone; RC15 remains local until independent external
-review and Planner/manual acceptance are separately recorded.
+and live configuration are outside the package allowlist. RC15 source checks
+pass on the repaired worker boundary; M10 remains the latest accepted
+milestone, and RC15 remains local until detached evidence and Planner/manual
+acceptance are separately recorded.

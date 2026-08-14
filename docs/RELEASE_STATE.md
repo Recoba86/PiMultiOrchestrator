@@ -50,7 +50,7 @@ Milestone acceptance does not itself create a product release.
 | M12.3 focused independent review | Exact source commit `56dbbb150fd184240db55e58e4bffc20efdd5c5f`; PASS with no unresolved blocker/high findings; optional medium/low limitations recorded separately and do not block local evidence |
 | M12 final routing gate local evidence | RC13 source commit `8d8e36a9526c6edd106d36fa8cb5069cda517405`; `214/214 PASS`, `20/20` integrity attacks, balanced `360`-case bilingual corpus, isolated Pi lifecycle dogfood, bounded real 9Router Triage, privacy, worker safety, latency, and clean worktree; local-only |
 | M12 final RC13 verifier | Artifact SHA-256 `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`; source tree `d5d06e16e4a2266d9b04d3afd79c6dd181df9345`; source digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`; review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`; External Review #5 remains pending |
-| M12 RC15 final-review candidate | Repair baseline `4416a85`; clean-checkout full suite `221/221 PASS` across 13 suites; focused safety/routing/host/mission tests `69/69 PASS`; detached artifact and bundle identities are recorded only after final verification; external review pending |
+| M12 RC15 final-review candidate | Source-review baseline `3101fd7`; focused worker-safety tests `7/7 PASS`; clean-checkout full suite `227/227 PASS` across 13 suites with zero failed/cancelled/skipped/todo; typecheck/build PASS; detached artifact and bundle identities are recorded only after final verification |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -67,7 +67,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 ## Known release blockers and limitations
 
 - No public artifact, tag, GitHub release, npm publication, or production-ready install exists. The local M11 RC and its verification metadata are not a public release.
-- RC15 addresses the previously noted M12.3 recovery limitations: malformed numbered history now rejects the restore, legacy analytics recommendation rows are sanitized before read/status update, and external backup bytes are capped before JSON parsing. Final external review of RC15 remains pending.
+- RC15 addresses the previously noted M12.3 recovery limitations and the final worker-safety review surface: malformed numbered history rejects restore, legacy analytics recommendation rows are sanitized before read/status update, external backup bytes are capped before JSON parsing, recursive built-in reads reject protected descendants/symlinks, npm lifecycle commands are not allowlisted, and worker Git content commands are blocked. Detached release evidence and final acceptance remain separate gates.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
 - Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and public release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
 - Human keyboard-driven TUI smoke remains pending as open validation, but is not an M10 acceptance blocker. M10 automated safety/recovery evidence is `159/159 PASS`; M12.1 isolated offline Pi TUI evidence passed separately.

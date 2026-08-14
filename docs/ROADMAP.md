@@ -294,19 +294,23 @@ unauthorized.
 
 ### M12 Final External Release Review — RC15
 
-Status: FINAL EXTERNAL REVIEW IN PROGRESS; not accepted, public, or production-ready.
+Status: FINAL EXTERNAL REVIEW IN PROGRESS; exact source checks pass; detached
+evidence is pending. RC15 is not accepted, public, or production-ready.
 
-The RC15 repair baseline is commit `4416a85`. It closes the adversarial
-findings carried forward from the RC13 review surface: release-tool force
-cleanup and stale-version checks, bundle privacy scanning, skipped/todo TAP
-rejection, trusted-worker network/publication shell commands, sensitive learned
-NORMAL suppression, Mission/M7 verification target binding, corrupt Smart
-Routing fail-closed loading, bounded/cancellable Triage, malformed history
-rejection, Mission text normalization, and Always-rule persistence ordering.
-Clean-checkout validation is `221/221 PASS` across 13 suites; focused
-safety/routing/host/mission validation is `69/69 PASS`; typecheck is PASS.
+The RC15 source-review baseline is commit `3101fd7`. It closes the adversarial
+findings carried forward from the RC13 review surface and the final worker
+boundary review: release-tool force cleanup and stale-version checks, bundle
+privacy scanning, skipped/todo TAP rejection, trusted-worker
+network/publication shell commands, sensitive learned NORMAL suppression,
+Mission/M7 verification target binding, corrupt Smart Routing fail-closed
+loading, bounded/cancellable Triage, malformed history rejection, Mission
+text normalization, Always-rule persistence ordering, shell/glob/recursive
+read bypasses, npm lifecycle execution, nested credential/symlink descendants,
+and worker Git content inspection. Clean-checkout validation is `227/227 PASS`
+across 13 suites with zero failed/cancelled/skipped/todo; focused worker-safety
+validation is `7/7 PASS`; typecheck and build are PASS.
 
-The final detached verifier and independent external review must bind the exact
-RC15 artifact and review bundle before this section can record PASS. No live Pi
+The final detached verifier must bind the exact RC15 artifact and review bundle
+before this section can record PASS. No live Pi
 configuration, provider account, credential, public tag, push, npm publication,
 or GitHub release is authorized by this local candidate.
