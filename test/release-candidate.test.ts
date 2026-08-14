@@ -61,6 +61,7 @@ test("release script emits a verified artifact outside the checkout", () => {
 		fileCount: number;
 		directorySource: string;
 		buildSource: string;
+		untrackedCount: number;
 		untrackedIncluded: boolean;
 		sourceDigest: string;
 		testDefinition: { command: string; digest: string };
