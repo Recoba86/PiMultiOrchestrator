@@ -29,6 +29,7 @@ const parse = <T>(value: unknown, fallback: T): T => {
 };
 const nowIso = (clock: () => Date): string => clock().toISOString();
 const clone = <T>(value: T): T => parse<T>(json(value), value);
+const normalizeMissionText = (value: string): string => value.normalize("NFKC").replace(/[\u200b\ufeff\u2060]/gu, "").trim();
 
 const idOf = (value: string | undefined, prefix: string, make: () => string): string =>
 	value && value.length > 0 ? value : `${prefix}-${make()}`;
@@ -38,7 +39,7 @@ export const createCanonicalMission = (
 	goal: string,
 	options: { readonly repositoryCwd?: string; readonly acceptanceCriteria?: readonly string[] } = {},
 ): MissionRecord => {
-	const normalizedGoal = goal.trim();
+	const normalizedGoal = normalizeMissionText(goal);
 	if (!normalizedGoal) throw new MissionValidationError([{ path: "goal", message: "goal is required" }]);
 	return store.createMission({
 		goal: normalizedGoal,
@@ -137,8 +138,10 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 		return text;
 	}
 	private text(value: unknown, path: string): string {
-		if (typeof value !== "string" || value.trim().length === 0 || value.length > this.maxTextLength) throw new MissionValidationError([{ path, message: "text is missing or exceeds bound" }]);
-		return value.trim();
+		if (typeof value !== "string") throw new MissionValidationError([{ path, message: "text is missing or exceeds bound" }]);
+		const normalized = normalizeMissionText(value);
+		if (normalized.length === 0 || normalized.length > this.maxTextLength) throw new MissionValidationError([{ path, message: "text is missing or exceeds bound" }]);
+		return normalized;
 	}
 	private missionRow(id: string): Row {
 		const row = this.db.prepare("SELECT * FROM missions WHERE mission_id=?").get(id) as Row | undefined;
@@ -257,6 +260,10 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 			const mission = this.missionRow(String(input.missionId)); const task = this.db.prepare("SELECT * FROM tasks WHERE task_id=?").get(String(input.taskId)) as Row | undefined;
 			if (!task) throw new MissionNotFoundError("task", String(input.taskId));
 			if (String(task.mission_id) !== String(input.missionId)) throw new MissionValidationError([{ path: "taskId", message: "task does not belong to mission" }]);
+			const targetAttempt = this.attempt(String(input.targetRunId));
+			if (!targetAttempt) throw new MissionNotFoundError("attempt", String(input.targetRunId));
+			if (String(targetAttempt.missionId) !== String(input.missionId) || String(targetAttempt.taskId) !== String(input.taskId)) throw new MissionValidationError([{ path: "targetRunId", message: "target attempt does not belong to mission task" }]);
+			if (targetAttempt.status === "running") throw new MissionValidationError([{ path: "targetRunId", message: "target attempt is not terminal" }]);
 			const id = idOf(input.verificationId, "verification", this.makeId); const round = input.round ?? 0;
 			if (!Number.isSafeInteger(round) || round < 0) throw new MissionValidationError([{ path: "round", message: "round must be a non-negative integer" }]);
 			if (this.db.prepare("SELECT 1 FROM verification_runs WHERE verification_id=?").get(id)) throw new MissionValidationError([{ path: "verificationId", message: "duplicate verification id" }]);

@@ -51,7 +51,7 @@ export const parseTapSummary = (output) => {
 	const values = Object.fromEntries(Object.entries(matches[0].groups ?? {}).map(([key, value]) => [key, Number(value)]));
 	for (const key of ["total", "suites", "passed", "failed", "cancelled", "skipped", "todo"]) if (!Number.isSafeInteger(values[key]) || values[key] < 0) fail("TAP summary contains an invalid count");
 	const accounted = values.passed + values.failed + values.cancelled + values.skipped + values.todo;
-	if (values.total <= 0 || values.passed <= 0 || values.total !== accounted || values.failed !== 0 || values.cancelled !== 0) fail("TAP summary totals are empty, inconsistent, or contain failed/cancelled tests");
+	if (values.total <= 0 || values.passed <= 0 || values.total !== accounted || values.failed !== 0 || values.cancelled !== 0 || values.skipped !== 0 || values.todo !== 0) fail("TAP summary totals are empty, inconsistent, or contain failed/cancelled/skipped/todo tests");
 	return {
 		total: values.total,
 		suites: values.suites,

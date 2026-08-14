@@ -7,12 +7,18 @@ import { createMissionStore } from "../src/core/mission/index.js";
 import { QualityService, selectReviewerRoute } from "../src/core/quality/index.js";
 import { QualityError } from "../src/core/quality/index.js";
 
+function completedAttempt(store: ReturnType<typeof createMissionStore>, taskId: string, attemptId: string): void {
+	const attempt = store.createAttempt({ taskId, attemptId });
+	store.finishAttempt(attempt.attemptId, "succeeded");
+}
+
 test("quality decisions stay separate from execution and persist escalation state", async () => {
 	const root = await mkdtemp(join(tmpdir(), "pi-quality-"));
 	try {
 		const store = createMissionStore({ root });
 		store.createMission({ missionId: "m1", goal: "ship", acceptanceCriteria: ["tests"] });
 		const task = store.createTask({ missionId: "m1", taskId: "t1", roleId: "implementer", executionClass: "implementation", objective: "ship" });
+		completedAttempt(store, task.taskId, "run-1");
 		const quality = new QualityService(store);
 		const verification = quality.startVerification({ missionId: "m1", taskId: task.taskId, targetRunId: "run-1", round: 0, implementationRouteId: "route-a" });
 		assert.equal(store.getTaskQualityStatus(task.taskId)?.status, "verification_running");
@@ -31,6 +37,7 @@ test("quality decisions stay separate from execution and persist escalation stat
 		const escalation = quality.escalate({ missionId: "m1", taskId: task.taskId, rejectedRunId: "run-1", verificationId: retry.verificationId, qualityRound: 0, failedCriteria: ["tests"], requiredFixes: ["fix test"], reviewerFindings: ["test failure"], priorImplementationRouteIds: ["route-a"], reviewerRouteId: "route-b", diversity: "prefer" });
 		assert.equal(escalation.preferredPool, "implementation");
 		assert.deepEqual(store.listQualityEscalations("m1", task.taskId).map((item) => item.escalationId), [escalation.escalationId]);
+		completedAttempt(store, task.taskId, "run-2");
 		const next = quality.startVerification({ missionId: "m1", taskId: task.taskId, targetRunId: "run-2", round: 1, implementationRouteId: "route-b", reviewerRouteId: "route-c" });
 		const passed = quality.completeVerification(next.verificationId, { verdict: "pass", criterionResults: [{ criterion: "tests", status: "satisfied", mandatory: true, evidenceSummary: "exit 0" }], mechanicalChecks: [{ command: "npm test", exitStatus: 0, outcome: "passed", provenance: "orchestrator" }], findings: [], requiredFixes: [], risks: [], summary: "passed" }, ["tests"]);
 		assert.equal(passed.status.status, "passed");
@@ -48,6 +55,7 @@ test("quality finalization rolls back decision, run, and task status together", 
 		const store = createMissionStore({ root, hooks: { fault: (point) => { if (fault && point === "after-event") throw new Error("injected quality fault"); } } });
 		store.createMission({ missionId: "m-atomic", goal: "ship", acceptanceCriteria: ["tests"] });
 		const task = store.createTask({ missionId: "m-atomic", taskId: "t-atomic", roleId: "reviewer", executionClass: "implementation", objective: "verify" });
+		completedAttempt(store, task.taskId, "run-atomic");
 		const quality = new QualityService(store);
 		const verification = quality.startVerification({ missionId: "m-atomic", taskId: task.taskId, targetRunId: "run-atomic", round: 0 });
 		const result = { verdict: "pass" as const, criterionResults: [{ criterion: "tests", status: "satisfied" as const, evidenceSummary: "observed" }], mechanicalChecks: [], findings: [], requiredFixes: [], risks: [], summary: "pass" };
@@ -79,6 +87,7 @@ test("quality loop creates bounded escalation, repairs, and re-verifies without 
 			diversity: "prefer",
 			acceptanceCriteria: ["tests"],
 			verify: async (currentRound) => {
+				completedAttempt(store, task.taskId, `run-${currentRound}`);
 				const verification = quality.startVerification({ missionId: "m-loop", taskId: task.taskId, targetRunId: `run-${currentRound}`, round: currentRound, implementationRouteId: currentRound === 0 ? "route-a" : "route-b", reviewerRouteId: "reviewer" });
 				round = currentRound;
 				return {
@@ -110,6 +119,7 @@ test("reopen marks an in-flight verification interrupted instead of rerunning it
 		let store = createMissionStore({ root });
 		store.createMission({ missionId: "m-recover", goal: "inspect" });
 		const task = store.createTask({ missionId: "m-recover", taskId: "t-recover", roleId: "reviewer", executionClass: "verification", objective: "inspect" });
+		completedAttempt(store, task.taskId, "attempt-1");
 		const run = new QualityService(store).startVerification({ missionId: "m-recover", taskId: task.taskId, targetRunId: "attempt-1" });
 		store.close();
 		store = createMissionStore({ root });

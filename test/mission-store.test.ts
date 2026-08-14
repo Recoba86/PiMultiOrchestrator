@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 
 import {
+	createCanonicalMission,
 	createMissionStore,
 	executeMissionTask,
 	MissionClosedError,
@@ -56,6 +57,31 @@ describe("SQLite mission store", () => {
 		const stale = store.admitEvidence({ missionId: "m1", sourceRevision: mission.revision, kind: "finding", content: { old: true } });
 		assert.throws(() => store.promoteEvidence(stale.evidenceId), MissionConflictError);
 		assert.equal(store.listEvidence("m1", "stale").length, 1);
+		store.close();
+	}));
+
+	it("binds verification to the selected terminal Mission task attempt", async () => withStore((root) => {
+		const store = createMissionStore({ root });
+		store.createMission({ missionId: "m1", goal: "ship" });
+		store.createMission({ missionId: "m2", goal: "other" });
+		const task1 = store.createTask({ missionId: "m1", taskId: "t1", roleId: "worker", executionClass: "implementation", objective: "ship" });
+		const task2 = store.createTask({ missionId: "m2", taskId: "t2", roleId: "worker", executionClass: "implementation", objective: "other" });
+		const running = store.createAttempt({ taskId: task1.taskId, attemptId: "attempt-running" });
+		assert.throws(() => store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: running.attemptId }), MissionValidationError);
+		store.finishAttempt(running.attemptId, "succeeded");
+		const other = store.createAttempt({ taskId: task2.taskId, attemptId: "attempt-other" });
+		store.finishAttempt(other.attemptId, "succeeded");
+		assert.throws(() => store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: other.attemptId }), MissionValidationError);
+		const verification = store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: running.attemptId });
+		assert.equal(verification.targetRunId, running.attemptId);
+		store.close();
+	}));
+
+	it("normalizes mission text and rejects invisible-only goals", async () => withStore((root) => {
+		const store = createMissionStore({ root });
+		const mission = createCanonicalMission(store, "\u200bＦｉｘ the bug\u2060");
+		assert.equal(mission.goal, "Fix the bug");
+		assert.throws(() => createCanonicalMission(store, "\u200b\ufeff\u2060"), MissionValidationError);
 		store.close();
 	}));
 

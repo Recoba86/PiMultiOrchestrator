@@ -11,6 +11,7 @@ import {
 	SmartRouter,
 	SmartRoutingSettingsStore,
 	TriageCapabilityError,
+	MAX_TRIAGE_PROMPT_LENGTH,
 	type SmartRoutingSettings,
 	type TriageClient,
 } from "../src/core/smart-routing/index.js";
@@ -184,6 +185,29 @@ test("M12.2 triage degradation preserves a user-choice recommendation", async ()
 	assert.equal((await noAi.decide("Take a look at this feature; something feels wrong sometimes. Clean it up if needed.")).mode, "SUGGEST_MISSION");
 	const disabled = new SmartRouter({ settings: { ...createDefaultSmartRoutingSettings(), enabled: false }, triageClient: { classify: async () => { throw new Error("must not call"); } } });
 	assert.equal((await disabled.decide("Fix the bug in src/a.ts and add tests")).mode, "NORMAL");
+});
+
+test("M12.2 triage bounds provider input and honors cancellation before accepting a result", async () => {
+	const prompt = "Take a look at this feature; something feels wrong sometimes. Clean it up if needed." + "x".repeat(MAX_TRIAGE_PROMPT_LENGTH + 2_000);
+	let receivedLength = 0;
+	const controller = new AbortController();
+	const router = new SmartRouter({
+		settings: { ...createDefaultSmartRoutingSettings(), aiTriageEnabled: true, primaryRouteId: route("triage-primary") },
+		triageClient: { classify: async (request) => { receivedLength = request.prompt.length; return { recommendedMode: "normal", confidence: 1, reasons: [] }; } },
+	});
+	const bounded = await router.decide(prompt);
+	assert.equal(bounded.mode, "NORMAL");
+	assert.equal(receivedLength, MAX_TRIAGE_PROMPT_LENGTH);
+
+	let release: (() => void) | undefined;
+	const cancelled = new SmartRouter({
+		settings: { ...createDefaultSmartRoutingSettings(), aiTriageEnabled: true, primaryRouteId: route("triage-primary"), fallbackRouteId: route("triage-fallback") },
+		triageClient: { classify: async () => new Promise((resolve) => { release = () => { controller.abort(); resolve({ recommendedMode: "normal", confidence: 1, reasons: [] }); }; }) },
+	});
+	const pending = cancelled.decide("Take a look at this feature; something feels wrong sometimes. Clean it up if needed.", controller.signal);
+	await new Promise<void>((resolve) => setImmediate(resolve));
+	release?.();
+	assert.equal((await pending).mode, "SUGGEST_MISSION");
 });
 
 test("M12.2 triage result is strict and settings retain stale route IDs", async () => {

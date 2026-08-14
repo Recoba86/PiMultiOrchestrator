@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -781,6 +781,26 @@ describe("Pi 9Router host adapter", () => {
 			assert.ok(settings);
 			assert.ok(settings.options.some((option) => option.startsWith("Smart Routing (ON)")));
 			assert.ok(settings.options.includes("AI usage (ambiguous prompts only)"));
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][fixture-pi-0.84.1][M10] fails closed when Smart Routing settings are corrupt", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-corrupt-"));
+		try {
+			const smartRoutingStore = new SmartRoutingSettingsStore({ root: join(root, "smart-routing") });
+			await smartRoutingStore.initialize();
+			await writeFile(join(root, "smart-routing", "smart-routing.json"), "{", "utf8");
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), smartRoutingStore });
+			const notifications: string[] = [];
+			const result = await pi.inputHandlers[0]!({ type: "input", text: "Fix the bug and add tests, then verify independently", source: "interactive" }, {
+				mode: "tui", hasUI: true, isIdle: () => true, ui: { notify: (message: string) => notifications.push(message) },
+			} as unknown as ExtensionContext);
+			assert.deepEqual(result, { action: "continue" });
+			assert.equal(notifications.length, 0);
+			host.dispose();
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

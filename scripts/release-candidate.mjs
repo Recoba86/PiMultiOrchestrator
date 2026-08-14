@@ -12,6 +12,7 @@ const EXPECTED_FILES = ["dist/**/*.js", "dist/**/*.d.ts", "README.md"];
 const OPTIONAL_FILES = ["docs/OPERATOR_GUIDE.md"];
 const ENTRYPOINT = "dist/host/pi-extension.js";
 const EXPECTED_RELEASE_VERSION = "0.1.0-rc.14";
+const RELEASE_OUTPUT_MARKERS = ["release-manifest.json", "verification.json", "artifact-files.txt"];
 const PI_PACKAGE = "@earendil-works/pi-coding-agent";
 const PI_PACKAGE_ROOT = join(REPO_ROOT, "node_modules", "@earendil-works", "pi-coding-agent");
 const PI_CLI = join(PI_PACKAGE_ROOT, "dist", "cli.js");
@@ -555,9 +556,10 @@ export async function verifyReleaseDirectory(directory) {
 	const verification = JSON.parse(await readFile(join(root, "verification.json"), "utf8"));
 	assertSourceIdentity(manifest);
 	if (manifest.schemaVersion !== 3 || manifest.releaseStatus !== "candidate") fail("release manifest schema/status is not the hardened candidate format");
+	if (manifest.package?.version !== EXPECTED_RELEASE_VERSION) fail(`release manifest package version must be ${EXPECTED_RELEASE_VERSION}`);
 	if (!manifest.piIdentity || manifest.piIdentity.package !== PI_PACKAGE || manifest.piIdentity.version !== "0.84.1" || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.packageJsonSha256) || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.cliSha256)) fail("release manifest has no bound Pi identity");
 	const artifactName = manifest.artifact?.file;
-	if (typeof artifactName !== "string" || artifactName !== artifactName.split(/[\\/]/u).pop() || !artifactName.endsWith(".tgz")) fail("release manifest has an invalid artifact filename");
+	if (typeof artifactName !== "string" || artifactName !== artifactName.split(/[\\/]/u).pop() || artifactName !== `pi-multi-orchestrator-${EXPECTED_RELEASE_VERSION}.tgz`) fail("release manifest has an invalid or stale artifact filename");
 	const artifactPath = join(root, artifactName);
 	const artifactHash = await verifyArtifactChecksum(artifactPath, join(root, `${artifactName}.sha256`));
 	if (manifest.artifact.sha256 !== artifactHash || verification.sha256 !== artifactHash) fail("release metadata checksum does not match artifact");
@@ -652,15 +654,21 @@ export async function bindReleaseEvidence(directory) {
 export async function buildReleaseCandidate({ output, force = false } = {}) {
 	const target = resolve(output ?? DEFAULT_OUTPUT);
 	if (isPathInside(REPO_ROOT, target)) fail("release output must be outside the source checkout");
-	const pi = await trustedPi();
-	const npm = await trustedNpm();
 	const targetEntries = await readdir(target).catch((error) => {
 		if (error?.code === "ENOENT") return [];
 		throw error;
 	});
 	if (targetEntries.length > 0 && !force) fail(`release output is not empty: ${target}; use --force to overwrite it`);
-	if (targetEntries.length > 0 && force) await rm(target, { recursive: true, force: true });
+	if (targetEntries.length > 0 && force) {
+		for (const marker of RELEASE_OUTPUT_MARKERS) {
+			const details = await lstat(join(target, marker)).catch(() => undefined);
+			if (!details || details.isSymbolicLink() || !details.isFile()) fail("refusing --force on a directory that is not a release-tool output");
+		}
+		await rm(target, { recursive: true, force: true });
+	}
 	await mkdir(target, { recursive: true });
+	const pi = await trustedPi();
+	const npm = await trustedNpm();
 
 	const sourceStage = await createGitSourceStage();
 	const { sourceIdentity, sourceRoot } = sourceStage;

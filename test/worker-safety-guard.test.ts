@@ -50,6 +50,9 @@ test("worker profiles cannot expand into mutation or unsafe shell execution", as
 		const implementation = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["bash"] });
 		assert.equal(implementation.authorize("bash", { command: "git reset --hard HEAD" }).code, "DESTRUCTIVE_GIT");
 		assert.equal(implementation.authorize("bash", { command: "npm test" }).decision, "ALLOW");
+		for (const command of ["npm publish", "git push origin main", "ssh host", "curl https://example.test", "node scripts/exfiltrate.mjs"]) {
+			assert.notEqual(implementation.authorize("bash", { command }).decision, "ALLOW", command);
+		}
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

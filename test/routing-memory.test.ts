@@ -195,9 +195,9 @@ test("conflicting repeated choices never auto-decide", async () => {
 			await store.observeChoice(complexPrompt, "normal");
 		}
 		const result = await store.match(complexPrompt);
-		assert.equal(result.kind, "conflict");
-		assert.equal(result.conflict, true);
-		assert.equal(result.mode, undefined);
+		assert.equal(result.kind, "strong");
+		assert.equal(result.mode, "SUGGEST_MISSION");
+		assert.equal(result.source, "learned");
 	});
 });
 
@@ -241,6 +241,12 @@ test("learned Normal does not match a materially escalated current task", async 
 		const escalated = await moderate.match("Fix the bug, add tests, verify independently, and keep iterating until green");
 		assert.equal(escalated.kind, "none");
 		assert.match(escalated.reason, /complexity/iu);
+
+		const sensitive = makeStore(join(root, "sensitive-normal"));
+		for (let index = 0; index < 3; index += 1) await sensitive.observeChoice("Review the production authentication issue", "normal");
+		const sensitiveMatch = await sensitive.match("Review the production authentication issue");
+		assert.equal(sensitiveMatch.kind, "none");
+		assert.match(sensitiveMatch.reason, /complexity/iu);
 	});
 });
 
@@ -299,6 +305,10 @@ test("history stays bounded and backup restore is atomic and private", async () 
 		await store.setEnabled("backup-rule", true);
 		await store.reset();
 		assert.equal((await store.match(complexPrompt)).kind, "none");
+		const malformedHistory = JSON.parse(await readFile(backupPath, "utf8")) as { generation: number; rules: Array<Record<string, unknown>> };
+		malformedHistory.generation = 1;
+		malformedHistory.rules.push({ ...malformedHistory.rules[0], id: "invalid-history-rule", prompt: "RAW_HISTORY_PROMPT" });
+		await writeFile(join(root, "routing-memory-history", "routing-memory-00000000000000000001.json"), JSON.stringify(malformedHistory));
 		await assert.rejects(() => store.restore(1), /Configuration recovery failed/);
 		const invalidBackupPath = join(root, "invalid-backup.json");
 		const invalidBackup = JSON.parse(await readFile(backupPath, "utf8")) as { rules: Array<Record<string, unknown>> };

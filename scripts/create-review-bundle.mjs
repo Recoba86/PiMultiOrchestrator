@@ -6,6 +6,7 @@ import {
 	DIRECTORY_SOURCE,
 	inspectTree,
 	releaseBindingFor,
+	scanPrivacy,
 	validateTestEvidence,
 	verifyReleaseDirectory,
 } from "./release-candidate.mjs";
@@ -15,6 +16,7 @@ const REVIEW_DOCS = ["COMPATIBILITY.md", "RELEASE_CHECKLIST.md", "DOGFOOD_LOG.md
 const RELEASE_EVIDENCE_FILES = ["test-evidence.json", "pi-install-evidence.json", "worker-safety-evidence.json", "release-integrity-evidence.json"];
 const M10_BASELINE_ENTRIES = ["m10-baseline", "m10-baseline.tgz", "m10-baseline.tgz.sha256"];
 export const BUNDLE_MANIFEST = "review-bundle-files.json";
+const BUNDLE_OUTPUT_MARKERS = [BUNDLE_MANIFEST, "REVIEW_EVIDENCE.json", "release-manifest.json"];
 const REQUIRED_ROOT_FILES = ["artifact-files.txt", "release-manifest.json", "verification.json", "package.json", "privacy-report.json", ...RELEASE_EVIDENCE_FILES, "REVIEW_PROMPT.md", "REVIEW_EVIDENCE.json", BUNDLE_MANIFEST];
 const RELEASE_ROOT_FILES = ["artifact-files.txt", "release-manifest.json", "verification.json"];
 
@@ -76,8 +78,21 @@ const assertEmptyOrForce = async (output, force) => {
 		throw error;
 	});
 	if (entries.length > 0 && !force) fail(`review bundle output is not empty: ${output}; use --force to overwrite it`);
-	if (entries.length > 0) await rm(output, { recursive: true, force: true });
+	if (entries.length > 0) {
+		for (const marker of BUNDLE_OUTPUT_MARKERS) {
+			const details = await lstat(join(output, marker)).catch(() => undefined);
+			if (!details || details.isSymbolicLink() || !details.isFile()) fail("refusing --force on a directory that is not a review-bundle output");
+		}
+		await rm(output, { recursive: true, force: true });
+	}
 	await mkdir(output, { recursive: true });
+};
+
+const assertBundlePrivacy = async (bundle, artifact) => {
+	const binaryFiles = new Set([artifact, "m10-baseline.tgz"]);
+	const report = await scanPrivacy(bundle);
+	const issues = report.issues.filter((issue) => !(issue.kind === "nul-byte" && binaryFiles.has(issue.path)));
+	if (issues.length > 0) fail(`review bundle privacy scan failed: ${issues.map((issue) => `${issue.path}: ${issue.kind}`).join(", ")}`);
 };
 
 const bundleRecords = async (bundle, excluded = new Set()) => {
@@ -178,6 +193,7 @@ Inspect ${artifact} for ${manifest.package?.name ?? "unknown"}@${manifest.packag
 		result: null,
 		findings: [],
 	}, null, 2)}\n`, "utf8");
+	await assertBundlePrivacy(target, artifact);
 	const { rootSha256 } = await writeBundleIntegrityManifest(target);
 	const rootFile = resolve(`${target}.root.sha256`);
 	await writeFile(rootFile, `${rootSha256}  ${basename(target)}/${BUNDLE_MANIFEST}\n`, "utf8");
@@ -192,6 +208,7 @@ export async function verifyReviewBundle(bundleDir, expectedRootSha256) {
 	const artifact = manifest.artifact?.file;
 	if (typeof artifact !== "string") fail("bundle manifest has no artifact");
 	await verifyReleaseDirectory(bundle);
+	await assertBundlePrivacy(bundle, artifact);
 	const expected = new Set([...REQUIRED_ROOT_FILES, ...M10_BASELINE_ENTRIES, ...REVIEW_DOCS, artifact, `${artifact}.sha256`, DIRECTORY_SOURCE]);
 	const actual = await readdir(bundle);
 	for (const name of actual) if (!expected.has(name)) fail(`unexpected review bundle entry: ${name}`);

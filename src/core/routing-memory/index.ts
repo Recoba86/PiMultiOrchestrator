@@ -271,6 +271,7 @@ const materiallyEscalated = (left: RoutingSignature, right: RoutingSignature): b
 	return highRiskMismatch || Math.abs(leftScore - rightScore) >= 0.28 && Math.max(leftScore, rightScore) >= 0.42;
 };
 const learnedNormalCompatible = (current: RoutingSignature, stored: RoutingSignature): boolean => {
+	if (current.sensitive || current.destructive || current.risk === "high") return false;
 	if (materiallyEscalated(current, stored)) return false;
 	const currentScore = complexityScore(current);
 	const storedScore = complexityScore(stored);
@@ -914,7 +915,14 @@ export class RoutingMemoryStore {
 		try { names = await readdir(join(this.root, this.historyDir)); } catch { return []; }
 		const entries: StoredRoutingMemory[] = [];
 		for (const name of names.filter((item) => /^routing-memory-\d{20}\.json$/u.test(item))) {
-			try { entries.push(parseStored(JSON.parse(await readFile(join(this.root, this.historyDir, name), "utf8")) as unknown).stored); } catch { /* corrupt history is isolated */ }
+			try {
+				const parsed = parseStored(JSON.parse(await readFile(join(this.root, this.historyDir, name), "utf8")) as unknown);
+				if (parsed.diagnostics.length > 0) throw new ConfigRecoveryError("history-entry-invalid");
+				entries.push(parsed.stored);
+			} catch (error) {
+				if (error instanceof ConfigRecoveryError) throw error;
+				throw new ConfigRecoveryError("history-entry-invalid");
+			}
 		}
 		return entries.sort((left, right) => right.generation - left.generation);
 	}

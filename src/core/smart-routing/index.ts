@@ -424,6 +424,9 @@ export interface TriageRequest {
 	readonly local: Pick<LocalSignalAnalysis, "missionScore" | "confidence" | "signals">;
 }
 
+export const MAX_TRIAGE_PROMPT_LENGTH = 16_384;
+const boundedTriagePrompt = (prompt: string): string => prompt.length <= MAX_TRIAGE_PROMPT_LENGTH ? prompt : prompt.slice(0, MAX_TRIAGE_PROMPT_LENGTH);
+
 export type TriageFailureClass = "auth" | "quota" | "timeout" | "unavailable" | "malformed" | "protocol" | "transport" | "cancelled";
 
 export class TriageCapabilityError extends Error {
@@ -456,7 +459,7 @@ export const TRIAGE_SYSTEM_PROMPT = [
 ].join(" ");
 
 export const buildTriagePrompt = (request: TriageRequest): string => JSON.stringify({
-	userPrompt: request.prompt,
+	userPrompt: boundedTriagePrompt(request.prompt),
 	localSignals: request.local.signals,
 	localMissionScore: request.local.missionScore,
 	localConfidence: request.local.confidence,
@@ -531,8 +534,13 @@ async function callWithTimeout(client: TriageClient, request: TriageRequest, rou
 	const started = Date.now();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
+		if (parentSignal?.aborted) return { failure: "cancelled", latencyMs: Date.now() - started };
 		const timeout = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => { controller.abort(); reject(new TriageCapabilityError("timeout")); }, timeoutMs); });
-		try { return { result: await Promise.race([client.classify(request, routeId, signal), timeout]), latencyMs: Date.now() - started }; }
+		try {
+			const result = await Promise.race([client.classify(request, routeId, signal), timeout]);
+			if (parentSignal?.aborted) return { failure: "cancelled", latencyMs: Date.now() - started };
+			return { result, latencyMs: Date.now() - started };
+		}
 		catch (error) { return { failure: signal.aborted && parentSignal?.aborted ? "cancelled" : classifyFailure(error), latencyMs: Date.now() - started }; }
 	} finally {
 		if (timer !== undefined) clearTimeout(timer);
@@ -549,7 +557,8 @@ export class SmartRouter {
 		const settings = validateSmartRoutingSettings(await (typeof this.options.settings === "function" ? this.options.settings() : this.options.settings));
 		const local = analyzeLocalSignals(prompt);
 		if (!settings.enabled) return { mode: "NORMAL", local, confidence: local.confidence, reasonCodes: ["smart_routing_disabled"] };
-		const memory = context?.memoryRecommendation;
+		const rawMemory = context?.memoryRecommendation;
+		const memory = rawMemory?.mode === "NORMAL" && (local.signals.includes("high_consequence") || local.signals.includes("destructive_sensitive")) ? undefined : rawMemory;
 		const memoryReasons = memory?.reasonCodes?.filter((code): code is RoutingReasonCode => ROUTING_REASON_SET.has(code)) ?? [];
 		const memoryDecision = memory && (memory.source !== undefined || memory.action !== undefined || memory.confidence !== undefined || memory.similarity !== undefined || memory.conflict !== undefined || memory.ruleId !== undefined)
 			? { memory: { ...(memory.source === undefined ? {} : { source: memory.source }), ...(memory.action === undefined ? {} : { action: memory.action }), ...(memory.confidence === undefined ? {} : { confidence: memory.confidence }), ...(memory.similarity === undefined ? {} : { similarity: memory.similarity }), ...(memory.conflict === undefined ? {} : { conflict: memory.conflict }), ...(memory.ruleId === undefined ? {} : { ruleId: memory.ruleId }) } }
@@ -562,7 +571,7 @@ export class SmartRouter {
 
 		const primary = settings.aiTriageEnabled ? settings.primaryRouteId : undefined;
 		if (!primary || !this.options.triageClient) return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: unique([...local.signals, ...memoryReasons, "triage_unavailable"]), ...memoryDecision };
-		const request: TriageRequest = { prompt, local: { missionScore: local.missionScore, confidence: local.confidence, signals: local.signals } };
+		const request: TriageRequest = { prompt: boundedTriagePrompt(prompt), local: { missionScore: local.missionScore, confidence: local.confidence, signals: local.signals } };
 		const primaryAttempt = await callWithTimeout(this.options.triageClient, request, primary, this.timeoutMs, signal);
 		if (primaryAttempt.result) return this.fromTriage(local, primary, primaryAttempt.result, primaryAttempt.latencyMs, false, 1, primary, context?.memoryRecommendation);
 		const failure = primaryAttempt.failure ?? "transport";

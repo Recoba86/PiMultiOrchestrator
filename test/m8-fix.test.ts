@@ -140,7 +140,7 @@ test("[M8-FIX] mission child usage/fallback and quality decisions reach durable 
 		assert.equal(mission.getTask(task.taskId)?.status, "execution_completed");
 
 		const quality = new QualityService(mission);
-		const rejectedRun = quality.startVerification({ missionId: "mission-m8", taskId: task.taskId, targetRunId: result.run.runId, round: 0, implementationRouteId: route("route-b"), reviewerRouteId: route("route-review") });
+		const rejectedRun = quality.startVerification({ missionId: "mission-m8", taskId: task.taskId, targetRunId: result.attempt.attemptId, round: 0, implementationRouteId: route("route-b"), reviewerRouteId: route("route-review") });
 		const rejected = quality.completeVerification(rejectedRun.verificationId, {
 			verdict: "reject",
 			criterionResults: [{ criterion: "reviewer approves", status: "failed", mandatory: true, evidenceSummary: "fixture rejection" }],
@@ -153,7 +153,9 @@ test("[M8-FIX] mission child usage/fallback and quality decisions reach durable 
 		assert.equal(rejected.decision.verdict, "reject");
 		appendQualityEvent(analyticsStore, "quality-m8-reject", { verificationId: rejectedRun.verificationId, repairRound: 0, firstPass: false });
 
-		const passedRun = quality.startVerification({ missionId: "mission-m8", taskId: task.taskId, targetRunId: "run-m8-repair", round: 1, implementationRouteId: route("route-b"), reviewerRouteId: route("route-review") });
+		const repairAttempt = mission.createAttempt({ taskId: task.taskId, attemptId: "run-m8-repair" });
+		mission.finishAttempt(repairAttempt.attemptId, "succeeded");
+		const passedRun = quality.startVerification({ missionId: "mission-m8", taskId: task.taskId, targetRunId: repairAttempt.attemptId, round: 1, implementationRouteId: route("route-b"), reviewerRouteId: route("route-review") });
 		const passed = quality.completeVerification(passedRun.verificationId, {
 			verdict: "pass",
 			criterionResults: [{ criterion: "reviewer approves", status: "satisfied", mandatory: true, evidenceSummary: "fixture repaired" }],

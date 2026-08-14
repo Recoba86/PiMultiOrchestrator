@@ -64,6 +64,7 @@ test("release script emits a verified artifact outside the checkout", () => {
 		untrackedIncluded: boolean;
 		sourceDigest: string;
 		testDefinition: { command: string; digest: string };
+		package: { version: string };
 	};
 	assert.equal(releaseManifest.schemaVersion, 3);
 	assert.equal(releaseManifest.artifact.file, artifact);
@@ -88,6 +89,38 @@ test("release script emits a verified artifact outside the checkout", () => {
 	assert.match(releaseManifest.sourceDigest, /^[0-9a-f]{64}$/u);
 	assert.equal(releaseManifest.testDefinition.command, "npm run check");
 	assert.match(releaseManifest.testDefinition.digest, /^[0-9a-f]{64}$/u);
+	releaseManifest.package.version = "0.1.0-rc.13";
+	writeFileSync(join(output, "release-manifest.json"), `${JSON.stringify(releaseManifest)}\n`, "utf8");
+	const verifierCode = `import { verifyReleaseDirectory } from ${JSON.stringify(join(root, "scripts", "release-candidate.mjs"))}; try { await verifyReleaseDirectory(process.argv[1]); process.exit(1); } catch { console.log("rejected"); }`;
+	assert.equal(execFileSync(process.execPath, ["--input-type=module", "-e", verifierCode, output], { cwd: root, encoding: "utf8" }).trim(), "rejected");
+});
+
+test("release verification refuses skipped or todo TAP work", () => {
+	const verifier = JSON.stringify(join(root, "scripts", "run-release-verification.mjs"));
+	for (const line of ["# skipped 1", "# todo 1"]) {
+		const counts = line === "# skipped 1" ? "# skipped 1\n# todo 0" : "# skipped 0\n# todo 1";
+		const tap = `# tests 2\n# suites 1\n# pass 1\n# fail 0\n# cancelled 0\n${counts}\n# duration_ms 1\n`;
+		const code = `import { parseTapSummary } from ${verifier}; try { parseTapSummary(${JSON.stringify(tap)}); process.exit(1); } catch { console.log("rejected"); }`;
+		assert.equal(execFileSync(process.execPath, ["--input-type=module", "-e", code], { cwd: root, encoding: "utf8" }).trim(), "rejected");
+	}
+});
+
+test("release and review-bundle force modes refuse unrelated directories", () => {
+	const releaseOutput = mkdtempSync(join(tmpdir(), "pi-multi-release-force-test-"));
+	const bundleOutput = mkdtempSync(join(tmpdir(), "pi-multi-bundle-force-test-"));
+	const marker = "user-data-must-survive";
+	writeFileSync(join(releaseOutput, "user-data.txt"), marker, "utf8");
+	writeFileSync(join(bundleOutput, "user-data.txt"), marker, "utf8");
+	let releaseError: unknown;
+	try { execFileSync(process.execPath, [script, "--output", releaseOutput, "--force"], { cwd: root, stdio: "pipe" }); } catch (error) { releaseError = error; }
+	assert.match((releaseError as { stderr?: Buffer }).stderr?.toString() ?? String(releaseError), /refusing --force/u);
+	let bundleError: unknown;
+	try { execFileSync(process.execPath, [join(root, "scripts", "create-review-bundle.mjs"), "--release-dir", root, "--output", bundleOutput, "--force"], { cwd: root, stdio: "pipe" }); } catch (error) { bundleError = error; }
+	assert.match((bundleError as { stderr?: Buffer }).stderr?.toString() ?? String(bundleError), /refusing --force/u);
+	assert.equal(readFileSync(join(releaseOutput, "user-data.txt"), "utf8"), marker);
+	assert.equal(readFileSync(join(bundleOutput, "user-data.txt"), "utf8"), marker);
+	rmSync(releaseOutput, { recursive: true, force: true });
+	rmSync(bundleOutput, { recursive: true, force: true });
 });
 
 test("release verification rejects synthetic secrets and ignores caller test claims", () => {

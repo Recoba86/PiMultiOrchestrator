@@ -678,9 +678,13 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const recommendationAnalyst = options.recommendationAnalyst;
 	const smartRoutingStore = options.smartRoutingStore;
 	let inMemorySmartRoutingSettings = createDefaultSmartRoutingSettings();
+	const disabledSmartRoutingSettings = (): SmartRoutingSettings => ({ ...createDefaultSmartRoutingSettings(), enabled: false, aiTriageEnabled: false, routingMemoryEnabled: false, learnFromRoutingChoices: false });
 	const loadSmartRoutingSettings = async (): Promise<SmartRoutingSettings> => {
 		if (!smartRoutingStore) return inMemorySmartRoutingSettings;
-		try { return (await smartRoutingStore.load()).settings; } catch { return createDefaultSmartRoutingSettings(); }
+		try {
+			const loaded = await smartRoutingStore.load();
+			return loaded.status === "corrupt" ? disabledSmartRoutingSettings() : loaded.settings;
+		} catch { return disabledSmartRoutingSettings(); }
 	};
 	const updateSmartRoutingSettings = async (mutator: (draft: SmartRoutingSettings) => SmartRoutingSettings): Promise<void> => {
 		if (!smartRoutingStore) {
@@ -1922,11 +1926,11 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const missionStatusLabel = (mission: MissionRecord): string =>
-		`${mission.missionId} [${mission.status}] rev ${mission.revision} — ${mission.goal}`;
+		`${mission.missionId} [${mission.status}] rev ${mission.revision} — ${mission.goal.replace(/[\r\n\u2028\u2029]+/gu, " ")}`;
 
 	const missionCreatedMessage = (mission: MissionRecord): string => [
 		"Mission created",
-		`Goal: ${mission.goal}`,
+		`Goal: ${mission.goal.replace(/[\r\n\u2028\u2029]+/gu, " ")}`,
 		`Status: ${mission.status}`,
 		`Next: open /missions ${mission.missionId} to add a Task`,
 		`Mission ID: ${mission.missionId}`,
@@ -2105,6 +2109,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 		if (!requireIdle(ctx, "task verification")) return;
 		const task = options.missionStore?.getTask(taskId);
+		if (options.missionStore && !task) {
+			ctx.ui.notify("Task was not found for this mission", "error");
+			return;
+		}
 		if (task && String(task.missionId) !== missionId) {
 			ctx.ui.notify("Task does not belong to the requested mission", "error");
 			return;
@@ -2112,6 +2120,19 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const targetRunId = requestedRunId?.trim() || task?.lastRunId;
 		if (!targetRunId) {
 			ctx.ui.notify("Task verification requires a completed task run; pass a target run id or run the task first", "warning");
+			return;
+		}
+		const targetAttempt = options.missionStore?.getAttempt(targetRunId);
+		if (options.missionStore && !targetAttempt) {
+			ctx.ui.notify("Target run was not found", "error");
+			return;
+		}
+		if (targetAttempt && ((targetAttempt.missionId !== undefined && String(targetAttempt.missionId) !== missionId) || (targetAttempt.taskId !== undefined && String(targetAttempt.taskId) !== taskId))) {
+			ctx.ui.notify("Target run does not belong to the requested mission task", "error");
+			return;
+		}
+		if (targetAttempt?.status === "running") {
+			ctx.ui.notify("Target run must be terminal before verification", "warning");
 			return;
 		}
 		if (ctx.mode !== "tui" && !ctx.hasUI) {
@@ -2129,7 +2150,6 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const packet = task?.packet && typeof task.packet === "object" && typeof (task.packet as Record<string, unknown>).packetId === "string"
 				? String((task.packet as Record<string, unknown>).packetId)
 				: undefined;
-			const targetAttempt = targetRunId ? options.missionStore?.getAttempt(targetRunId) : undefined;
 			const run = qualityService.startVerification({
 				missionId,
 				taskId,
@@ -2596,32 +2616,27 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				recordRoutingDecision(decision, "run_normally", decision.memory);
 				return { action: "continue" };
 			}
-			if (action === "Always orchestrate similar tasks") {
-				if (!routingMemory) {
+				if (action === "Always orchestrate similar tasks") {
+					if (!routingMemory) {
 					ctx.ui.notify("Routing Memory is unavailable; the original prompt will continue normally.", "warning");
 					recordRoutingDecision(decision, "failed", decision.memory);
 					return { action: "continue" };
 				}
-				let explicitRuleId: string | undefined;
-				let explicitRuleCreated = false;
-				try {
-					const saved = routingMemoryRecord(await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature)));
-					explicitRuleId = typeof saved?.id === "string" ? saved.id : undefined;
-					explicitRuleCreated = saved?.created === true;
-				} catch {
-					ctx.ui.notify("The explicit routing preference could not be saved; no Mission was created.", "warning");
-					recordRoutingDecision(decision, "failed", decision.memory);
-					return { action: "handled" };
-				}
-				const mission = createInputMission(ctx, event.text);
-				if (!mission) {
-					if (explicitRuleCreated && explicitRuleId) {
-						try { await Promise.resolve(routingMemory.deleteRule(explicitRuleId)); } catch { ctx.ui.notify("The new routing preference could not be rolled back.", "warning"); }
+					const mission = createInputMission(ctx, event.text);
+					if (!mission) {
+						recordRoutingDecision(decision, "failed", decision.memory);
+						return { action: "continue" };
 					}
-					recordRoutingDecision(decision, "failed", decision.memory);
-					return { action: "continue" };
-				}
-				if (explicitRuleCreated) recordRoutingDecision(decision, "rule_created_explicit", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
+					let explicitRuleCreated = false;
+					try {
+						const saved = routingMemoryRecord(await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature)));
+						explicitRuleCreated = saved?.created === true;
+					} catch {
+						ctx.ui.notify("Mission created; the explicit routing preference could not be saved.", "warning");
+						recordRoutingDecision(decision, "run_as_mission", decision.memory);
+						return { action: "handled" };
+					}
+					if (explicitRuleCreated) recordRoutingDecision(decision, "rule_created_explicit", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
 				recordRoutingDecision(decision, "run_as_mission", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
 				return { action: "handled" };
 			}
@@ -2653,7 +2668,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 		try {
 			const mission = createCanonicalMission(store, invocation.goal, { repositoryCwd: ctx.cwd });
-			appendMissionPointer(mission);
+			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission), "info");
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);

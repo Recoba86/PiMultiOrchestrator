@@ -229,6 +229,23 @@ export interface CommandSafetyResult extends SafetyResult {
 
 function commandResult(command: string, decision: SafetyDecision, reason: string, code: string): CommandSafetyResult { return { command, decision, reason, code }; }
 
+const SAFE_COMMANDS = new Set([
+	"cat", "cmp", "cut", "diff", "echo", "find", "git", "grep", "head", "ls", "mkdir", "mv", "npm", "node", "printf", "pwd", "rm", "rg", "sed", "sort", "tail", "tar", "test", "touch", "uniq", "wc",
+]);
+const NETWORK_COMMANDS = /\b(?:curl|wget|fetch|nc|netcat|telnet|ftp|ssh|scp|sftp|rsync|openssl\s+s_client)\b|\b(?:git\s+(?:push|fetch|pull|clone|remote|ls-remote)|npm\s+(?:publish|install|ci|update|login|logout|adduser|token|access|view|search|exec)|pnpm\s+(?:publish|install|add)|yarn\s+(?:publish|install)|docker\s+push|gh\s+(?:auth|repo|release|api))\b|https?:\/\//iu;
+
+function allowlistedCommand(source: string): boolean {
+	const match = /^\s*([^\s"';&|]+)(?:\s+(.*))?$/u.exec(source);
+	if (!match) return false;
+	const executable = match[1]!.split("/").pop()!.toLowerCase();
+	const args = match[2] ?? "";
+	if (!SAFE_COMMANDS.has(executable)) return false;
+	if (executable === "git" && /\b(?:push|fetch|pull|clone|remote|ls-remote|submodule)\b/iu.test(args)) return false;
+	if (executable === "npm" && !/^(?:test(?:\s|$)|run\s+(?:check|build|typecheck|lint|test)(?:\s|$)|version\s+--show(?:\s|$))/u.test(args)) return false;
+	if (executable === "node" && !/^--version(?:\s|$)/u.test(args)) return false;
+	return true;
+}
+
 /** Conservative command policy. Shell parsing is intentionally bounded; ambiguity is reviewed, not guessed. */
 export class CommandSafetyPolicy {
 	evaluate(command: string, options: CommandSafetyOptions = {}): CommandSafetyResult {
@@ -240,6 +257,7 @@ export class CommandSafetyPolicy {
 		if (/\brm\s+(?:-[^-\s]*r[^\s]*\s+|--recursive\b)|\bfind\b[^\n]*\s-delete\b/iu.test(source)) return commandResult(command, "BLOCK", "recursive destructive deletion is not allowed", "DESTRUCTIVE_DELETE");
 		if (/\bgit\s+(?:reset\s+--hard|clean\s+-[^\n]*f|restore\b|checkout\s+--\b)/iu.test(source)) return commandResult(command, "BLOCK", "destructive Git operation requires explicit recovery tooling", "DESTRUCTIVE_GIT");
 		if (/(?:^|\s)(?:>|>>|<)|\$\(|`|\$[A-Za-z_][A-Za-z0-9_]*|\*\*|\b(?:eval|exec)\b/iu.test(source)) return commandResult(command, "REVIEW_REQUIRED", "shell target cannot be established safely", "AMBIGUOUS_SHELL");
+		if (/[;&|]/u.test(source)) return commandResult(command, "REVIEW_REQUIRED", "compound shell commands require a bounded single command", "COMPOUND_SHELL");
 		if (options.pathPolicy) {
 			const tokens = source.split(/\s+/u).filter((token) => !token.startsWith("-")).map((token) => token.replace(/^['"]|['"]$/gu, "")).filter(Boolean);
 			for (const token of tokens) {
@@ -249,7 +267,9 @@ export class CommandSafetyPolicy {
 		}
 		if (options.trusted === false && /\b(?:edit|write|rm|mv|cp|touch|mkdir|npm\s+install)\b/iu.test(source)) return commandResult(command, "BLOCK", "mutating command requires explicit project trust", "PROJECT_TRUST_REQUIRED");
 		if (options.explicitlyAuthorized) return commandResult(command, "ALLOW", "explicitly authorized bounded command", "AUTHORIZED");
-		return commandResult(command, "ALLOW", "command is within the conservative safe set", "SAFE_COMMAND");
+		if (NETWORK_COMMANDS.test(source)) return commandResult(command, "BLOCK", "network, publication, or remote-shell commands are not allowed", "NETWORK_OR_PUBLICATION");
+		if (!allowlistedCommand(source)) return commandResult(command, "REVIEW_REQUIRED", "command is outside the bounded local command allowlist", "COMMAND_NOT_ALLOWLISTED");
+		return commandResult(command, "ALLOW", "command is within the bounded local command allowlist", "SAFE_COMMAND");
 	}
 }
 
