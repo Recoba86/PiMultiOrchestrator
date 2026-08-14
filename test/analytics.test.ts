@@ -10,7 +10,7 @@ const event = (id: string, patch: Partial<AnalyticsEventV1> = {}): AnalyticsEven
 test("analytics store is privacy-minimal and idempotent across reopen", () => {
 	const root = mkdtempSync(join(tmpdir(), "pmo-analytics-"));
 	const first = new SQLiteAnalyticsStore({ root, enabled: true });
-	assert.equal(first.append(event("run-1", { dimensions: { safe: true, innocuous: "RAW_DIMENSION_MARKER", Authorization: "Bearer secret-analytics-token", prompt: "private task text" }, tokenUsage: { inputTokens: 3, outputTokens: 2, provenance: "observed" } })), true);
+	assert.equal(first.append(event("run-1", { dimensions: { fixture: true, fallbackCount: 2, reviewerRouteId: "route-review", safe: true, innocuous: "RAW_DIMENSION_MARKER", Authorization: "Bearer secret-analytics-token", prompt: "private task text" }, tokenUsage: { inputTokens: 3, outputTokens: 2, provenance: "observed" } })), true);
 	assert.equal(first.append(event("run-1", { outcome: "failed" })), false);
 	first.close();
 	const second = new SQLiteAnalyticsStore({ root, enabled: true });
@@ -18,6 +18,7 @@ test("analytics store is privacy-minimal and idempotent across reopen", () => {
 	assert.equal(JSON.stringify(second.list()).includes("prompt"), false);
 	assert.equal(JSON.stringify(second.list()).includes("secret-analytics-token"), false);
 	assert.equal(JSON.stringify(second.list()).includes("RAW_DIMENSION_MARKER"), false);
+	assert.deepEqual(second.list()[0]?.dimensions, { fixture: true, fallbackCount: 2, reviewerRouteId: "route-review" });
 	second.close();
 });
 

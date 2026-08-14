@@ -325,8 +325,14 @@ const safeCost = (cost: AnalyticsCost | undefined): AnalyticsCost | undefined =>
 };
 const safeDimensions = (dimensions: AnalyticsEventV1["dimensions"]): AnalyticsEventV1["dimensions"] | undefined => {
 	if (!dimensions) return undefined;
+	const fixture = boolValue(dimensions.fixture);
 	const fallbackCount = numberValue(dimensions.fallbackCount);
-	return fallbackCount === undefined ? undefined : { fallbackCount };
+	const reviewerRouteId = safeMetadataText(dimensions.reviewerRouteId, 64);
+	return fixture === undefined && fallbackCount === undefined && reviewerRouteId === undefined ? undefined : {
+		...(fixture === undefined ? {} : { fixture }),
+		...(fallbackCount === undefined ? {} : { fallbackCount }),
+		...(reviewerRouteId === undefined ? {} : { reviewerRouteId }),
+	};
 };
 
 export function estimateReferenceCost(usage: AnalyticsTokenUsage, pricing: ReferencePricingV1, billingMode: "metered_api" | "subscription" | "free" | "unknown" = "metered_api"): ReferenceCostEstimate {
