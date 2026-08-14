@@ -49,7 +49,7 @@ test("worker profiles cannot expand into mutation or unsafe shell execution", as
 		assert.equal(unknownProtocol.authorize("submit_evil", {}).code, "TOOL_NOT_ACTIVE");
 		const implementation = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["bash"] });
 		assert.equal(implementation.authorize("bash", { command: "git reset --hard HEAD" }).code, "DESTRUCTIVE_GIT");
-		for (const command of ["npm test", "npm run build", "npm publish", "git commit -m save", "git archive HEAD", "git -c core.fsmonitor=hook status", "git push origin main", "ssh host", "curl https://example.test", "node scripts/exfiltrate.mjs", "cat *", "cat .??*", "grep -R . .", "rm *", "mv * safe"]) {
+		for (const command of ["npm test", "npm run build", "npm publish", "git commit -m save", "git diff -- src/index.ts", "git show HEAD:.env", "git archive HEAD", "git -c core.fsmonitor=hook status", "git push origin main", "ssh host", "curl https://example.test", "node scripts/exfiltrate.mjs", "cat *", "cat .??*", "grep -R . .", "rm *", "mv * safe"]) {
 			assert.notEqual(implementation.authorize("bash", { command }).decision, "ALLOW", command);
 		}
 		const bounded = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["grep", "find"] });

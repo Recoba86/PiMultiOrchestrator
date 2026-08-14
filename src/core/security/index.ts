@@ -268,9 +268,9 @@ function allowlistedCommand(source: string): boolean {
 	const executable = match[1]!.split("/").pop()!.toLowerCase();
 	const args = match[2] ?? "";
 	if (!SAFE_COMMANDS.has(executable)) return false;
-	if (executable === "git" && !/^(?:status|diff|log|show|ls-files|rev-parse|branch|describe|check-ignore)(?:\s|$)/u.test(args)) return false;
+	if (executable === "git" && !/^(?:status|log|ls-files|rev-parse|branch|describe|check-ignore)(?:\s|$)/u.test(args)) return false;
 	if (executable === "git" && /\b(?:push|fetch|pull|clone|remote|ls-remote|submodule)\b/iu.test(args)) return false;
-	if (executable === "git" && /\barchive\b|(?:^|\s)(?:-c|--config-env)(?:\s|=)/iu.test(args)) return false;
+	if (executable === "git" && /\b(?:archive|show|cat-file|grep)\b|(?:^|\s)(?:-c|--config-env|-p|--patch)(?:\s|=|$)/iu.test(args)) return false;
 	if (executable === "node" && !/^--version(?:\s|$)/u.test(args)) return false;
 	return true;
 }
