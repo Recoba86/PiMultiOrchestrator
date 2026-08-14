@@ -129,24 +129,36 @@ test("release and review-bundle force modes refuse unrelated directories", () =>
 	rmSync(bundleOutput, { recursive: true, force: true });
 });
 
-test("release output rejects symlink targets and symlinked paths into the checkout", () => {
+test("release and review-bundle outputs reject symlink targets and symlinked paths into the checkout", () => {
 	const target = mkdtempSync(join(tmpdir(), "pi-multi-release-symlink-target-"));
+	const bundleTarget = mkdtempSync(join(tmpdir(), "pi-multi-bundle-symlink-target-"));
 	const link = join(tmpdir(), `pi-multi-release-symlink-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+	const bundleLink = join(tmpdir(), `pi-multi-bundle-symlink-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 	const checkoutLink = join(tmpdir(), `pi-multi-release-checkout-link-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 	try {
 		symlinkSync(target, link, "dir");
+		symlinkSync(bundleTarget, bundleLink, "dir");
 		symlinkSync(root, checkoutLink, "dir");
 		let linkError: unknown;
 		try { execFileSync(process.execPath, [script, "--output", link], { cwd: root, stdio: "pipe" }); } catch (error) { linkError = error; }
 		assert.match((linkError as { stderr?: Buffer }).stderr?.toString() ?? String(linkError), /real directory/u);
 		assert.deepEqual(readdirSync(target), []);
+		let bundleLinkError: unknown;
+		try { execFileSync(process.execPath, [join(root, "scripts", "create-review-bundle.mjs"), "--release-dir", root, "--output", bundleLink], { cwd: root, stdio: "pipe" }); } catch (error) { bundleLinkError = error; }
+		assert.match((bundleLinkError as { stderr?: Buffer }).stderr?.toString() ?? String(bundleLinkError), /real directory/u);
+		assert.deepEqual(readdirSync(bundleTarget), []);
 		let checkoutError: unknown;
 		try { execFileSync(process.execPath, [script, "--output", join(checkoutLink, "release")], { cwd: root, stdio: "pipe" }); } catch (error) { checkoutError = error; }
 		assert.match((checkoutError as { stderr?: Buffer }).stderr?.toString() ?? String(checkoutError), /outside the source checkout/u);
+		let bundleCheckoutError: unknown;
+		try { execFileSync(process.execPath, [join(root, "scripts", "create-review-bundle.mjs"), "--release-dir", root, "--output", join(checkoutLink, "bundle")], { cwd: root, stdio: "pipe" }); } catch (error) { bundleCheckoutError = error; }
+		assert.match((bundleCheckoutError as { stderr?: Buffer }).stderr?.toString() ?? String(bundleCheckoutError), /outside the source checkout/u);
 	} finally {
 		rmSync(link, { force: true });
+		rmSync(bundleLink, { force: true });
 		rmSync(checkoutLink, { force: true });
 		rmSync(target, { recursive: true, force: true });
+		rmSync(bundleTarget, { recursive: true, force: true });
 	}
 });
 

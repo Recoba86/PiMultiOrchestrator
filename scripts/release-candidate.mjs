@@ -27,13 +27,13 @@ const isPathInside = (parent, candidate) => {
 	return child === "" || (child !== ".." && !child.startsWith(`..${sep}`));
 };
 
-const assertReleaseOutputTarget = async (target) => {
-	if (isPathInside(REPO_ROOT, target)) fail("release output must be outside the source checkout");
+export const assertExternalOutputTarget = async (target, label = "release output") => {
+	if (isPathInside(REPO_ROOT, target)) fail(`${label} must be outside the source checkout`);
 	const targetDetails = await lstat(target).catch((error) => {
 		if (error?.code === "ENOENT") return undefined;
 		throw error;
 	});
-	if (targetDetails?.isSymbolicLink() || (targetDetails && !targetDetails.isDirectory())) fail("release output must be a real directory");
+	if (targetDetails?.isSymbolicLink() || (targetDetails && !targetDetails.isDirectory())) fail(`${label} must be a real directory`);
 	const missing = [];
 	let ancestor = target;
 	while (true) {
@@ -43,9 +43,9 @@ const assertReleaseOutputTarget = async (target) => {
 		});
 		if (details) {
 			const realAncestor = await realpath(ancestor);
-			if (!(await stat(realAncestor)).isDirectory()) fail("release output parent must be a directory");
+			if (!(await stat(realAncestor)).isDirectory()) fail(`${label} parent must be a directory`);
 			const realTarget = resolve(realAncestor, ...missing.reverse());
-			if (isPathInside(REPO_ROOT, realTarget)) fail("release output must be outside the source checkout");
+			if (isPathInside(REPO_ROOT, realTarget)) fail(`${label} must be outside the source checkout`);
 			return;
 		}
 		const parent = dirname(ancestor);
@@ -699,7 +699,7 @@ export async function bindReleaseEvidence(directory) {
 
 export async function buildReleaseCandidate({ output, force = false } = {}) {
 	const target = resolve(output ?? DEFAULT_OUTPUT);
-	await assertReleaseOutputTarget(target);
+	await assertExternalOutputTarget(target);
 	const targetEntries = await readdir(target).catch((error) => {
 		if (error?.code === "ENOENT") return [];
 		throw error;

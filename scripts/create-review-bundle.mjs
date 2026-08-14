@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { cp, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	DIRECTORY_SOURCE,
+	assertExternalOutputTarget,
 	inspectTree,
 	releaseBindingFor,
 	scanPrivacy,
@@ -33,10 +34,6 @@ const canonical = (value) => {
 	return JSON.stringify(value);
 };
 const equalJson = (left, right) => canonical(left) === canonical(right);
-const isPathInside = (parent, candidate) => {
-	const child = relative(parent, candidate);
-	return child === "" || (child !== ".." && !child.startsWith(`..${sep}`));
-};
 const assertMachineNeutral = (value, name) => {
 	if (/(?:\/(?:Users|private|home|var\/folders)\/|[A-Z]:[\\/]+Users[\\/]+)/u.test(JSON.stringify(value))) fail(`${name} contains an absolute private machine path`);
 };
@@ -143,7 +140,7 @@ export async function verifyBundleIntegrity(bundleDir, expectedRootSha256) {
 export async function createReviewBundle({ releaseDir, output, force = false }) {
 	const source = resolve(releaseDir);
 	const target = resolve(output);
-	if (isPathInside(root, target)) fail("review bundle output must be outside the source checkout");
+	await assertExternalOutputTarget(target, "review bundle output");
 	const sourceStat = await lstat(source);
 	if (sourceStat.isSymbolicLink() || !sourceStat.isDirectory()) fail("release directory must be a real directory");
 	await assertEmptyOrForce(target, force);

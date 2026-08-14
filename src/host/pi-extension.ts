@@ -2530,18 +2530,20 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				dispose: async () => { await rm(root, { recursive: true, force: true }); },
 			};
 		} catch {
-			await rm(root, { recursive: true, force: true }).catch(() => undefined);
+			await rm(root, { recursive: true, force: true });
 			throw new Error("routing-memory-backup-failed");
 		}
 	};
 	const runCancellableMemoryMutation = async <T>(memory: RoutingMemoryHostAdapter, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<{ readonly value?: T; readonly cancelled: boolean }> => {
 		if (signal?.aborted) return { cancelled: true };
 		const rollback = signal === undefined ? undefined : await prepareRoutingMemoryRollback(memory);
-		let rolledBack = false;
+		let rollbackAttempted = false;
+		let rollbackFailure: unknown;
 		const rollbackIfNeeded = async (): Promise<void> => {
-			if (rolledBack || rollback === undefined) return;
-			rolledBack = true;
-			await rollback.rollback();
+			if (rollbackAttempted || rollback === undefined) return;
+			rollbackAttempted = true;
+			try { await rollback.rollback(); }
+			catch (error) { rollbackFailure = error; throw error; }
 		};
 		try {
 			if (signal?.aborted) return { cancelled: true };
@@ -2551,10 +2553,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			return { cancelled: true };
 		} catch (error) {
 			if (!signal?.aborted) throw error;
+			if (rollbackFailure !== undefined) throw rollbackFailure;
 			await rollbackIfNeeded();
+			if (rollbackFailure !== undefined) throw rollbackFailure;
 			return { cancelled: true };
 		} finally {
-			try { await rollback?.dispose(); } catch { /* temporary cleanup is non-critical */ }
+			await rollback?.dispose();
 		}
 	};
 	const discardCancelledMemoryRule = async (memory: RoutingMemoryHostAdapter, value: unknown): Promise<void> => {
