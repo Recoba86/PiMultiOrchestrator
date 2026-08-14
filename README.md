@@ -4,18 +4,18 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The current local candidate is `0.1.0-rc.12`; rc.1 through rc.11 are historical
-candidates. rc.12 includes M12.3 Adaptive Routing Memory and builds only from exact Git content,
+The current local candidate is `0.1.0-rc.13`; rc.1 through rc.12 are historical
+candidates. rc.13 includes the M12 final routing-gate repairs and builds only from exact Git content,
 independently reruns the bound test definition, recursively authenticates the
 review bundle against an externally supplied root digest, and retains rc.3's
 independently passing worker-safety boundary. It remains local, not public or
 production-ready. M12.1, M12.2, and M12.3 have local verification evidence;
-the focused M12.3 review passed, while the M12 final routing gate, External
-Review #5, and Planner/manual acceptance remain pending.
+the M12 final routing gate passed locally, while External Review #5 and
+Planner/manual acceptance remain pending.
 
-M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. The M12 final routing gate is not started. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
+M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. The local M12 final routing gate passed on RC13 with deterministic corpus, isolated Pi lifecycle, bounded real AI Triage, safety, latency, and release-verifier evidence. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox; M12.1, M12.2, and M12.3 isolated Pi evidence passed, while external review, the final routing gate, and human/Planner acceptance remain open validation. M11's local RC and M12 local candidates are not public or production-ready; applicable release acceptance remains open. A quality PASS is not by itself mission completion, canonical evidence admission, or release readiness.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox; M12.1, M12.2, M12.3, and the local M12 final gate have passed their recorded local evidence, while external review and human/Planner acceptance remain open validation. M11's local RC and M12 local candidates are not public or production-ready; applicable release acceptance remains open. A quality PASS is not by itself mission completion, canonical evidence admission, or release readiness.
 
 The implementation contract is split across the repository files
 `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`,
@@ -83,7 +83,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M12.3 implementation work did not modify any live environment. M10 is the latest accepted milestone; M11, M12.1, M12.2, and M12.3 are local, implemented-but-not-accepted work. Focused M12.3 review passed, but the final routing gate, external review, Planner/manual acceptance, and publication remain open. See `docs/ROADMAP.md` for the release gate.
+M1 through M12 final-gate work did not modify any live environment. M10 is the latest accepted milestone; M11, M12.1, M12.2, M12.3, and the M12 final gate are local, implemented-but-not-accepted work. The final routing gate passed locally, but external review, Planner/manual acceptance, and publication remain open. See `docs/ROADMAP.md` for the release gate.
 
 ## M9 accepted capability snapshot
 

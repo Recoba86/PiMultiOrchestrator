@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, and M12.3 are implemented local-pass work; M12.3 detached RC.12 verification passed, but the M12 Final Gate is not started. M10 remains the latest accepted milestone.
+Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC13 verification and bounded live dogfood passed. M10 remains the latest accepted milestone.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -257,14 +257,37 @@ reset with explicit confirmation. Routing telemetry is allowlisted metadata;
 raw prompts, transcripts, tool output, provider responses, and credentials are
 excluded.
 
-Local evidence: Analytics `9/9`, Routing Memory `14/14`, Smart Router `13/13`,
-provider host `25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1`
-pass (`61/61` focused tests). The detached RC.12 verifier also passed `212/212`
-tests, `20/20` integrity attacks, Pi install/upgrade/rollback/rescue, privacy,
-and worker safety. Focused independent review of the exact source commit passed
-with no unresolved blocker/high; the M12 Final Routing Gate, external review,
+Local evidence: Analytics `9/9`, Routing Memory `14/14`, Smart Router `14/14`,
+provider host `25/25`, and isolated Pi `0.84.1` RPC/TUI dogfood passed. The
+detached RC13 verifier passed `214/214` tests, `20/20` integrity attacks, Pi
+install/upgrade/rollback/rescue, privacy, and worker safety. Focused review of
+the exact source commit found no unresolved blocker/high. External review,
 Planner/manual acceptance, and publication remain separate pending gates.
 
 ### M12 Final Gate — Routing Dogfood
 
-Status: NOT STARTED.
+Status: COMPLETE / LOCAL PASS; not accepted, public, or production-ready.
+
+Evidence:
+
+- balanced deterministic English/Persian/mixed corpus: `360/360` expected
+  classifications, with `120` cases per path and zero errors;
+- isolated Pi `0.84.1` RPC/PTY dogfood covering explicit entry, normal-input
+  isolation, Smart Routing, Routing Memory, restart, disable, stale routes,
+  direct-worker/M7 labeling, and a composed Smart-routed Mission → Task → Run
+  → M7 pass using a FakeNineRouter fixture;
+- bounded real 9Router inference in disposable roots: ten ambiguous sessions,
+  `20` triage calls, `9` fallback successes, `1` timeout degradation, and no
+  raw prompt telemetry; no live Pi configuration was modified;
+- RC13 `npm run check`: `214/214 PASS`; detached release verification:
+  `20/20` integrity attacks, privacy, worker safety, and Pi `0.84.1`
+  install/upgrade/rollback/rescue PASS;
+- artifact SHA-256
+  `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`, source
+  digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`,
+  review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
+
+The local final gate is not a public release or acceptance handoff. External
+Review #5 is `EXTERNAL_REVIEW_PENDING`; Planner/manual acceptance, human
+acceptance, tags, push, npm publication, and GitHub release remain pending or
+unauthorized.

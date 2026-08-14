@@ -1027,3 +1027,34 @@ review-bundle root SHA-256 is
 Focused independent review of that exact commit is PASS with no unresolved
 blocker/high; the M12 Final Routing Gate, external review, Planner/manual
 acceptance, and publication remain separate.
+
+## 22. M12 Final Routing Gate evidence
+
+The RC13 local final-gate run revalidated the M12.1–M12.3 boundary and the
+end-to-end routing surface without promoting the result to product acceptance:
+
+- balanced English/Persian/mixed analyzer corpus: `360/360` expected paths,
+  `120` simple, `120` complex, `120` ambiguous, zero errors;
+- bounded adversarial analyzer/parser inputs: `13/13` exception-free, with
+  explicit invocation recognized and embedded invocation rejected;
+- isolated Pi `0.84.1` RPC/PTY dogfood: explicit entry, normal-input isolation,
+  Smart Routing, Routing Memory persistence/disable/restart, stale routes,
+  Direct Worker/M7 labeling, and composed Smart-routed Mission → Task → Run →
+  M7 PASS. The composed lifecycle uses FakeNineRouter; current live-provider
+  M7 is not re-claimed by this entry;
+- fresh disposable-root real 9Router Triage: ten ambiguous sessions, `20`
+  calls, `9` capability-only fallback successes, `1` timeout degradation, and
+  no raw prompt telemetry;
+- RC13 `npm run check`: `214/214 PASS`; detached release verifier: `20/20`
+  integrity attacks, privacy, worker safety, and Pi `0.84.1`
+  install/upgrade/rollback/rescue PASS; focused review has no unresolved
+  blocker/high;
+- artifact SHA-256 `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`,
+  source commit `8d8e36a9526c6edd106d36fa8cb5069cda517405`, source digest
+  `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`, and
+  review-bundle root
+  `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
+
+External Review #5 remains `EXTERNAL_REVIEW_PENDING`; Planner/manual acceptance,
+public release, tags, push, npm publication, and GitHub release remain separate
+pending or unauthorized gates.

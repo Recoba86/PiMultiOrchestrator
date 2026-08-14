@@ -3,6 +3,40 @@
 This is an auditable local record. It contains no prompts, transcripts, tool
 output, credentials, or live-provider data.
 
+## M12 Final Routing Gate — RC13 local closeout
+
+- **Date:** 2026-08-14.
+- **Candidate/source:** `pi-multi-orchestrator@0.1.0-rc.13`, source commit
+  `8d8e36a9526c6edd106d36fa8cb5069cda517405`; local-only and unpublished.
+- **Deterministic dogfood:** a balanced English/Persian/mixed corpus of `360`
+  cases (`120` per expected path) classified with zero errors. Bounded empty,
+  whitespace, 1 MiB, Unicode, RTL/LTR, Markdown, multiline, and invocation
+  inputs were `13/13` exception-free; explicit invocation was recognized and
+  embedded invocation was rejected.
+- **Pi/TUI-equivalent dogfood:** isolated Pi `0.84.1` RPC/PTY sessions passed
+  normal-input isolation, explicit Mission entry, Smart Routing recommendation,
+  Routing Memory cross-language persistence/disable/restart, stale-route
+  degradation, Direct Worker/M7 labeling, and the composed Smart-routed
+  Mission → Task → Run → M7 lifecycle. The composed lifecycle used a local
+  FakeNineRouter; no current live-provider M7 claim is made here.
+- **Real 9Router dogfood:** ten fresh disposable-root ambiguous sessions
+  completed with `20` bounded Triage calls: `7` suggestions, `3` normal
+  decisions, `9` capability-only fallback successes, and one timeout
+  degradation. Durations were approximately `6.3–10.7 s`. A Primary-only
+  probe did not invoke fallback when no Fallback was configured. Credentials
+  were injected into process memory only; no raw prompt or provider response
+  entered persisted analytics.
+- **Offline/release evidence:** `npm run check` passed `214/214`; detached RC13
+  verification passed `20/20` integrity attacks, privacy, worker safety, and
+  Pi `0.84.1` install/upgrade/rollback/rescue. Artifact SHA-256 is
+  `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`; source
+  digest is `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`;
+  review-bundle root is
+  `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
+- **Boundary:** focused review found no unresolved blocker/high. M10 remains
+  the latest accepted milestone. External Review #5, Planner/manual acceptance,
+  and publication remain separate gates; no live Pi configuration was modified.
+
 ## M12.3 — Adaptive Routing Memory closeout
 
 - **Date:** 2026-08-14.

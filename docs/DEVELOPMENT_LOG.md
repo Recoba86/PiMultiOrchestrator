@@ -4,6 +4,34 @@ Last updated: 2026-08-14
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## M12 Final Routing Gate — local RC13 pass
+
+- **Date:** 2026-08-14.
+- **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone.
+  This is not M12 acceptance, a public release, or a Planner/manual handoff.
+- **Starting baseline:** clean `main` at `ddd3ea727ca338ecbbab2b23401de733e8c18cde`,
+  local candidate `0.1.0-rc.12`, Pi `0.84.1`.
+- **Implementation:** corrected the shared local analyzer's informational
+  question/explanation handling, bilingual uncertainty boundaries, API/UI and
+  release-plus-verification complexity signals, and retry-policy false positive;
+  added focused analyzer coverage and a composed Smart-routed Mission → Task →
+  Run → M7 integration proof. Bumped the local candidate to `0.1.0-rc.13`.
+- **Validation:** `npm run check` passed `214/214`; focused routing/provider,
+  security, quality, memory, stale-route, and Pi suites passed; the balanced
+  English/Persian/mixed corpus passed `360/360`; bounded adversarial input was
+  `13/13` exception-free; focused review found no unresolved blocker/high.
+- **Live boundary:** fresh disposable roots used real 9Router Triage for ten
+  ambiguous sessions (`20` calls, `9` fallback successes, one timeout
+  degradation). No live Pi configuration, provider account, Keychain value,
+  source checkout, tag, push, npm publication, or GitHub release was modified.
+- **Release evidence:** RC13 artifact SHA-256
+  `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`, source
+  digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`,
+  and review-bundle root
+  `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
+- **Remaining gates:** External Review #5 is `EXTERNAL_REVIEW_PENDING`;
+  Planner/manual acceptance and authorized publication remain pending.
+
 ## M12.3 — Adaptive Routing Memory
 
 - **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.3 is not a public or production-ready release.

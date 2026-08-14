@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M12.3 local RC.12 implementation, isolated Pi dogfood, detached RC.12 verification, and focused independent review PASS; M12 final gate, M11 acceptance, external review, Planner, and publication gates pending |
+| Development phase | M10 accepted; M12 final routing gate local PASS on RC13 with isolated Pi/live-triage/release evidence; M11 acceptance, external review, Planner, and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -24,7 +24,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | M12.2 candidate | `0.1.0-rc.11` — local, not public; implementation commit `8219c083577bc21a31046ade4ee1f982fe28abc6`; RC.10 superseded |
-| M12.3 candidate | `0.1.0-rc.12` — local, not public; detached verifier bound to source commit `56dbbb150fd184240db55e58e4bffc20efdd5c5f` |
+| M12.3 candidate | `0.1.0-rc.12` — historical local candidate; superseded by RC13 |
+| M12 final candidate | `0.1.0-rc.13` — local, not public; source commit `8d8e36a9526c6edd106d36fa8cb5069cda517405` |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
 | M11 candidate | `0.1.0-rc.8` — historical local candidate; not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
@@ -54,10 +55,11 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M9 — Full TUI control center | ACCEPTED / PASS |
 | M10 — Safety and hardening | ACCEPTED / PASS |
 | M11 — Packaging, release, and dogfooding | IMPLEMENTED BUT NOT ACCEPTED |
-| M12 — Smart Mission Entry, Hybrid Routing & Routing Memory | IN PROGRESS; M12.1, M12.2, and M12.3 local work complete; final gate not started |
+| M12 — Smart Mission Entry, Hybrid Routing & Routing Memory | IN PROGRESS; M12.1, M12.2, M12.3, and final routing gate locally complete; not accepted or public |
 | M12.1 — Frictionless Mission Entry | COMPLETE / LOCAL PASS; not accepted or public |
 | M12.2 — Hybrid Smart Router | COMPLETE / LOCAL PASS; not accepted or public |
 | M12.3 — Adaptive Routing Memory | COMPLETE / LOCAL PASS; not accepted or public |
+| M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PASS; not accepted, public, or production-ready |
 
 ## M12.3 current implementation
 
@@ -101,6 +103,42 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   npm publication, or GitHub release was modified. M10 remains the latest
   accepted milestone; M12.3 remains local-only pending the final routing gate,
   external review, Planner/manual acceptance, and publication gates.
+
+## M12 Final Routing Gate — local pass only
+
+- **Candidate/source:** RC13 `0.1.0-rc.13`, source commit
+  `8d8e36a9526c6edd106d36fa8cb5069cda517405`; worktree clean after the
+  documentation closeout. M10 remains the latest accepted milestone.
+- **Deterministic coverage:** balanced English/Persian/mixed corpus of `360`
+  cases (`120` simple, `120` complex, `120` ambiguous), with zero
+  misclassifications; bounded adversarial inputs were `13/13` exception-free.
+  Analyzer latency probe was sub-3 ms maximum over the corpus.
+- **Isolated Pi/TUI-equivalent path:** current Pi `0.84.1` RPC/PTY proof passed
+  explicit entry, normal-input isolation, Smart Routing recommendation,
+  Routing Memory persistence/disable/restart, and the composed Smart-routed
+  Mission → Task → Run → M7 lifecycle. The composed M7 proof uses a local
+  FakeNineRouter fixture; it is not claimed as current live-provider M7.
+- **Current live 9Router dogfood:** ten disposable-root ambiguous sessions
+  completed without child failure: `20` bounded triage calls, `7` suggestions,
+  `3` normal decisions, `9` capability-only fallback successes, and one
+  timeout degradation. Routing durations were approximately `6.3–10.7 s`;
+  telemetry inspection was allowlisted and contained no raw prompts. A
+  Primary-only probe degraded without invoking fallback when no Fallback was
+  configured. Credentials were resolved in process memory only.
+- **Safety/release:** TrustStore, WorkerToolSafetyGuard, protected paths,
+  direct-worker/M7 distinction, backup/restore/corruption/migration, and stale
+  route handling passed their focused suites. `npm run check` passed `214/214`
+  tests; the detached RC13 verifier passed `20/20` integrity attacks, privacy,
+  worker safety, and Pi `0.84.1` install/upgrade/rollback/rescue.
+- **Release identity:** artifact `pi-multi-orchestrator-0.1.0-rc.13.tgz`,
+  SHA-256 `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`;
+  source tree `d5d06e16e4a2266d9b04d3afd79c6dd181df9345`; source digest
+  `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`;
+  review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
+- **Boundary:** focused review found no unresolved blocker/high. External
+  review remains `EXTERNAL_REVIEW_PENDING`; Planner/manual acceptance,
+  publication, tags, push, and live Pi configuration changes remain outside
+  this local pass.
 
 ## M12.2 current implementation
 
@@ -148,7 +186,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - No routing memory was included in M12.2. M12.2 Smart Routing is documented above; M12.3 Adaptive Routing Memory is documented separately above.
 - Local evidence: typecheck/build/check and the full `177/177` test suite passed; release verification passed with `20/20` integrity attacks; the independently checked review bundle remains `EXTERNAL_REVIEW_PENDING`.
 - Offline Pi `0.84.1` TUI evidence used disposable roots: English Mission `mission-68626594-683d-4b3a-a273-b9e1a9b83df5`, Persian Mission `mission-40224d4f-55d5-4cb6-9cad-0fe7c8eca6ea`, empty warning, ordinary-input isolation, `/missions` persistence, and Control Center `Direct Workers`/Back navigation all passed. No live provider, credential, or user Pi configuration was used.
-- M10 remains the latest accepted milestone. Independent review, Planner acceptance, human/manual acceptance, live-route triage, and publication remain separate gates.
+- M10 remains the latest accepted milestone. External review, Planner acceptance, human/manual acceptance, and publication remain separate gates; the RC13 local final-gate live triage was performed only in disposable roots.
 
 ## Stable / accepted capabilities
 
