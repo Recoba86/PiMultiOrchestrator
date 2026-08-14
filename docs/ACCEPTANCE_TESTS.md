@@ -1011,7 +1011,7 @@ securely available route and remain separate gates when unavailable.
 ### M12.3 acceptance mapping
 
 The 53 mission criteria map to the tests above as follows: 1–7 → M12.3-01;
-8–11, 22, 42–43, 46 → M12.3-02; 12–18 → M12.3-03; 19–24, 37–38 →
+8–11, 22, 42–44, 46 → M12.3-02; 12–18 → M12.3-03; 19–24, 37–38 →
 M12.3-04; 25–36 → M12.3-05; 39–41, 45, 47–48 → M12.3-06; 49–53 →
 M12.3-07. The M12.3 local focused evidence is analytics `9/9`, Routing
 Memory `14/14`, Smart Router `13/13`, provider host `25/25`, and isolated Pi
