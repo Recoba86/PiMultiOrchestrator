@@ -873,3 +873,60 @@ A milestone is complete only when every required case through that milestone pas
 - **Pass:** the direct flow remains available, creates no Mission task or M7 quality record, explicitly states the distinction, and canonical `/verify-task` remains confirmation-gated and Mission/M7-labeled.
 
 M12.1 does not add automatic prompt classification, smart routing, Routing Memory, or background execution. Real Pi Computer-Use checks and final release verification remain separately labeled evidence.
+
+## 20. M12.2 Hybrid Smart Router
+
+### M12.2-01 — Deterministic local paths are bounded and bilingual
+
+- **Level:** U/I
+- **Action:** run the local analyzer against English, Persian, and mixed
+  explanations/questions, narrow edits, multi-step implementation, tests,
+  independent verification, audit/review, release, sensitive changes, and
+  research-plus-implementation prompts.
+- **Pass:** only `NORMAL` and `SUGGEST_MISSION` paths are emitted; simple input
+  uses no AI; structural signals—not prompt length alone—drive complex-path
+  classification; the representative corpus contains at least 100 cases.
+
+### M12.2-02 — Ambiguous triage uses strict bounded policy
+
+- **Level:** I/P fixture
+- **Action:** configure Primary and optional Fallback route IDs and exercise a
+  valid normal result, valid mission result, low confidence, malformed JSON,
+  timeout, auth/quota/transport failure, unavailable route, and cancelled call.
+- **Pass:** the response shape is exactly `recommendedMode`, `confidence`, and
+  `reasons`; fallback runs only after capability failure; valid disagreement
+  does not call fallback; failure degrades to the user-choice recommendation;
+  no prompt or raw provider response is persisted.
+
+### M12.2-03 — Suggestion UX is one-shot and lossless
+
+- **Level:** U/P fixture
+- **Action:** submit a complex prompt through Pi `0.84.1` and choose Run as
+  Mission, Run Normally, and cancel in separate disposable sessions.
+- **Pass:** Run as Mission creates exactly one canonical Mission with the exact
+  goal; Run Normally continues the exact original event once; cancel restores
+  the original editor text; missing/failing MissionStore never drops input.
+
+### M12.2-04 — Settings remain inside Routing & Fallback
+
+- **Level:** U/P fixture
+- **Action:** open the existing twelve-section Control Center and edit Smart
+  Routing, AI Triage, Primary, and Fallback settings across available, missing,
+  stale, and unavailable route states.
+- **Pass:** the twelve top-level sections and order are unchanged; AI Triage
+  cannot be enabled without an available Primary; stale IDs remain visible;
+  versioned atomic history/restore works; no live Pi configuration changes.
+
+### M12.2-05 — Telemetry privacy and release boundary
+
+- **Level:** I/P
+- **Action:** append routing decisions and analyst results containing prompt-,
+  transcript-, tool-, and secret-like decoy fields, then query the stores and
+  run the repository release checks.
+- **Pass:** only bounded allowlisted metadata remains; full deterministic tests,
+  typecheck, build, package, and privacy/diff checks pass; live provider calls,
+  public publication, and M12.3 Routing Memory remain outside this milestone.
+
+M12.2 local evidence is not acceptance of M12 or a public release. Real-route
+English/Persian triage and controlled real fallback require an authorized,
+securely available route and remain separate gates when unavailable.

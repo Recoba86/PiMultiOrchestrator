@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. Only M12.1 is authorized; M12.2, M12.3, and the M12 Final Gate are not started.
+Status: IN PROGRESS. M12.1 and M12.2 are implemented local-pass work; M12.3 and the M12 Final Gate are not started. M10 remains the latest accepted milestone.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -214,7 +214,28 @@ Exit gate: PASS — local typecheck/build/full tests, release verification, focu
 
 ### M12.2 — Hybrid Smart Router
 
-Status: NOT STARTED.
+Status: COMPLETE / LOCAL PASS; not accepted, public, or production-ready.
+
+M12.2 adds the bounded hybrid Smart Router for ordinary Pi input:
+
+- deterministic bilingual local signals classify clear prompts as `NORMAL` or
+  `SUGGEST_MISSION` without an AI call;
+- ambiguous prompts optionally use a configured Primary Triage route and a
+  capability-only Fallback, with strict JSON validation and local/user-choice
+  degradation;
+- the suggestion is one-shot and offers `Run as Mission` or `Run Normally`;
+  explicit `@orchestrator <goal>` input remains the M12.1 bypass;
+- settings live inside the existing Routing & Fallback section and persist in
+  a versioned atomic/rollback-capable sidecar without changing ConfigV1 route
+  semantics;
+- routing telemetry stores bounded decision metadata only, never raw prompts,
+  transcripts, credentials, or provider responses.
+
+Local evidence: typecheck/build, the full test suite, focused Smart Router and
+Pi host regression suites, and isolated Pi `0.84.1` TUI dogfood pass. Live
+Primary/Fallback triage inference remains open because this checkout has no
+securely available 9Router credential/route; no credential or live Pi state was
+manufactured or modified.
 
 ### M12.3 — Adaptive Routing Memory
 

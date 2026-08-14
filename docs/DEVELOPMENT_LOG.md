@@ -4,6 +4,17 @@ Last updated: 2026-08-14
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## M12.2 — Hybrid Smart Router
+
+- **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.2 is not a public or production-ready release.
+- **Candidate:** `0.1.0-rc.10`; M12.1 RC.9 remains historical local evidence.
+- **Purpose:** Add frictionless ordinary-prompt routing with deterministic bilingual local signals, bounded optional AI Triage for ambiguity, and an explicit Mission-or-normal user choice.
+- **Major outcomes:** Clear simple prompts continue with no AI/banner; clear multi-stage prompts offer `Run as Mission` or `Run Normally`; ambiguous prompts use only configured Primary/optional capability-only Fallback routes; strict triage JSON, stale route visibility, local degradation, and original-prompt preservation are enforced.
+- **Persistence and privacy:** Smart Routing uses a versioned atomic rollback-capable `smart-routing.json` sidecar separate from legacy ConfigV1 route semantics. Typed routing telemetry stores only decision/path/reason/action/call/fallback/failure metadata; raw prompts, transcripts, tool output, provider responses, and secrets are excluded. Analyst persistence was bounded at the same trust boundary.
+- **UX boundary:** No new Control Center section was added. Smart Routing lives in Routing & Fallback. Explicit `@orchestrator <goal>` remains the M12.1 bypass; Routing Memory, AUTO_MISSION, mid-run promotion, and learned routing remain out of scope.
+- **Evidence:** Smart Router `9/9`, Pi provider host `24/24`, analyst `4/4`, and Control Center `6/6` focused suites passed. Isolated Pi `0.84.1` TUI dogfood passed for normal/no-banner and complex/banner/canonical-Mission flows. Full repository gate and local release verification are recorded below after final execution.
+- **Live boundary:** No live Pi configuration, provider account, credential, public tag, push, npm publication, or GitHub release was modified. Live Primary/Fallback inference was not executed because no secure 9Router credential/registered route was available in the checkout; this remains an external gate.
+
 ## M12.1 — Frictionless Mission Entry
 
 - **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.1 is not a public or production-ready release.

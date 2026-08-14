@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
 
+import { SQLiteAnalyticsStore } from "../src/core/analytics/index.js";
 import {
 	RecommendationAnalystService,
 	validateAnalystPacket,
@@ -50,4 +54,29 @@ test("M8.5 unavailable analyst leaves deterministic result usable", async () => 
 	const status = await service.analyze({ mode: "ai-assisted", routeId: "route-v", packet: packet() });
 	assert.equal(status.state, "failed");
 	assert.match(status.message ?? "", /unavailable/);
+});
+
+test("M12.2 analyst persistence keeps only bounded verdict metadata", async () => {
+	const root = await mkdtemp(join(tmpdir(), "pi-m12-analyst-privacy-"));
+	try {
+		const store = new SQLiteAnalyticsStore({ root, enabled: true });
+		store.saveAnalystAnalysis({
+			recommendationId: "rec-1",
+			routeId: "route-v",
+			analyzedAt: "2026-08-14T00:00:00.000Z",
+			inputFingerprint: "a".repeat(64),
+			verdict: "support",
+			reasoningFactors: ["sample size"],
+			caveats: ["fixture"],
+			explanation: "bounded verdict",
+			...( { prompt: "raw user prompt", transcript: "raw transcript" } as Record<string, string> ),
+		} as never);
+		const analyses = store.listAnalystAnalyses();
+		assert.equal(analyses.length, 1);
+		assert.equal(JSON.stringify(analyses).includes("raw user prompt"), false);
+		assert.equal(JSON.stringify(analyses).includes("transcript"), false);
+		store.close();
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });

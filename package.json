@@ -1,6 +1,6 @@
 {
   "name": "pi-multi-orchestrator",
-  "version": "0.1.0-rc.9",
+  "version": "0.1.0-rc.10",
   "description": "Pi control center for bounded 9Router model, pool, mission, quality, analytics, and safety workflows",
   "type": "module",
   "keywords": ["pi-package"],
@@ -46,6 +46,10 @@
     "./analytics": {
       "types": "./dist/core/analytics/index.d.ts",
       "import": "./dist/core/analytics/index.js"
+    },
+    "./smart-routing": {
+      "types": "./dist/core/smart-routing/index.d.ts",
+      "import": "./dist/core/smart-routing/index.js"
     },
 		"./security": {
 			"types": "./dist/core/security/index.d.ts",

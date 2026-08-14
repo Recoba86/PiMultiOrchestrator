@@ -36,6 +36,7 @@ import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/typ
 import type { QualityPersistence, TaskQualityStatus, VerificationRunRecord } from "../src/core/quality/types.js";
 import { summarize, type AnalyticsEventV1, type AnalyticsRecommendation, type AnalyticsStoreAdapter } from "../src/core/analytics/index.js";
 import { TrustStore } from "../src/core/security/index.js";
+import { SmartRoutingSettingsStore } from "../src/core/smart-routing/index.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -153,6 +154,7 @@ interface PiFixture {
 	readonly registerCalls: string[];
 	readonly tools: Map<string, unknown>;
 	readonly entries: Array<{ customType: string; data: unknown }>;
+	readonly sentUserMessages: Array<{ content: string; options?: { readonly deliverAs?: "steer" | "followUp" } }>;
 	readonly inputHandlers: Array<(event: InputEvent, ctx: ExtensionContext) => Promise<InputEventResult>>;
 }
 
@@ -163,6 +165,7 @@ function piFixture(): PiFixture {
 	const registerCalls: string[] = [];
 	const tools = new Map<string, unknown>();
 	const entries: Array<{ customType: string; data: unknown }> = [];
+	const sentUserMessages: Array<{ content: string; options?: { readonly deliverAs?: "steer" | "followUp" } }> = [];
 	const inputHandlers: Array<(event: InputEvent, ctx: ExtensionContext) => Promise<InputEventResult>> = [];
 	const pi = {
 		registerProvider(name: string, config: ProviderConfig): void {
@@ -182,11 +185,14 @@ function piFixture(): PiFixture {
 		appendEntry(customType: string, data: unknown): void {
 			entries.push({ customType, data });
 		},
+		sendUserMessage(content: string, options?: { readonly deliverAs?: "steer" | "followUp" }): void {
+			sentUserMessages.push({ content, ...(options === undefined ? {} : { options }) });
+		},
 		on(event: string, handler: (event: InputEvent, ctx: ExtensionContext) => Promise<InputEventResult>): void {
 			if (event === "input") inputHandlers.push(handler);
 		},
 	} as unknown as ExtensionAPI;
-	return { pi, providers, commands, unregisters, registerCalls, tools, entries, inputHandlers };
+	return { pi, providers, commands, unregisters, registerCalls, tools, entries, sentUserMessages, inputHandlers };
 }
 
 function missionFixture(): { store: MissionStoreAdapter; mission: MissionRecord; transitions: Array<{ id: string; status: string }> } {
@@ -403,7 +409,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /M12\.1 .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /M12\.2 .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);
@@ -595,6 +601,107 @@ describe("Pi 9Router host adapter", () => {
 			assert.deepEqual(menuMission.acceptanceCriteria, ["tests pass", "review complete"]);
 		} finally {
 			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][fixture-pi-0.84.1] keeps Smart Routing choices one-shot and preserves explicit mission entry", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-smart-host-"));
+		const missionRoot = join(root, "missions");
+		const routingRoot = join(root, "routing");
+		const store = createMissionStore({ root: missionRoot, id: () => "host-" + Date.now() + "-" + Math.random().toString(16).slice(2) });
+		const smartRoutingStore = new SmartRoutingSettingsStore({ root: routingRoot });
+		try {
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store, smartRoutingStore });
+			host.registerCommands();
+			const notifications: string[] = [];
+			const selections: Array<string | undefined> = ["Run as Mission", "Run Normally", undefined];
+			const editorTexts: string[] = [];
+			const ctx = {
+				cwd: "/private/tmp/pi-m12-smart-host",
+				mode: "tui",
+				hasUI: true,
+				isIdle: () => true,
+				ui: {
+					select: async () => selections.shift(),
+					setEditorText: (value: string) => { editorTexts.push(value); },
+					notify: (message: string) => { notifications.push(message); },
+				},
+			} as unknown as ExtensionContext;
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+			const complexPrompt = "Fix the bug in src/auth.ts and add tests, then verify independently";
+
+			assert.deepEqual(await handleInput({ type: "input", text: complexPrompt, source: "interactive" }, ctx), { action: "handled" });
+			assert.equal(store.listMissions().length, 1);
+			assert.equal(store.listMissions()[0]?.goal, complexPrompt);
+
+			assert.deepEqual(await handleInput({ type: "input", text: complexPrompt, source: "interactive" }, ctx), { action: "continue" });
+			assert.equal(store.listMissions().length, 1);
+
+			assert.deepEqual(await handleInput({ type: "input", text: complexPrompt, source: "interactive" }, ctx), { action: "handled" });
+			assert.deepEqual(editorTexts, [complexPrompt]);
+			assert.ok(notifications.some((message) => /preserved|حفظ/u.test(message)));
+
+			const busyCtx = { ...ctx, isIdle: () => false } as unknown as ExtensionContext;
+			assert.deepEqual(await handleInput({ type: "input", text: "@orchestrator explicit busy goal", source: "interactive" }, busyCtx), { action: "handled" });
+			assert.equal(store.listMissions().length, 2);
+			assert.ok(store.listMissions().some((mission) => mission.goal === "explicit busy goal"));
+		} finally {
+			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][fixture-pi-0.84.1] requeues explicit input after missing or failing mission storage", async () => {
+		const notify = (): void => {};
+		const missingPi = piFixture();
+		const missingHost = createPiHost(missingPi.pi, { manager: managerFixture(projection()) });
+		const missingHandler = missingPi.inputHandlers[0];
+		assert.ok(missingHandler);
+		const missingCtx = { cwd: "/private/tmp/pi-m12-missing-store", mode: "tui", hasUI: true, isIdle: () => true, ui: { notify } } as unknown as ExtensionContext;
+		assert.deepEqual(await missingHandler({ type: "input", text: "@orchestrator recover this", source: "interactive" }, missingCtx), { action: "handled" });
+		assert.deepEqual(missingPi.sentUserMessages, [{ content: "@orchestrator recover this", options: { deliverAs: "followUp" } }]);
+
+		const failingPi = piFixture();
+		const failingStore = { createMission: () => { throw new Error("fixture store failure"); } } as unknown as MissionStoreAdapter;
+		createPiHost(failingPi.pi, { manager: managerFixture(projection()), missionStore: failingStore });
+		const failingHandler = failingPi.inputHandlers[0];
+		assert.ok(failingHandler);
+		const failingCtx = { cwd: "/private/tmp/pi-m12-failing-store", mode: "tui", hasUI: true, isIdle: () => true, ui: { notify } } as unknown as ExtensionContext;
+		assert.deepEqual(await failingHandler({ type: "input", text: "@orchestrator retry after store error", source: "interactive" }, failingCtx), { action: "handled" });
+		assert.deepEqual(failingPi.sentUserMessages, [{ content: "@orchestrator retry after store error", options: { deliverAs: "followUp" } }]);
+	});
+
+	it("[U][fixture-pi-0.84.1] exposes Smart Routing settings inside the existing Routing & Fallback section", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-settings-"));
+		try {
+			const configStore = new ConfigStore({ root: join(root, "config") });
+			await configStore.initialize(createDefaultConfig());
+			const smartRoutingStore = new SmartRoutingSettingsStore({ root: join(root, "smart-routing") });
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), configStore, smartRoutingStore });
+			host.registerCommands();
+			const calls: Array<{ title: string; options: readonly string[] }> = [];
+			const rootSelections: Array<string | undefined> = ["Routing & Fallback", undefined];
+			await pi.commands.get("orchestrator")!.handler("", {
+				mode: "tui",
+				hasUI: true,
+				isIdle: () => true,
+				ui: {
+					select: async (title: string, options: readonly string[]) => {
+						calls.push({ title, options });
+						return title === "Pi Multi-Orchestrator" ? rootSelections.shift() : "Back";
+					},
+					notify: () => {},
+				},
+			} as unknown as ExtensionCommandContext);
+			const settings = calls.find((call) => call.title === "Routing & Fallback");
+			assert.ok(settings);
+			assert.ok(settings.options.some((option) => option.startsWith("Smart Routing (ON)")));
+			assert.ok(settings.options.includes("AI usage (ambiguous prompts only)"));
+		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
 	});

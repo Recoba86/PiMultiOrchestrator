@@ -227,3 +227,29 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Decision:** `/subagent-run` is presented as Direct Workers, including Direct Verification Worker. Its feedback states that direct execution creates no canonical Mission task, M7 verification run, quality decision, or quality history. `/verify-task`, quality status, and quality history are labeled canonical Mission quality (M7) without changing their execution or persistence semantics.
 - **Rationale:** The Verification Pool is intentionally shared by direct read-only execution and canonical reviewers; naming the worker path and its negative guarantee prevents users from mistaking a foreground worker for a quality decision.
 - **Consequences:** The pool and route policy remain unchanged. M12.1 does not promote direct output into Mission state or alter M7 confirmation, routing, protocol, or persistence behavior.
+
+## ADR-035 — M12.2 keeps Smart Routing hybrid and user-controlled
+
+- **Decision:** Use a deterministic bilingual local analyzer for clear prompts;
+  return `NORMAL` for clear ordinary work and `SUGGEST_MISSION` for clear
+  multi-stage work; reserve optional AI Triage for ambiguity; and expose one
+  explicit Run as Mission/Run Normally choice. Keep explicit
+  `@orchestrator <goal>` as the M12.1 bypass.
+- **Rationale:** The local path is fast, predictable, offline-testable, and
+  cost-free for common prompts. A bounded triage path covers semantic
+  ambiguity without making model calls the default routing authority or
+  silently changing user intent.
+- **Decision details:** Triage is selected by stable configured route ID,
+  receives only the current prompt plus local signals, must return strict JSON,
+  and may use Fallback only for capability failure. Valid disagreement is not
+  a quality-shopping trigger. Missing/stale routes and all capability failures
+  degrade to the same user-choice recommendation.
+- **Persistence/privacy:** Smart Routing settings use a versioned atomic
+  rollback-capable sidecar because the host production path still uses legacy
+  ConfigV1 route semantics. Routing telemetry is allowlisted bounded metadata
+  with no raw prompt, transcript, provider response, or credential. Routing
+  Memory and learned rules are explicitly deferred to M12.3.
+- **Consequences:** M12.2 does not add a Control Center section, AUTO_MISSION,
+  mid-run promotion, benchmark model selection, background scheduling, or
+  automatic Mission creation. Live triage remains a separately evidenced gate
+  requiring a secure authorized route.

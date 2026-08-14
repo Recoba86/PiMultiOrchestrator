@@ -344,3 +344,32 @@ Product behavior is accepted only through measurable cases in [ACCEPTANCE_TESTS.
 - The creation feedback MUST show the goal, current status, and next action before implementation identifiers.
 - Direct Workers are foreground/ad-hoc execution without canonical Mission lifecycle. A Direct Verification Worker MUST state that it does not create canonical M7 verification or quality state. `/verify-task` remains the canonical Mission/Task/Run quality path.
 - M12.1 MUST NOT add automatic prompt classification, smart routing, Routing Memory, background scheduling, or promotion of direct work into canonical state.
+
+## 20. M12.2 Hybrid Smart Routing
+
+- Smart Routing MUST expose only `NORMAL` and `SUGGEST_MISSION` outcomes. It
+  MUST NOT auto-create a Mission, promote a running prompt, use Routing Memory,
+  learn rules, or select models by benchmark.
+- Clear explanations/questions and narrow one-step changes MUST continue as a
+  normal Pi prompt without an AI call or recommendation banner. Clear
+  multi-stage work MUST show a one-shot choice between `Run as Mission` and
+  `Run Normally`.
+- The local analyzer MUST use deterministic English/Persian/mixed structural
+  signals for action, repository scope, mutation, investigation, multiple
+  steps/deliverables, tests, independent verification, audit/review,
+  debug-and-fix, iteration, release/deployment, sensitive changes, multiple
+  roles, and research plus implementation. Prompt length alone is not a rule.
+- Ambiguous prompts MAY call AI Triage only through an explicitly configured
+  Primary route. Triage MUST return strict JSON with
+  `recommendedMode`, bounded `confidence`, and bounded reason codes. The
+  configured Fallback MAY run only after a Primary capability failure, never
+  merely because the result disagrees. Missing/stale routes, malformed output,
+  timeout, auth, quota, transport, or unavailable capability MUST degrade to
+  a user-choice recommendation without dropping the original prompt.
+- Settings MUST remain inside the existing Routing & Fallback section and use
+  versioned atomic persistence with rollback history. Stale route IDs MUST
+  remain visible and MUST NOT silently remap. AI Triage is enabled only when a
+  usable Primary route is configured.
+- Routing telemetry MUST contain bounded decision metadata only; raw prompts,
+  transcripts, tool output, provider responses, and credentials MUST NOT be
+  persisted. Explicit `@orchestrator <goal>` remains the M12.1 bypass.

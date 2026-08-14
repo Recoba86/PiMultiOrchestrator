@@ -46,10 +46,11 @@ import {
 	createSubagentExecutor,
 	WorkerError,
 	 type ResultProtocolSpec,
-	type SubagentExecutionRequest,
-	type SubagentExecutor,
-	type SubagentRunResult,
-	type RouteAttemptAdapter,
+	 type SubagentExecutionRequest,
+	 type SubagentExecutor,
+	 type SubagentRunResult,
+	 type RouteAttemptAdapter,
+	type ResolvedWorkerRoute,
 } from "../core/workers/index.js";
 import type { FailureClassification, RoutingRequest } from "../core/routing/index.js";
 import type {
@@ -73,11 +74,26 @@ import {
 	type AnalystPacket,
 	type AnalystRoute,
 	type AnalyticsEventV1,
+	type AnalyticsRoutingTelemetryV1,
 	type AnalyticsRange,
 	type AnalyticsStoreAdapter,
 } from "../core/analytics/index.js";
 import { TrustStore, PathSafetyPolicy, SecretSanitizer, getCapabilityMatrix } from "../core/security/index.js";
 import { PACKAGE_INFO } from "../core/package-info.js";
+import {
+	SmartRouter,
+	SmartRoutingSettingsStore,
+	createDefaultSmartRoutingSettings,
+	buildTriagePrompt,
+	TriageCapabilityError,
+	TRIAGE_SYSTEM_PROMPT,
+	formatRoutingReasons,
+	parseTriageResult,
+	containsPersian,
+	type SmartRoutingDecision,
+	type SmartRoutingSettings,
+	type TriageClient,
+} from "../core/smart-routing/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
@@ -185,6 +201,8 @@ export interface PiHostOptions {
 	readonly subagentExecutor?: SubagentExecutor;
 	readonly analyticsStore?: AnalyticsStoreAdapter;
 	readonly recommendationAnalyst?: RecommendationAnalystContract;
+	readonly smartRoutingStore?: SmartRoutingSettingsStore;
+	readonly triageClient?: TriageClient;
 	/** Local-only project trust state; never part of portable ConfigStore data. */
 	readonly trustStore?: TrustStore;
 }
@@ -206,6 +224,7 @@ export interface PiHost {
 	readonly qualityService?: QualityService;
 	readonly analyticsStore?: AnalyticsStoreAdapter;
 	readonly recommendationAnalyst?: RecommendationAnalystContract;
+	readonly smartRoutingStore?: SmartRoutingSettingsStore;
 	readonly trustStore?: TrustStore;
 	readonly qualityExecutor?: SubagentExecutor;
 	reconcile(): Promise<ReconcileResult>;
@@ -509,6 +528,66 @@ const asProviderConfig = (projection: ProviderProjection): ProviderConfig | unde
 	return config;
 };
 
+/** Resolve one current route without selecting a worker pool or copying credentials. */
+async function resolveHostRoute(manager: PiManagerContract, routeId: StableId): Promise<ResolvedWorkerRoute> {
+	const projection = await manager.providerProjection();
+	const selected = projection?.models.find((model) => model.routeId === routeId);
+	if (!projection?.baseUrl || !projection.apiKeyReference || !selected) {
+		throw new TriageCapabilityError("unavailable", "Selected route is not currently registered");
+	}
+	const runtime = await RuntimeModelRuntime.create({
+		modelsPath: null,
+		allowModelNetwork: false,
+		refreshOnCreate: false,
+		credentials: {
+			read: async () => undefined,
+			list: async () => [],
+			modify: async (_provider: string, fn: (current: undefined) => Promise<undefined>) => fn(undefined),
+			delete: async () => undefined,
+		} as never,
+	});
+	runtime.registerProvider(projection.providerId, {
+		name: "9Router",
+		baseUrl: projection.baseUrl,
+		api: projection.api,
+		apiKey: projection.apiKeyReference,
+		authHeader: projection.authHeader,
+		models: [{
+			id: selected.id,
+			name: selected.name,
+			reasoning: selected.reasoning,
+			input: [...selected.input],
+			cost: { ...selected.cost },
+			contextWindow: selected.contextWindow,
+			maxTokens: selected.maxTokens,
+		}],
+	} as never);
+	await runtime.refresh({ providers: [projection.providerId], allowNetwork: false });
+	const model = runtime.getModel(projection.providerId, selected.id);
+	if (!model || model.id !== selected.id) throw new TriageCapabilityError("unavailable", "Selected route model is unavailable");
+	return { routeId, remoteModelId: selected.id, model: model as never, modelRuntime: runtime };
+}
+
+const createHostTriageClient = (manager: PiManagerContract): TriageClient => ({
+	classify: async (request, routeId, signal) => {
+		const route = await resolveHostRoute(manager, routeId);
+		let response: Awaited<ReturnType<typeof route.modelRuntime.completeSimple>>;
+		try {
+			response = await route.modelRuntime.completeSimple(route.model, {
+				systemPrompt: TRIAGE_SYSTEM_PROMPT,
+				messages: [{ role: "user", content: buildTriagePrompt(request), timestamp: Date.now() }],
+			}, { signal });
+		} catch (error) {
+			throw error instanceof TriageCapabilityError ? error : new TriageCapabilityError("transport");
+		}
+		if (response.stopReason !== "stop") throw new TriageCapabilityError(response.stopReason === "aborted" ? "cancelled" : "protocol");
+		const text = response.content.filter((block): block is { readonly type: "text"; readonly text: string } => block.type === "text").map((block) => block.text).join("").trim();
+		if (!text) throw new TriageCapabilityError("malformed", "AI Triage returned no structured result");
+		try { return parseTriageResult(JSON.parse(text) as unknown); }
+		catch (error) { throw error instanceof TriageCapabilityError ? error : new TriageCapabilityError("malformed"); }
+	},
+});
+
 /** Build the M5 adapter from the already-authoritative M3/M4 stores. */
 async function createHostSubagentExecutor(
 	manager: PiManagerContract,
@@ -549,42 +628,8 @@ async function createHostSubagentExecutor(
 			};
 		},
 		resolveRoute: async (routeId) => {
-			const projection = await manager.providerProjection();
-			const selected = projection?.models.find((model) => model.routeId === routeId);
-			if (!projection?.baseUrl || !projection.apiKeyReference || !selected) {
-				throw new WorkerError("route-resolution", "Selected route is not currently registered");
-			}
-			const runtime = await RuntimeModelRuntime.create({
-				modelsPath: null,
-				allowModelNetwork: false,
-				refreshOnCreate: false,
-				credentials: {
-					read: async () => undefined,
-					list: async () => [],
-					modify: async (_provider: string, fn: (current: undefined) => Promise<undefined>) => fn(undefined),
-					delete: async () => undefined,
-				} as never,
-			});
-			runtime.registerProvider(projection.providerId, {
-				name: "9Router",
-				baseUrl: projection.baseUrl,
-				api: projection.api,
-				apiKey: projection.apiKeyReference,
-				authHeader: projection.authHeader,
-				models: [{
-					id: selected.id,
-					name: selected.name,
-					reasoning: selected.reasoning,
-					input: [...selected.input],
-					cost: { ...selected.cost },
-					contextWindow: selected.contextWindow,
-					maxTokens: selected.maxTokens,
-				}],
-			} as never);
-			await runtime.refresh({ providers: [projection.providerId], allowNetwork: false });
-			const model = runtime.getModel(projection.providerId, selected.id);
-			if (!model || model.id !== selected.id) throw new WorkerError("route-model-mismatch", "Selected route model is unavailable");
-			return { routeId, remoteModelId: selected.id, model: model as never, modelRuntime: runtime };
+			try { return await resolveHostRoute(manager, routeId); }
+			catch (error) { throw error instanceof WorkerError ? error : new WorkerError("route-resolution", "Selected route is not currently registered"); }
 		},
 		...(healthStore ? {
 			recordSuccess: (routeId: StableId, at: Date) => healthStore.recordSuccess(routeId, at),
@@ -611,6 +656,20 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const qualityService = options.qualityService ?? (qualityStore ? new QualityService(qualityStore) : undefined);
 	const analyticsStore = options.analyticsStore;
 	const recommendationAnalyst = options.recommendationAnalyst;
+	const smartRoutingStore = options.smartRoutingStore;
+	let inMemorySmartRoutingSettings = createDefaultSmartRoutingSettings();
+	const loadSmartRoutingSettings = async (): Promise<SmartRoutingSettings> => {
+		if (!smartRoutingStore) return inMemorySmartRoutingSettings;
+		try { return (await smartRoutingStore.load()).settings; } catch { return createDefaultSmartRoutingSettings(); }
+	};
+	const updateSmartRoutingSettings = async (mutator: (draft: SmartRoutingSettings) => SmartRoutingSettings): Promise<void> => {
+		if (!smartRoutingStore) {
+			inMemorySmartRoutingSettings = mutator(structuredClone(inMemorySmartRoutingSettings));
+			return;
+		}
+		await smartRoutingStore.update(mutator);
+	};
+	const smartRouter = new SmartRouter({ settings: loadSmartRoutingSettings, triageClient: options.triageClient ?? createHostTriageClient(manager) });
 	const analytics = analyticsStore ? new AnalyticsQueryService(analyticsStore) : undefined;
 	const recommendationApplication = analyticsStore ? new RecommendationApplicationService(analyticsStore, poolManager) : undefined;
 	const sanitizer = new SecretSanitizer();
@@ -620,6 +679,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	let registeredFingerprint: string | undefined;
 	let reconciled = false;
 	const lifetime = new AbortController();
+	let routingEventSequence = 0;
 
 	const notifyError = (ctx: ExtensionContext | ExtensionCommandContext, prefix: string, error: unknown): void => {
 		ctx.ui.notify(`${prefix}: ${sanitizer.sanitizeText(errorMessage(error))}`, "error");
@@ -1339,6 +1399,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					continue;
 				case "Routing & Fallback":
 					await showRoutingStatus(ctx);
+					await openRoutingSettings(ctx);
 					continue;
 				case "Health & Quotas":
 					await showRouteHealth(ctx);
@@ -1615,7 +1676,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const openRoutingSettings = async (ctx: ExtensionCommandContext): Promise<void> => {
-		if (!configStore) {
+		if (!configStore && !smartRoutingStore) {
 			ctx.ui.notify("Routing settings are unavailable until the configuration store is configured", "error");
 			return;
 		}
@@ -1625,10 +1686,26 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 		if (!requireIdle(ctx, "routing policy")) return;
 		try {
-			const loaded = await configStore.load();
-			if (!loaded.snapshot) throw new Error("configuration unavailable");
-			const current = loaded.snapshot.config.routing;
+			const loaded = configStore ? await configStore.load() : undefined;
+			const current = loaded?.snapshot?.config.routing ?? createDefaultConfig().routing;
+			const smart = await loadSmartRoutingSettings();
+			const routeEntries: Array<{ readonly routeId: StableId; readonly label: string; readonly state: "available" | "missing" | "stale" | "unavailable" }> = (await manager.list()).flatMap((entry) => {
+				if (!entry.routeId) return [];
+				const state = entry.missing ? "missing" : entry.stale ? "stale" : entry.available === false ? "unavailable" : "available";
+				return [{ routeId: entry.routeId as StableId, label: `${entry.displayName ?? entry.remoteModelId} — ${entry.routeId} [${state}]`, state }];
+			});
+			for (const routeId of [smart.primaryRouteId, smart.fallbackRouteId]) {
+				if (routeId && !routeEntries.some((entry) => entry.routeId === routeId)) routeEntries.push({ routeId, label: `Configured route — ${routeId} [missing or stale]`, state: "missing" });
+			}
+			const routeOptions = [...new Map(routeEntries.map((entry) => [entry.routeId, entry])).values()];
+			const primaryEntry = smart.primaryRouteId === undefined ? undefined : routeEntries.find((entry) => entry.routeId === smart.primaryRouteId);
+			const triageLabel = primaryEntry?.state !== "available" ? "UNAVAILABLE" : smart.aiTriageEnabled ? "ON" : "OFF";
 			const choice = await ctx.ui.select("Routing & Fallback", [
+				`Smart Routing (${smart.enabled ? "ON" : "OFF"})`,
+				`AI Triage (${triageLabel})`,
+				`Triage Primary (${smart.primaryRouteId ?? "None"})`,
+				`Triage Fallback (${smart.fallbackRouteId ?? "None"})`,
+				"AI usage (ambiguous prompts only)",
 				`Max attempts (${current.maxAttempts})`,
 				`Timeout ms (${current.timeoutMs})`,
 				`Rate-limit cooldown ms (${current.rateLimitCooldownMs})`,
@@ -1638,12 +1715,45 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				"Back",
 			]);
 			if (!choice || choice === "Back") return;
-			if (choice.startsWith("Fallback enabled")) {
+			if (choice.startsWith("Smart Routing")) {
+				await updateSmartRoutingSettings((draft) => ({ ...draft, enabled: !smart.enabled }));
+			} else if (choice.startsWith("AI Triage")) {
+				if (!smart.aiTriageEnabled && (!primaryEntry || primaryEntry.state !== "available")) {
+					ctx.ui.notify("Configure an available Triage Primary route before enabling AI Triage.", "warning");
+					return;
+				}
+				await updateSmartRoutingSettings((draft) => ({ ...draft, aiTriageEnabled: !smart.aiTriageEnabled }));
+			} else if (choice.startsWith("Triage Primary")) {
+				const labels = ["None", ...routeOptions.map((entry) => entry.label), "Back"];
+				const selected = await ctx.ui.select("Triage Primary route", labels);
+				if (selected && selected !== "Back") {
+					const entry = routeOptions.find((candidate) => candidate.label === selected);
+					await updateSmartRoutingSettings((draft) => {
+						const { primaryRouteId: _old, ...rest } = draft;
+						return entry ? { ...rest, primaryRouteId: entry.routeId, aiTriageEnabled: entry.state === "available" } : { ...rest, aiTriageEnabled: false };
+					});
+				}
+			} else if (choice.startsWith("Triage Fallback")) {
+				const labels = ["None", ...routeOptions.map((entry) => entry.label), "Back"];
+				const selected = await ctx.ui.select("Triage Fallback route", labels);
+				if (selected && selected !== "Back") {
+					const entry = routeOptions.find((candidate) => candidate.label === selected);
+					await updateSmartRoutingSettings((draft) => {
+						const { fallbackRouteId: _old, ...rest } = draft;
+						return entry ? { ...rest, fallbackRouteId: entry.routeId } : rest;
+					});
+				}
+			} else if (choice.startsWith("AI usage")) {
+				ctx.ui.notify("AI Triage runs only for locally ambiguous prompts.", "info");
+			} else if (choice.startsWith("Fallback enabled")) {
+				if (!configStore) throw new Error("configuration unavailable");
 				await configStore.update((draft) => { draft.routing.fallback.enabled = !current.fallback.enabled; });
 			} else if (choice.startsWith("Diversity")) {
+				if (!configStore) throw new Error("configuration unavailable");
 				const value = await ctx.ui.select("Diversity preference", ["none", "prefer-different-family", "prefer-different-resource", "require-different-family", "require-different-resource"]);
 				if (value) await configStore.update((draft) => { draft.routing.diversityPreference = value as typeof draft.routing.diversityPreference; });
 			} else {
+				if (!configStore) throw new Error("configuration unavailable");
 				const raw = await ctx.ui.input("New routing value", "");
 				const value = Number.parseInt(raw?.trim() ?? "", 10);
 				if (!Number.isInteger(value) || value < 0) {
@@ -2210,26 +2320,112 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
+	const recordRoutingDecision = (decision: SmartRoutingDecision, action: AnalyticsRoutingTelemetryV1["action"]): void => {
+		if (!analyticsStore) return;
+		const routing: AnalyticsRoutingTelemetryV1 = {
+			decision: decision.mode === "NORMAL" ? "normal" : "suggest_mission",
+			localPath: decision.local.path,
+			triageCalls: decision.triage?.calls ?? 0,
+			fallbackUsed: decision.triage?.fallbackUsed === true,
+			reasonCodes: [...decision.reasonCodes],
+			...(action === undefined ? {} : { action }),
+			...(decision.triage?.failureClass === undefined ? {} : { failureClass: decision.triage.failureClass }),
+		};
+		routingEventSequence += 1;
+		recordAnalytics({
+			eventId: `routing-${Date.now()}-${routingEventSequence}`,
+			occurredAt: new Date().toISOString(),
+			eventType: "routing",
+			...(decision.triage === undefined ? {} : { durationMs: decision.triage.latencyMs }),
+			routing,
+		});
+	};
+
 	const handleInput = async (event: InputEvent, ctx: ExtensionContext): Promise<InputEventResult> => {
 		if (event.source === "extension") return { action: "continue" };
 		const invocation = parseOrchestratorInvocation(event.text);
-		if (!invocation) return { action: "continue" };
+		if (!invocation) {
+			if (event.streamingBehavior !== undefined) return { action: "continue" };
+			let decision: SmartRoutingDecision;
+			try { decision = await smartRouter.decide(event.text, ctx.signal); }
+			catch {
+				ctx.ui.notify("Smart Routing unavailable; continuing with the original prompt.", "warning");
+				return { action: "continue" };
+			}
+			if (decision.mode === "NORMAL") {
+				recordRoutingDecision(decision, "continued");
+				return { action: "continue" };
+			}
+			if (ctx.mode !== "tui" && !ctx.hasUI) {
+				recordRoutingDecision(decision, "headless_normal");
+				return { action: "continue" };
+			}
+			const locale = containsPersian(event.text) ? "fa" : "en";
+			const reason = formatRoutingReasons(decision.reasonCodes, locale);
+			ctx.ui.notify(`${locale === "fa" ? "پیشنهاد ارکستریتور" : "Orchestrator recommended"}\n${locale === "fa" ? "دلیل" : "Reason"}: ${reason || (locale === "fa" ? "کار چندمرحله‌ای" : "multi-step work")}`, "info");
+			let action: string | undefined;
+			try { action = await ctx.ui.select("Orchestrator recommended", ["Run as Mission", "Run Normally"]); }
+			catch {
+				recordRoutingDecision(decision, "failed");
+				return { action: "continue" };
+			}
+			if (action === "Run as Mission") {
+				if (!options.missionStore) {
+					missionStoreUnavailable(ctx);
+					recordRoutingDecision(decision, "failed");
+					return { action: "continue" };
+				}
+				try {
+					const mission = createCanonicalMission(options.missionStore, event.text, { repositoryCwd: ctx.cwd });
+					appendMissionPointer(mission);
+					ctx.ui.notify(missionCreatedMessage(mission), "info");
+					recordRoutingDecision(decision, "run_as_mission");
+					return { action: "handled" };
+				} catch (error) {
+					notifyError(ctx, "Mission creation failed", error);
+					recordRoutingDecision(decision, "failed");
+					return { action: "continue" };
+				}
+			}
+			if (action === "Run Normally") {
+				// Pi's input runner continues this exact event once; it does not re-emit
+				// the input handler, so no string sentinel or recursive dispatch is needed.
+				recordRoutingDecision(decision, "run_normally");
+				return { action: "continue" };
+			}
+			recordRoutingDecision(decision, "cancelled");
+			try { ctx.ui.setEditorText(event.text); } catch { return { action: "continue" }; }
+			ctx.ui.notify(locale === "fa" ? "پیشنهاد لغو شد؛ متن اصلی حفظ شد." : "Recommendation cancelled; the original prompt was preserved.", "info");
+			return { action: "handled" };
+		}
 		if (!invocation.goal) {
 			ctx.ui.notify("Add a goal after @orchestrator.", "warning");
 			return { action: "handled" };
 		}
+		const requeueOriginal = (): InputEventResult => {
+			const sendUserMessage = (pi as unknown as {
+				sendUserMessage?: (content: string, options?: { readonly deliverAs?: "steer" | "followUp" }) => void;
+			}).sendUserMessage;
+			if (typeof sendUserMessage !== "function") return { action: "continue" };
+			try {
+				sendUserMessage.call(pi, event.text, event.streamingBehavior === undefined ? { deliverAs: "followUp" } : { deliverAs: event.streamingBehavior });
+				return { action: "handled" };
+			} catch {
+				return { action: "continue" };
+			}
+		};
 		const store = options.missionStore;
 		if (!store) {
 			missionStoreUnavailable(ctx);
-			return { action: "handled" };
+			return requeueOriginal();
 		}
-		if (!requireIdle(ctx, "mission state")) return { action: "handled" };
 		try {
 			const mission = createCanonicalMission(store, invocation.goal, { repositoryCwd: ctx.cwd });
 			appendMissionPointer(mission);
 			ctx.ui.notify(missionCreatedMessage(mission), "info");
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
+			return requeueOriginal();
 		}
 		return { action: "handled" };
 	};
@@ -2644,13 +2840,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	}).on;
 	if (piOn) piOn.call(pi, "input", handleInput);
 
-		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, registerCommands, dispose };
+		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
 	const runtime = await import("@earendil-works/pi-coding-agent");
 	const root = process.env.PI_MULTI_ORCH_CONFIG_ROOT ?? join(runtime.getAgentDir(), "pi-multi-orchestrator");
 	const configStore = new ConfigStore({ root });
+	const smartRoutingStore = new SmartRoutingSettingsStore({ root });
 	const trustStore = new TrustStore({ root: join(root, "trust") });
 	let analyticsStore: AnalyticsStoreAdapter | undefined;
 	try {
@@ -2723,7 +2920,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 			},
 		});
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, healthStore, trustStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, healthStore, trustStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

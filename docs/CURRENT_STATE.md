@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M12.1 local RC.9 verification PASS / M11 acceptance, independent review, Planner, and publication gates pending |
+| Development phase | M10 accepted; M12.2 local RC.10 verification PASS / M11 acceptance, independent review, Planner, live-route, and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,7 +23,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M12.1 candidate | `0.1.0-rc.9` — local, not public; starting HEAD `22c6df3bd23b9c325a6e665af5da6de160a63f62`; implementation commit `ad39a8f` |
+| M12.2 candidate | `0.1.0-rc.10` — local, not public; M12.1 RC.9 is historical; implementation commit pending local closeout commit |
+| M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
 | M11 candidate | `0.1.0-rc.8` — historical local candidate; not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
 | M11-R4 historical release evidence | rc.2 artifact and `165/165 PASS`; rejected by Independent Review #3 for the custom-tool bypass |
@@ -52,18 +53,50 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M9 — Full TUI control center | ACCEPTED / PASS |
 | M10 — Safety and hardening | ACCEPTED / PASS |
 | M11 — Packaging, release, and dogfooding | IMPLEMENTED BUT NOT ACCEPTED |
-| M12 — Smart Mission Entry, Hybrid Routing & Routing Memory | IN PROGRESS; only M12.1 is authorized |
+| M12 — Smart Mission Entry, Hybrid Routing & Routing Memory | IN PROGRESS; M12.1 and M12.2 local work complete; M12.3 and final gate not started |
 | M12.1 — Frictionless Mission Entry | COMPLETE / LOCAL PASS; not accepted or public |
+| M12.2 — Hybrid Smart Router | COMPLETE / LOCAL PASS; not accepted or public |
+
+## M12.2 current implementation
+
+- Smart Routing runs on ordinary native Pi input after the explicit M12.1
+  `@orchestrator <goal>` bypass. Clear explanations/questions and narrow
+  one-step changes continue as `NORMAL`; clear multi-stage work produces a
+  one-shot Mission-or-normal choice.
+- The local analyzer is deterministic, bilingual (English/Persian/mixed), and
+  uses structural signals for repository scope, mutation, investigation,
+  multi-step work, tests, independent verification, audit/review,
+  release/deployment, sensitive changes, multiple roles, and research plus
+  implementation. Length alone is not a routing rule.
+- Ambiguous prompts use AI Triage only when enabled with an available Primary
+  route. The response is strict `{recommendedMode, confidence, reasons}` JSON;
+  a configured Fallback is used only for capability failure. Low confidence,
+  unavailable routes, malformed responses, timeout, auth, quota, and transport
+  failures degrade to the user-choice recommendation without dropping the
+  original prompt.
+- Settings are stored in versioned `smart-routing.json` plus bounded history,
+  separate from the legacy ConfigV1 route envelope. The existing twelve-section
+  Control Center remains unchanged; Smart Routing appears inside Routing &
+  Fallback. Stale route IDs remain visible and do not silently remap.
+- Routing telemetry is bounded metadata only: decision, local path, reason
+  codes, triage call/fallback counts, action, and failure class. No raw prompt,
+  transcript, tool output, provider response, or credential is persisted.
+- Local evidence: focused Smart Router `9/9`, provider host `24/24`, analyst
+  `4/4`, Control Center `6/6`, isolated Pi `0.84.1` TUI normal/no-banner and
+  complex/banner/Mission flows, plus the final repository gates below. No live
+  Pi configuration or provider account was modified. Live-route triage remains
+  an explicit open gate because no secure 9Router credential/route was
+  available in this checkout.
 
 ## M12.1 current implementation
 
 - Pi `0.84.1` native `input` events recognize an explicit `@orchestrator <goal>` entry; ordinary input continues unchanged.
 - The entry and `/orchestrator` → Context & Mission Settings → Create mission menu call the shared `createCanonicalMission` operation and persist through the real MissionStore.
 - Empty entry is handled with `Add a goal after @orchestrator.`; no empty Mission is written. Direct Workers are labeled separately from canonical Mission/M7 verification.
-- No smart routing, automatic prompt classification, routing memory, live Pi configuration, provider account, credential, or public release work is included.
+- No routing memory, live Pi configuration, provider account, credential, or public release work is included. M12.2 Smart Routing is documented above; M12.3 remains not started.
 - Local evidence: typecheck/build/check and the full `177/177` test suite passed; release verification passed with `20/20` integrity attacks; the independently checked review bundle remains `EXTERNAL_REVIEW_PENDING`.
 - Offline Pi `0.84.1` TUI evidence used disposable roots: English Mission `mission-68626594-683d-4b3a-a273-b9e1a9b83df5`, Persian Mission `mission-40224d4f-55d5-4cb6-9cad-0fe7c8eca6ea`, empty warning, ordinary-input isolation, `/missions` persistence, and Control Center `Direct Workers`/Back navigation all passed. No live provider, credential, or user Pi configuration was used.
-- M10 remains the latest accepted milestone. Independent review, Planner acceptance, human/manual acceptance, and publication remain separate gates.
+- M10 remains the latest accepted milestone. Independent review, Planner acceptance, human/manual acceptance, live-route triage, and publication remain separate gates.
 
 ## Stable / accepted capabilities
 
@@ -194,6 +227,12 @@ The Node `node:sqlite` API is experimental; the adapter boundary isolates that c
 ### Human TUI smoke
 
 Automated Pi-native dialog callback and RPC tests passed for the M2 model manager and M3 pool editor. Authorized autonomous Computer-Use dogfood of the RC.8 TUI and canonical Mission → Task → Implementation → M7 Verification flow passed on 2026-08-14. M12.1's isolated offline Pi `0.84.1` TUI check also passed on 2026-08-14; the Computer Use connector could not target Terminal, so the same disposable PTY flow was used without live state. A final human keyboard sanity smoke has not yet been performed and remains explicit open validation.
+
+M12.2's isolated offline Pi `0.84.1` PTY check passed on 2026-08-14: a clear
+explanation reached the editor with no recommendation banner, and a complex
+implementation request showed the recommendation and created exactly one
+canonical Mission with the exact goal. Live ambiguous triage and real fallback
+were not called because no secure 9Router route/credential was available.
 
 ### Deferred capabilities
 

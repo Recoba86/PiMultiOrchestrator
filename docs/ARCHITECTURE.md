@@ -722,6 +722,32 @@ read-only workers and canonical Mission reviewers; `/verify-task` remains the
 canonical Mission/Task/Run → M7 path. M12.1 does not add classification,
 automatic routing, promotion, or scheduling.
 
+## 23.2 M12.2 Hybrid Smart Router
+
+The host's ordinary native Pi `input` path first preserves the explicit
+M12.1 `@orchestrator <goal>` bypass, then evaluates Smart Routing. A small
+deterministic local analyzer normalizes Unicode and emits bounded bilingual
+structural signals. Clear simple input returns `NORMAL`; clear multi-stage
+input returns `SUGGEST_MISSION`; only the ambiguous path can call the optional
+triage client.
+
+The triage client resolves the configured stable route ID through the current
+provider projection and creates an isolated Pi model runtime without copying
+resolved credentials. It sends only the current prompt and local signal
+metadata, validates the exact JSON response, bounds latency, and tries the
+configured fallback only for a capability failure. A disagreement is a valid
+answer, not a fallback trigger. Any unavailable or malformed capability
+returns the user-choice recommendation so the original prompt is never lost.
+
+Smart Routing settings use a versioned `smart-routing.json` sidecar with
+atomic writes, generation checks, bounded history, and restore support. This
+keeps the legacy ConfigV1 route envelope and existing route-selection policy
+unchanged while retaining stale IDs for user repair. The existing twelve
+Control Center sections remain fixed; settings are nested in Routing &
+Fallback. Routing telemetry is a typed metadata event with allowlisted reason
+codes/actions and no prompt or provider-response field. Routing Memory is not
+read or written in M12.2; the context parameter is reserved for M12.3 only.
+
 ## 23. M11 package and rescue boundary
 
 M11 packages the compiled host entrypoint through Pi's supported `pi-package`

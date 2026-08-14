@@ -32,14 +32,15 @@ export const AnalyticsSchemaV1 = ANALYTICS_SCHEMA_V1;
 
 export type AnalyticsClassification = "observed" | "provider_reported" | "pi_runtime_reported" | "configured" | "estimated" | "unavailable" | "unknown";
 export type AnalyticsEventType =
-  | "run"
-  | "attempt"
-  | "fallback"
-  | "quality"
-  | "route"
-  | "config"
-  | "recommendation"
-  | "custom";
+	| "run"
+	| "attempt"
+	| "fallback"
+	| "quality"
+	| "route"
+	| "config"
+	| "routing"
+	| "recommendation"
+	| "custom";
 
 export interface AnalyticsTokenUsage {
   readonly inputTokens?: number;
@@ -58,6 +59,16 @@ export interface AnalyticsCost {
   readonly formulaVersion?: string;
   readonly kind?: "actual" | "equivalent" | "avoided";
   readonly billingMode?: "metered_api" | "subscription" | "free" | "unknown";
+}
+
+export interface AnalyticsRoutingTelemetryV1 {
+	readonly decision: "normal" | "suggest_mission";
+	readonly localPath: "simple" | "complex" | "ambiguous";
+	readonly triageCalls: number;
+	readonly fallbackUsed: boolean;
+	readonly reasonCodes: readonly string[];
+	readonly action?: "continued" | "run_as_mission" | "run_normally" | "cancelled" | "headless_normal" | "failed";
+	readonly failureClass?: string;
 }
 
 export interface ReferencePricingV1 {
@@ -101,8 +112,9 @@ export interface AnalyticsEventV1 {
   readonly firstPass?: boolean;
   readonly repairRound?: number;
   readonly tokenUsage?: AnalyticsTokenUsage;
-  readonly cost?: AnalyticsCost;
-  readonly dimensions?: Readonly<Record<string, string | number | boolean>>;
+	readonly cost?: AnalyticsCost;
+	readonly routing?: AnalyticsRoutingTelemetryV1;
+	readonly dimensions?: Readonly<Record<string, string | number | boolean>>;
 }
 
 export interface AnalyticsRange { readonly from?: string; readonly to?: string; }
@@ -126,7 +138,16 @@ export interface AnalyticsSummary {
   readonly actualCostMicros?: number;
   readonly estimatedCostMicros?: number;
   readonly avoidedCostMicros?: number;
-  readonly unknownCostEvents: number;
+	readonly unknownCostEvents: number;
+	readonly routing: {
+		readonly decisions: number;
+		readonly normal: number;
+		readonly suggestions: number;
+		readonly triageCalls: number;
+		readonly fallbackCalls: number;
+		readonly failures: number;
+		readonly byReason: Readonly<Record<string, number>>;
+	};
   readonly byPool: Readonly<Record<string, { readonly runs: number; readonly successes: number; readonly failures: number; readonly fallbacks: number; readonly tokens: number; readonly durationMs: number }>>;
   readonly byRoute: Readonly<Record<string, { readonly runs: number; readonly successes: number; readonly failures: number; readonly fallbacks: number; readonly tokens: number; readonly durationMs: number }>>;
   readonly byMission?: Readonly<Record<string, { readonly runs: number; readonly successes: number; readonly failures: number; readonly fallbacks: number; readonly tokens: number; readonly durationMs: number }>>;
@@ -207,6 +228,37 @@ const secretLike = (value: string): boolean => /(?:bearer\s+[a-z0-9._-]{8,}|(?:a
 const safeText = (value: unknown, max = 512): string | undefined => { const text = bounded(value, max); return text && !secretLike(text) ? text : undefined; };
 const numberValue = (value: unknown): number | undefined => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER ? value : undefined;
 const boolValue = (value: unknown): boolean | undefined => typeof value === "boolean" ? value : undefined;
+const safeRoutingCode = (value: unknown): string | undefined => typeof value === "string" && /^[a-z][a-z0-9_:-]{0,63}$/u.test(value) ? value : undefined;
+const safeRoutingAction = (value: unknown): AnalyticsRoutingTelemetryV1["action"] => ["continued", "run_as_mission", "run_normally", "cancelled", "headless_normal", "failed"].includes(value as string) ? value as AnalyticsRoutingTelemetryV1["action"] : undefined;
+type StoredAnalystAnalysis = import("./analyst.js").AnalystAnalysisRecord;
+const safeAnalystText = (value: unknown, max = 512): string | undefined => {
+	const text = safeText(value, max);
+	return text && !/(?:prompt|transcript|tool[_ -]?output|session|raw input|user input|authorization|secret)/iu.test(text) ? text : undefined;
+};
+const safeAnalystAnalysis = (value: unknown): StoredAnalystAnalysis | undefined => {
+	if (!isRecord(value)) return undefined;
+	const recommendationId = safeAnalystText(value.recommendationId, 160);
+	const routeId = safeAnalystText(value.routeId, 160);
+	const analyzedAt = safeAnalystText(value.analyzedAt, 64);
+	const inputFingerprint = typeof value.inputFingerprint === "string" && /^[a-f0-9]{64}$/u.test(value.inputFingerprint) ? value.inputFingerprint : undefined;
+	const verdict = value.verdict === "support" || value.verdict === "oppose" || value.verdict === "insufficient_evidence" ? value.verdict : undefined;
+	const explanation = safeAnalystText(value.explanation, 1_000);
+	if (!recommendationId || !routeId || !analyzedAt || Number.isNaN(Date.parse(analyzedAt)) || !inputFingerprint || !verdict || !explanation) return undefined;
+	const list = (item: unknown): readonly string[] => Array.isArray(item) ? item.slice(0, 16).map((entry) => safeAnalystText(entry)).filter((entry): entry is string => entry !== undefined) : [];
+	const suggestedMove = safeAnalystText(value.suggestedMove, 160);
+	return {
+		recommendationId,
+		routeId,
+		analyzedAt,
+		inputFingerprint,
+		verdict,
+		...(suggestedMove === undefined ? {} : { suggestedMove }),
+		reasoningFactors: list(value.reasoningFactors),
+		caveats: list(value.caveats),
+		explanation,
+		...(typeof value.stale === "boolean" ? { stale: value.stale } : {}),
+	};
+};
 
 export function estimateReferenceCost(usage: AnalyticsTokenUsage, pricing: ReferencePricingV1, billingMode: "metered_api" | "subscription" | "free" | "unknown" = "metered_api"): ReferenceCostEstimate {
   if (usage.provenance !== "observed" && usage.provenance !== "provider_reported" && usage.provenance !== "pi_runtime_reported") return {};
@@ -223,7 +275,7 @@ export function estimateReferenceCost(usage: AnalyticsTokenUsage, pricing: Refer
   const equivalent: AnalyticsCost = { amountMicros, currency, provenance: "estimated", formulaVersion: "reference-pricing-v1", kind: "equivalent", billingMode: "metered_api" };
   return { equivalent, ...(billingMode === "subscription" || billingMode === "free" ? { avoided: { ...equivalent, kind: "avoided", billingMode } } : {}) };
 }
-const EVENT_TYPES: readonly AnalyticsEventType[] = ["run", "attempt", "fallback", "quality", "route", "config", "recommendation", "custom"];
+const EVENT_TYPES: readonly AnalyticsEventType[] = ["run", "attempt", "fallback", "quality", "route", "config", "routing", "recommendation", "custom"];
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const isAnalyticsEvent = (value: unknown): value is AnalyticsEventV1 => isRecord(value) && typeof value.eventId === "string" && typeof value.occurredAt === "string" && !Number.isNaN(Date.parse(value.occurredAt)) && typeof value.eventType === "string" && EVENT_TYPES.includes(value.eventType as AnalyticsEventType);
 const safeJson = (event: AnalyticsEventV1): string => JSON.stringify({
@@ -232,6 +284,15 @@ const safeJson = (event: AnalyticsEventV1): string => JSON.stringify({
   qualityRound: numberValue(event.qualityRound), roleId: safeText(event.roleId), poolId: safeText(event.poolId), routeId: safeText(event.routeId), remoteModelId: safeText(event.remoteModelId), gatewayId: safeText(event.gatewayId), sourceLabel: safeText(event.sourceLabel), resourceClass: safeText(event.resourceClass), resourceId: safeText(event.resourceId), durationMs: numberValue(event.durationMs), outcome: safeText(event.outcome), failureClass: safeText(event.failureClass), fallbackFromRouteId: safeText(event.fallbackFromRouteId), fallbackToRouteId: safeText(event.fallbackToRouteId), qualityOutcome: safeText(event.qualityOutcome), firstPass: boolValue(event.firstPass), repairRound: numberValue(event.repairRound),
   tokenUsage: event.tokenUsage ? { inputTokens: numberValue(event.tokenUsage.inputTokens), outputTokens: numberValue(event.tokenUsage.outputTokens), cacheReadTokens: numberValue(event.tokenUsage.cacheReadTokens), cacheWriteTokens: numberValue(event.tokenUsage.cacheWriteTokens), reasoningTokens: numberValue(event.tokenUsage.reasoningTokens), totalTokens: numberValue(event.tokenUsage.totalTokens), provenance: event.tokenUsage.provenance } : undefined,
   cost: event.cost ? { amountMicros: numberValue(event.cost.amountMicros), currency: safeText(event.cost.currency, 12), provenance: event.cost.provenance, formulaVersion: safeText(event.cost.formulaVersion, 64), kind: event.cost.kind, billingMode: event.cost.billingMode } : undefined,
+  routing: event.routing ? {
+	decision: event.routing.decision === "normal" ? "normal" : "suggest_mission",
+	localPath: event.routing.localPath === "simple" || event.routing.localPath === "complex" ? event.routing.localPath : "ambiguous",
+	triageCalls: numberValue(event.routing.triageCalls),
+	fallbackUsed: boolValue(event.routing.fallbackUsed),
+	reasonCodes: event.routing.reasonCodes.slice(0, 8).map(safeRoutingCode).filter((code): code is string => code !== undefined),
+	action: safeRoutingAction(event.routing.action),
+	failureClass: safeRoutingCode(event.routing.failureClass),
+  } : undefined,
   dimensions: event.dimensions ? Object.fromEntries(Object.entries(event.dimensions).slice(0, 32).filter(([key]) => !/(?:prompt|transcript|source|secret|auth|header|content|output|argument|result|private|key)/iu.test(key)).map(([key, value]) => [safeText(key, 64), typeof value === "string" ? safeText(value, 128) : numberValue(value) ?? boolValue(value)])) : undefined,
 });
 
@@ -313,8 +374,8 @@ export class SQLiteAnalyticsStore implements AnalyticsStoreAdapter, AnalyticsSin
   }
   listRecommendations(): readonly AnalyticsRecommendation[] { if (this.closed || !this.db) return []; try { return (this.db.prepare("SELECT payload_json FROM analytics_recommendations ORDER BY created_at,recommendation_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { return [JSON.parse(row.payload_json) as AnalyticsRecommendation]; } catch { return []; } }); } catch { return []; } }
   updateRecommendationStatus(recommendationId: string, status: AnalyticsRecommendation["status"]): boolean { if (this.closed || !this.db) return false; try { const row = this.db.prepare("SELECT payload_json FROM analytics_recommendations WHERE recommendation_id=?").get(recommendationId) as { payload_json?: string } | undefined; if (!row?.payload_json) return false; const payload = { ...(JSON.parse(row.payload_json) as AnalyticsRecommendation), status }; const result = this.db.prepare("UPDATE analytics_recommendations SET status=?,payload_json=? WHERE recommendation_id=?").run(status, JSON.stringify(payload), recommendationId); return Number(result.changes) > 0; } catch { return false; } }
-  saveAnalystAnalysis(analysis: import("./analyst.js").AnalystAnalysisRecord): void { if (!this.enabled || this.closed || !this.db) return; const payload = JSON.stringify(analysis); const analysisId = `${analysis.recommendationId}:${analysis.routeId}:${analysis.inputFingerprint}`; try { this.db.prepare("INSERT OR IGNORE INTO analytics_analyst_results(analysis_id,recommendation_id,analyzed_at,route_id,input_fingerprint,payload_json) VALUES (?,?,?,?,?,?)").run(analysisId, analysis.recommendationId, analysis.analyzedAt, analysis.routeId, analysis.inputFingerprint, payload); } catch { /* analytics is non-critical */ } }
-  listAnalystAnalyses(): readonly import("./analyst.js").AnalystAnalysisRecord[] { if (this.closed || !this.db) return []; try { return (this.db.prepare("SELECT payload_json FROM analytics_analyst_results ORDER BY analyzed_at,analysis_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { const value: unknown = JSON.parse(row.payload_json); return value && typeof value === "object" ? [value as import("./analyst.js").AnalystAnalysisRecord] : []; } catch { return []; } }); } catch { return []; } }
+  saveAnalystAnalysis(analysis: import("./analyst.js").AnalystAnalysisRecord): void { if (!this.enabled || this.closed || !this.db) return; const safe = safeAnalystAnalysis(analysis); if (!safe) return; const payload = JSON.stringify(safe); const analysisId = [safe.recommendationId, safe.routeId, safe.inputFingerprint].join(":"); try { this.db.prepare("INSERT OR IGNORE INTO analytics_analyst_results(analysis_id,recommendation_id,analyzed_at,route_id,input_fingerprint,payload_json) VALUES (?,?,?,?,?,?)").run(analysisId, safe.recommendationId, safe.analyzedAt, safe.routeId, safe.inputFingerprint, payload); } catch { /* analytics is non-critical */ } }
+  listAnalystAnalyses(): readonly import("./analyst.js").AnalystAnalysisRecord[] { if (this.closed || !this.db) return []; try { return (this.db.prepare("SELECT payload_json FROM analytics_analyst_results ORDER BY analyzed_at,analysis_id").all() as Array<{ payload_json: string }>).flatMap((row) => { try { const value: unknown = JSON.parse(row.payload_json); const safe = safeAnalystAnalysis(value); return safe ? [safe] : []; } catch { return []; } }); } catch { return []; } }
   integrityCheck(): readonly string[] { if (!this.db || this.closed) return [...this.diagnostics, "analytics database is unavailable"]; try { return analyticsIntegrityIssues(this.db); } catch (error) { return [error instanceof Error ? error.message : "analytics integrity check failed"]; } }
   async backup(destinationPath = join(dirname(this.databasePath), "backups", `analytics-${new Date().toISOString().replaceAll(/[:.]/gu, "-")}.sqlite`)): Promise<string> { if (!this.db || this.closed) throw new Error("analytics database is unavailable"); if (destinationPath === this.databasePath) throw new Error("destination-matches-source"); mkdirSync(dirname(destinationPath), { recursive: true, mode: 0o700 }); const temporary = `${destinationPath}.tmp-${createHash("sha256").update(`${process.pid}:${Date.now()}`).digest("hex").slice(0, 16)}`; try { await sqliteBackup(this.db, temporary); const check = new DatabaseSync(temporary, { readOnly: true }); const issues = analyticsIntegrityIssues(check); check.close(); if (issues.length > 0) throw new Error(`analytics backup integrity check failed: ${issues.join("; ")}`); removeSqliteSidecars(destinationPath); renameSync(temporary, destinationPath); try { chmodSync(destinationPath, 0o600); } catch { /* best effort */ } return destinationPath; } catch (error) { try { unlinkSync(temporary); } catch { /* best effort */ } throw error; } }
   static async restore(options: { readonly root: string; readonly enabled?: boolean; readonly databasePath?: string }, backupPath: string): Promise<SQLiteAnalyticsStore> { const source = new DatabaseSync(backupPath, { readOnly: true }); try { const issues = analyticsIntegrityIssues(source); if (issues.length > 0) throw new Error(`analytics backup integrity check failed: ${issues.join("; ")}`); } finally { source.close(); } mkdirSync(options.root, { recursive: true, mode: 0o700 }); const target = options.databasePath ?? join(options.root, "analytics.sqlite"); if (target === backupPath) throw new Error("source-matches-destination"); const temporary = `${target}.restore-${createHash("sha256").update(`${process.pid}:${Date.now()}`).digest("hex").slice(0, 16)}`; const reopened = new DatabaseSync(backupPath, { readOnly: true }); try { await sqliteBackup(reopened, temporary); } finally { reopened.close(); } try { removeSqliteSidecars(target); renameSync(temporary, target); chmodSync(target, 0o600); } catch (error) { try { unlinkSync(temporary); } catch { /* best effort */ } throw error; } return new SQLiteAnalyticsStore(options); }
@@ -343,6 +404,7 @@ export class AnalyticsQueryService {
   costSummary(range?: AnalyticsRange): { readonly actualCostMicros?: number; readonly estimatedCostMicros?: number; readonly avoidedCostMicros?: number; readonly unknownCostEvents: number; readonly costByCurrency: AnalyticsSummary["costByCurrency"] } { const summary = this.store.summary(range); return { ...(summary.actualCostMicros === undefined ? {} : { actualCostMicros: summary.actualCostMicros }), ...(summary.estimatedCostMicros === undefined ? {} : { estimatedCostMicros: summary.estimatedCostMicros }), ...(summary.avoidedCostMicros === undefined ? {} : { avoidedCostMicros: summary.avoidedCostMicros }), unknownCostEvents: summary.unknownCostEvents, costByCurrency: summary.costByCurrency }; }
   qualitySummary(range?: AnalyticsRange): Pick<AnalyticsSummary, "qualityPasses" | "qualityRejects" | "qualityBlocked" | "firstPassSuccesses" | "repairRounds" | "qualityByPool" | "qualityByRoute"> { const summary = this.store.summary(range); return { qualityPasses: summary.qualityPasses, qualityRejects: summary.qualityRejects, qualityBlocked: summary.qualityBlocked, firstPassSuccesses: summary.firstPassSuccesses, repairRounds: summary.repairRounds, qualityByPool: summary.qualityByPool, qualityByRoute: summary.qualityByRoute }; }
   fallbackSummary(range?: AnalyticsRange): { readonly fallbacks: number; readonly fallbackTransitions?: AnalyticsSummary["fallbackTransitions"] } { const summary = this.store.summary(range); return { fallbacks: summary.fallbacks, ...(summary.fallbackTransitions === undefined ? {} : { fallbackTransitions: summary.fallbackTransitions }) }; }
+  routingSummary(range?: AnalyticsRange): AnalyticsSummary["routing"] { return this.store.summary(range).routing; }
 }
 
 export class ScoreEngine {
@@ -383,6 +445,7 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
   const qualityByPool: Record<string, { observations: number; passes: number; rejects: number; blocked: number; firstPass: number; repairRounds: number }> = {};
   const qualityByRoute: Record<string, { observations: number; passes: number; rejects: number; blocked: number; firstPass: number; repairRounds: number }> = {};
   const costByCurrency: Record<string, { actualMicros?: number; estimatedMicros?: number; avoidedMicros?: number }> = {};
+  const routing = { decisions: 0, normal: 0, suggestions: 0, triageCalls: 0, fallbackCalls: 0, failures: 0, byReason: {} as Record<string, number> };
   let actualCostMicros = 0, estimatedCostMicros = 0, avoidedCostMicros = 0; let hasActual = false, hasEstimate = false, hasAvoided = false;
   const attemptRuns = new Set(events.filter((event) => event.eventType === "attempt" && event.runId).map((event) => event.runId));
   const isCanonicalSample = (event: AnalyticsEventV1): boolean => event.eventType === "attempt" || (event.eventType === "run" && (!event.runId || !attemptRuns.has(event.runId)));
@@ -401,6 +464,14 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
   };
   for (const event of events) {
     if (event.eventType === "run") runs++; if (event.eventType === "attempt") attempts++; if (event.eventType === "fallback") fallbacks++;
+    if (event.eventType === "routing" && event.routing) {
+      routing.decisions++;
+      if (event.routing.decision === "normal") routing.normal++; else routing.suggestions++;
+      routing.triageCalls += event.routing.triageCalls;
+      if (event.routing.fallbackUsed) routing.fallbackCalls++;
+      if (event.routing.action === "failed" || event.routing.failureClass !== undefined) routing.failures++;
+      for (const code of event.routing.reasonCodes) routing.byReason[code] = (routing.byReason[code] ?? 0) + 1;
+    }
     if (event.eventType === "run" && successful(event)) successes++; if (event.eventType === "run" && failed(event)) failures++;
     if (event.qualityOutcome === "pass") qualityPasses++; if (event.qualityOutcome === "reject") qualityRejects++; if (event.qualityOutcome === "blocked") qualityBlocked++; if (event.firstPass === true) firstPassSuccesses++; repairRounds += event.repairRound ?? 0; if (isCanonicalSample(event)) durationMs += event.durationMs ?? 0;
     if (event.qualityOutcome && event.poolId) { const bucket = qualityByPool[event.poolId] ??= { observations: 0, passes: 0, rejects: 0, blocked: 0, firstPass: 0, repairRounds: 0 }; bucket.observations++; if (event.qualityOutcome === "pass") bucket.passes++; if (event.qualityOutcome === "reject") bucket.rejects++; if (event.qualityOutcome === "blocked") bucket.blocked++; if (event.firstPass === true) bucket.firstPass++; bucket.repairRounds += event.repairRound ?? 0; }
@@ -421,7 +492,7 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
     if (event.cost) { const amount = event.cost.amountMicros; const currency = event.cost.currency?.trim().toUpperCase(); if (amount === undefined || event.cost.provenance === "unknown" || event.cost.provenance === "unavailable" || !currency) unknownCostEvents++; else { const c = costByCurrency[currency] ??= {}; if (event.cost.kind === "actual" && (event.cost.provenance === "observed" || event.cost.provenance === "provider_reported")) { actualCostMicros += amount; hasActual = true; c.actualMicros = (c.actualMicros ?? 0) + amount; } else if (event.cost.kind === "avoided" && (event.cost.provenance === "estimated" || event.cost.provenance === "configured")) { avoidedCostMicros += amount; hasAvoided = true; c.avoidedMicros = (c.avoidedMicros ?? 0) + amount; } else if ((event.cost.kind === "equivalent" || event.cost.provenance === "estimated" || event.cost.provenance === "configured") && event.cost.kind !== "actual") { estimatedCostMicros += amount; hasEstimate = true; c.estimatedMicros = (c.estimatedMicros ?? 0) + amount; } else unknownCostEvents++; } } else if (isCanonicalSample(event)) unknownCostEvents++;
   }
   const currencies = Object.keys(costByCurrency);
-  return { ...(range?.from ? { from: range.from } : {}), ...(range?.to ? { to: range.to } : {}), eventCount: events.length, runs, attempts, successes, failures, fallbacks, qualityPasses, qualityRejects, qualityBlocked, firstPassSuccesses, repairRounds, durationMs, tokens, unknownTokenAttempts, ...(hasActual && currencies.length <= 1 ? { actualCostMicros } : {}), ...(hasEstimate && currencies.length <= 1 ? { estimatedCostMicros } : {}), ...(hasAvoided && currencies.length <= 1 ? { avoidedCostMicros } : {}), unknownCostEvents, byPool, byRoute, byMission, byRole, byPoolRoute, fallbackTransitions, qualityByPool, qualityByRoute, costByCurrency };
+  return { ...(range?.from ? { from: range.from } : {}), ...(range?.to ? { to: range.to } : {}), eventCount: events.length, runs, attempts, successes, failures, fallbacks, qualityPasses, qualityRejects, qualityBlocked, firstPassSuccesses, repairRounds, durationMs, tokens, unknownTokenAttempts, ...(hasActual && currencies.length <= 1 ? { actualCostMicros } : {}), ...(hasEstimate && currencies.length <= 1 ? { estimatedCostMicros } : {}), ...(hasAvoided && currencies.length <= 1 ? { avoidedCostMicros } : {}), unknownCostEvents, routing, byPool, byRoute, byMission, byRole, byPoolRoute, fallbackTransitions, qualityByPool, qualityByRoute, costByCurrency };
 };
 
 export { AnalyticsQueryService as AnalyticsService };

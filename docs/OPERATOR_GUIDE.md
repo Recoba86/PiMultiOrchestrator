@@ -49,9 +49,18 @@ message where applicable.
   explicitly says `Boss runtime not implemented yet`; profiles do not imply
   autonomous planning or scheduling.
 - **Routing & Fallback** is a non-executing preview of policy, eligibility,
-  diversity, cooldown, and no-route reasons. **Health & Quotas** shows observed
-  route health and cooldowns. Provider quota remaining is `UNKNOWN` unless an
-  authoritative value exists.
+  diversity, cooldown, and no-route reasons. Its settings also contain Smart
+  Routing. Smart Routing is ON by default: clear explanations/questions and
+  narrow one-step changes continue normally; clear multi-stage work shows a
+  one-shot `Run as Mission` / `Run Normally` choice; and ambiguous prompts use
+  AI Triage only when an available Primary route is explicitly configured.
+  Triage runs are bounded, return strict JSON, and may use the configured
+  Fallback only for a capability failure. If triage is unavailable, the user
+  still receives the Mission-or-normal choice. Settings are stored in the
+  versioned, atomic, rollback-capable `smart-routing.json` sidecar; stale route
+  IDs remain visible and never silently select a replacement. **Health &
+  Quotas** shows observed route health and cooldowns. Provider quota remaining
+  is `UNKNOWN` unless an authoritative value exists.
 - **Budget / Quality Profiles** shows quality gates, metadata-only analytics
   collection, and configured reference billing profiles. Missing pricing or
   mixed-currency values remain `UNKNOWN`; this view does not enable budget-aware
