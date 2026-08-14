@@ -713,9 +713,12 @@ describe("Pi 9Router host adapter", () => {
 		memory.observeChoice = (async (...args: Parameters<RoutingMemoryStore["observeChoice"]>) => {
 			observeStarted();
 			await observeGate;
-			return originalObserve(args[0], args[1]);
+			const mutation = await originalObserve(args[0], args[1]);
+			await memory.addExplicitMissionRule("Always orchestrate concurrent routing updates", { id: "concurrent-routing-update" });
+			return mutation;
 		}) as RoutingMemoryStore["observeChoice"];
 		const analytics = analyticsFixture();
+		const notifications: string[] = [];
 		const controller = new AbortController();
 		try {
 			const pi = piFixture();
@@ -728,14 +731,16 @@ describe("Pi 9Router host adapter", () => {
 				hasUI: true,
 				signal: controller.signal,
 				isIdle: () => true,
-				ui: { select: async () => "Run as Mission", notify: () => {} },
+				ui: { select: async () => "Run as Mission", notify: (message: string) => notifications.push(message) },
 			} as unknown as ExtensionContext);
 			await observeStartedPromise;
 			controller.abort();
 			releaseObserve();
 			assert.deepEqual(await pending, { action: "handled" });
 			assert.equal(store.listMissions().length, 1);
-			assert.equal((await memory.listViews()).filter((rule) => rule.source === "learned").length, 0);
+			const views = await memory.listViews();
+			assert.equal(views.some((rule) => rule.id === "concurrent-routing-update"), true);
+			assert.ok(notifications.some((message) => message.includes("cancellation cleanup failed")));
 			assert.equal(analytics.list().length, 4);
 		} finally {
 			store.close();

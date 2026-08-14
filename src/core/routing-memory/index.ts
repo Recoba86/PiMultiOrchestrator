@@ -72,7 +72,7 @@ export interface RoutingMemoryRule {
 }
 
 export type RoutingMemoryRuleView = RoutingMemoryRule;
-export type RoutingMemoryRuleWrite = RoutingMemoryRuleView & { readonly created: boolean };
+export type RoutingMemoryRuleWrite = RoutingMemoryRuleView & { readonly created: boolean; readonly generation: number };
 
 export interface RoutingLocalSignals {
 	readonly missionScore?: number;
@@ -692,8 +692,8 @@ export class RoutingMemoryStore {
 				rules.push(rule);
 			}
 			throwIfAborted(options.signal);
-			await this.commit(rules, current, options.expectedGeneration);
-			return { ...toPublicRule(rule), created };
+			const mutation = await this.commit(rules, current, options.expectedGeneration);
+			return { ...toPublicRule(rule), created, generation: mutation.generation };
 		});
 	}
 

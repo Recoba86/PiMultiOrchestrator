@@ -114,11 +114,11 @@ interface RoutingMemoryHostAdapter {
 	forgetLearned(): MaybePromise<unknown>;
 	reset(): MaybePromise<unknown>;
 	backup(destinationPath?: string): Promise<string>;
-	restore(backupPath: string): MaybePromise<unknown>;
+	restore(backupPath: string, options?: { readonly expectedGeneration?: number }): MaybePromise<unknown>;
 }
 
 interface RoutingMemoryRollback {
-	rollback(): Promise<void>;
+	rollback(expectedGeneration: number): Promise<void>;
 	dispose(): Promise<void>;
 }
 
@@ -2520,13 +2520,18 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const result = routingMemoryRecord(value);
 		return result?.created === true || result?.ruleCreated === true;
 	};
+	const routingMemoryMutationGeneration = (value: unknown): number | undefined => {
+		const result = routingMemoryRecord(value);
+		return typeof result?.generation === "number" && Number.isSafeInteger(result.generation) && result.generation >= 0 ? result.generation : undefined;
+	};
+	const isRoutingMemoryCancellation = (error: unknown): boolean => error instanceof Error && error.message === "routing-memory-cancelled";
 	const prepareRoutingMemoryRollback = async (memory: RoutingMemoryHostAdapter): Promise<RoutingMemoryRollback> => {
 		const root = await mkdtemp(join(tmpdir(), "pi-multi-routing-memory-cancel-"));
 		const backupPath = join(root, "before.json");
 		try {
 			await memory.backup(backupPath);
 			return {
-				rollback: async () => { await Promise.resolve(memory.restore(backupPath)); },
+				rollback: async (expectedGeneration) => { await Promise.resolve(memory.restore(backupPath, { expectedGeneration })); },
 				dispose: async () => { await rm(root, { recursive: true, force: true }); },
 			};
 		} catch {
@@ -2539,22 +2544,29 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const rollback = signal === undefined ? undefined : await prepareRoutingMemoryRollback(memory);
 		let rollbackAttempted = false;
 		let rollbackFailure: unknown;
-		const rollbackIfNeeded = async (): Promise<void> => {
+		const rollbackIfNeeded = async (value: unknown): Promise<void> => {
 			if (rollbackAttempted || rollback === undefined) return;
 			rollbackAttempted = true;
-			try { await rollback.rollback(); }
+			try {
+				const generation = routingMemoryMutationGeneration(value);
+				if (generation === undefined) throw new Error("routing-memory-generation-unavailable");
+				await rollback.rollback(generation);
+			}
 			catch (error) { rollbackFailure = error; throw error; }
 		};
+		let completedValue: unknown;
 		try {
 			if (signal?.aborted) return { cancelled: true };
 			const value = await operation();
+			completedValue = value;
 			if (!signal?.aborted) return { value, cancelled: false };
-			await rollbackIfNeeded();
+			await rollbackIfNeeded(value);
 			return { cancelled: true };
 		} catch (error) {
 			if (!signal?.aborted) throw error;
+			if (isRoutingMemoryCancellation(error)) return { cancelled: true };
 			if (rollbackFailure !== undefined) throw rollbackFailure;
-			await rollbackIfNeeded();
+			await rollbackIfNeeded(completedValue);
 			if (rollbackFailure !== undefined) throw rollbackFailure;
 			return { cancelled: true };
 		} finally {
