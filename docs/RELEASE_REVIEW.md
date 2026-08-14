@@ -1,7 +1,7 @@
 # M12 final external release review — RC16
 
-Status: `EXTERNAL_REVIEW_PENDING` for the RC16 candidate. RC16 is not an
-accepted, public, or production-ready release.
+Status: `EXTERNAL_REVIEW_PASS` for the exact detached RC16 local candidate.
+RC16 is not an accepted, public, or production-ready release.
 
 The reviewer must inspect the exact detached candidate identified by
 `release-manifest.json`, `verification.json`, the artifact checksum sidecar,
@@ -30,13 +30,15 @@ extracted `directory-source/` directory; direct `.tgz` installation is not a
 supported claim. The review bundle is audit material, not its own trust root:
 the expected bundle-root digest must arrive independently.
 
-Final disposition is pending fresh detached verification of the RC16 source,
-artifact, and review bundle. The candidate includes the M12.1 entry-preservation
-repair, canonical completion and M7 evidence checks, corrupt-state recovery,
-Unicode/input bounds, worker timeout ceilings, and validated TypeScript launcher
-provenance. The embedded bundle review marker must remain
-`EXTERNAL_REVIEW_PENDING` until its root digest is checked separately; it is
-audit material, not the trust root.
+Final disposition on 2026-08-14: PASS. The exact detached verifier passed the
+source-bound check, artifact/package binding, privacy scan, Pi `0.84.1`
+install/upgrade/rollback/rescue, worker-safety regression, and `20/20`
+integrity attacks. The M12.1 entry-preservation repair, canonical completion
+and M7 evidence checks, corrupt-state recovery, Unicode/input bounds, worker
+timeout ceilings, and validated TypeScript launcher provenance are included.
+The embedded bundle review marker remains `EXTERNAL_REVIEW_PENDING` by design:
+the bundle is audit material and its root digest is checked separately; it is
+not the trust root. Planner/manual acceptance and publication remain separate.
 
 Historical M11 and earlier RC evidence remains in Git history and the
 append-only development log. It is intentionally not copied into this current

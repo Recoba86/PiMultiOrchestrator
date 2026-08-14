@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC16 is the current candidate pending detached release verification after entry, Mission/M7, recovery, and provenance repairs. M10 remains the latest accepted milestone; Planner/manual acceptance and publication remain pending.
+Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC16 is the exact locally verified candidate after entry, Mission/M7, recovery, and provenance repairs. M10 remains the latest accepted milestone; Planner/manual acceptance and publication remain pending.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -210,7 +210,7 @@ Deliverables:
 - clear `Direct Workers` and canonical Mission/M7 terminology without changing `/verify-task` semantics; and
 - deterministic parser, persistence, menu-equivalence, ordinary-input, and direct-worker regression coverage.
 
-Exit gate: PASS — local typecheck/build/full tests, focused UX review, and isolated offline Pi `0.84.1` checks pass; detached RC16 release verification and final external review remain pending, while M10 remains the latest accepted milestone and Planner/manual acceptance/publication remain separate.
+Exit gate: PASS — local typecheck/build/full tests, focused UX review, isolated offline Pi `0.84.1` checks, and detached RC16 release verification pass; M10 remains the latest accepted milestone and Planner/manual acceptance/publication remain separate.
 
 ### M12.2 — Hybrid Smart Router
 
@@ -235,7 +235,7 @@ Local evidence: typecheck/build, the full test suite, focused Smart Router and
 Pi host regression suites, isolated Pi `0.84.1` TUI dogfood, and bounded live
 English/Persian Primary/Fallback/degradation dogfood pass in disposable roots.
 No credential value or live Pi state was manufactured or modified. This M12.2
-evidence is local-only and historical; RC16 supersedes its candidate pending
+evidence is local-only and historical; RC16 supersedes its candidate and passes
 detached release verification. Planner/manual acceptance remains separate.
 
 ### M12.3 — Adaptive Routing Memory
@@ -263,7 +263,7 @@ provider host `25/25`, and isolated Pi `0.84.1` RPC/TUI dogfood passed. The
 detached RC13 verifier passed `214/214` tests, `20/20` integrity attacks, Pi
 install/upgrade/rollback/rescue, privacy, and worker safety. Focused review of
 the exact source commit found no unresolved blocker/high. This M12.3 evidence
-is historical; RC16 supersedes its candidate pending detached release
+is historical; RC16 supersedes its candidate and passes detached release
 verification. Planner/manual acceptance and publication remain separate.
 
 ### M12 Final Gate — historical RC13 Routing Dogfood evidence
@@ -291,14 +291,14 @@ Evidence:
 
 This RC13 final-gate record is historical and is not a public release or
 acceptance handoff. At that time External Review #5 was
-`EXTERNAL_REVIEW_PENDING`; RC16 supersedes that pending state pending detached
+`EXTERNAL_REVIEW_PENDING`; RC16 supersedes that pending state and passes detached
 verification. Planner/manual acceptance, human acceptance, tags, push, npm
 publication, and GitHub release remain pending or unauthorized.
 
 ### M12 Final External Release Review — RC16
 
-Status: EXTERNAL_REVIEW_PENDING on the current local candidate. RC16 is not
-accepted, public, or production-ready.
+Status: FINAL EXTERNAL REVIEW PASS on the exact detached local candidate. RC16
+is not accepted, public, or production-ready.
 
 The RC16 implementation adds the fresh M12.1/M7 and recovery repairs: explicit
 entry failure preserves user input, completion is Boss-only and evidence-gated,
@@ -309,7 +309,7 @@ validated TypeScript launcher. Clean-checkout validation is `231/231 PASS`
 across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build
 are PASS.
 
-The final detached verifier and independently anchored review bundle remain
-pending for RC16. No live Pi configuration, provider account, credential,
+The final detached verifier and independently anchored review bundle passed for
+RC16. No live Pi configuration, provider account, credential,
 public tag, push, npm publication, or GitHub release is authorized by this local
 candidate. Planner/manual acceptance and publication remain separate gates.

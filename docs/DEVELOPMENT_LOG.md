@@ -7,11 +7,11 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 ## M12.1 autonomous mission entry and RC16 candidate
 
 - **Date:** 2026-08-14.
-- **Status:** IMPLEMENTED BUT NOT ACCEPTED; RC16 is a local candidate pending detached artifact, privacy, Pi, integrity, and independently anchored bundle verification. M10 remains the latest accepted milestone.
+- **Status:** FINAL EXTERNAL REVIEW PASS on the exact detached RC16 local candidate; M10 remains the latest accepted milestone and RC16 is not production-ready.
 - **Implementation:** explicit-entry failure preserves the original prompt; canonical Mission completion is Boss-only and requires completed/passed M7 evidence; verification, evidence, escalation, and backup validation enforce Mission/task identity and quality lineage.
 - **Routing/recovery:** bounded input is checked before local analysis, zero-width Unicode cannot bypass NORMAL safety, corrupt Smart Routing and Routing Memory state can be repaired, malformed history is isolated, and direct worker timeouts cannot exceed the configured ceiling.
 - **Release provenance:** build scripts invoke the validated TypeScript package directly and bind its launcher hash. Package version is `0.1.0-rc.16`.
-- **Validation:** clean `npm run check` passed `231/231` tests across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build passed. Fresh detached release verification and bundle-root verification remain pending.
+- **Validation:** clean `npm run check` passed `231/231` tests across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build passed. Fresh detached release verification passed artifact binding, privacy, Pi `0.84.1` compatibility, worker safety, `20/20` integrity attacks, and independent bundle-root verification.
 - **Boundary:** no live Pi configuration, provider account, Keychain, credential value, public tag, push, npm publication, GitHub release, or production-ready claim was made. Planner/manual acceptance and publication remain separate.
 
 ## M12 Final External Release Review — RC15 candidate

@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; RC16 local candidate has implementation and clean-check evidence; detached release verification and Planner/manual acceptance gates pending |
+| Development phase | M10 accepted; RC16 final external review PASS on an exact detached local candidate; Planner/manual acceptance and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -57,17 +57,17 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M9 — Full TUI control center | ACCEPTED / PASS |
 | M10 — Safety and hardening | ACCEPTED / PASS |
 | M11 — Packaging, release, and dogfooding | IMPLEMENTED BUT NOT ACCEPTED |
-| M12 — Smart Mission Entry, Hybrid Routing & Routing Memory | IN PROGRESS; M12.1, M12.2, M12.3, and final routing gate locally complete; RC16 release verification pending; not accepted or public |
+| M12 — Smart Mission Entry, Hybrid Routing & Routing Memory | IN PROGRESS; M12.1, M12.2, M12.3, final routing gate, and RC16 source review locally complete; not accepted or public |
 | M12.1 — Frictionless Mission Entry | COMPLETE / LOCAL PASS; not accepted or public |
 | M12.2 — Hybrid Smart Router | COMPLETE / LOCAL PASS; not accepted or public |
 | M12.3 — Adaptive Routing Memory | COMPLETE / LOCAL PASS; not accepted or public |
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PASS; not accepted, public, or production-ready |
 
-## RC16 candidate — detached release verification pending
+## RC16 final external-review candidate
 
-- **Status:** implementation and clean source validation complete; the exact
-  detached artifact and review bundle are pending. M10 remains the latest
-  accepted milestone. RC16 is not public or production-ready.
+- **Status:** final external review PASS on the exact detached local candidate;
+  M10 remains the latest accepted milestone. RC16 is not public or
+  production-ready.
 - **Implementation:** explicit-entry failure now preserves the original prompt;
   canonical Mission completion is Boss-only and requires completed/passed M7
   evidence; verification, evidence, escalation, and backup rows are bound to
@@ -78,8 +78,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   configured ceiling, and release builds use a validated TypeScript launcher.
 - **Validation:** clean `npm run check` passed `231/231` tests across 13
   suites with zero failed/cancelled/skipped/todo; typecheck and build passed.
-  A fresh detached release verifier and independently anchored review bundle
-  remain required before final release disposition.
+  The fresh detached release verifier and independently anchored review bundle
+  passed; exact identities are recorded in the generated release packet.
 - **Boundary:** no live Pi configuration, provider account, credential,
   public tag, push, npm publication, or GitHub release was modified.
 
@@ -137,18 +137,18 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   `69e55e37731c44d6540950056664e729fa56b7898eccadc8b417669cc1327ce8`.
   Focused review of this historical RC12 source found no unresolved
   blocker/high. RC16 supersedes that candidate and its verifier; the M12 Final
-  Routing Gate remains local evidence pending RC16 detached verification. Planner/manual
+  Routing Gate remains local evidence; RC16 detached verification passes. Planner/manual
   acceptance and publication remain separate.
 - No live Pi configuration, provider account, credential, public tag, push,
   npm publication, or GitHub release was modified. M10 remains the latest
   accepted milestone; M12.3 and the M12 final gate remain local-only pending
   Planner/manual acceptance and publication gates. RC15 external review is
-  historical and RC16 detached verification is pending.
+  historical and RC16 detached verification passes.
 
 ## M12 Final Routing Gate — historical RC13 local pass; superseded by RC16
 
-- This section preserves RC13 evidence only; RC16 is the current local
-  candidate and detached external-review result is pending.
+- This section preserves RC13 evidence only; RC16 is the current exact local
+  candidate and detached external-review result passes.
 - **Candidate/source:** RC13 `0.1.0-rc.13`, source commit
   `8d8e36a9526c6edd106d36fa8cb5069cda517405`; worktree clean after the
   documentation closeout. M10 remains the latest accepted milestone.
@@ -180,7 +180,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
 - **Historical boundary:** focused review found no unresolved blocker/high.
   At the time of RC13, External Review #5 remained
-  `EXTERNAL_REVIEW_PENDING`; RC16 supersedes that pending state pending detached
+  `EXTERNAL_REVIEW_PENDING`; RC16 supersedes that pending state and passes detached
   verification. Planner/manual
   acceptance, publication, tags, push, and live Pi configuration changes remain
   outside this local pass.
@@ -229,9 +229,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - The entry and `/orchestrator` → Context & Mission Settings → Create mission menu call the shared `createCanonicalMission` operation and persist through the real MissionStore.
 - Empty entry is handled with `Add a goal after @orchestrator.`; no empty Mission is written. Direct Workers are labeled separately from canonical Mission/M7 verification.
 - No routing memory was included in M12.2. M12.2 Smart Routing is documented above; M12.3 Adaptive Routing Memory is documented separately above.
-- Local evidence: typecheck/build/check and the full `231/231` test suite passed; RC16 detached release verification and `20/20` integrity evidence remain pending. The bundle marker remains `EXTERNAL_REVIEW_PENDING` by design until its root is independently checked.
+- Local evidence: typecheck/build/check and the full `231/231` test suite passed; RC16 detached release verification passed with `20/20` integrity evidence. The bundle marker remains `EXTERNAL_REVIEW_PENDING` by design even after its root was independently checked.
 - Offline Pi `0.84.1` TUI evidence used disposable roots: English Mission `mission-68626594-683d-4b3a-a273-b9e1a9b83df5`, Persian Mission `mission-40224d4f-55d5-4cb6-9cad-0fe7c8eca6ea`, empty warning, ordinary-input isolation, `/missions` persistence, and Control Center `Direct Workers`/Back navigation all passed. No live provider, credential, or user Pi configuration was used.
-- M10 remains the latest accepted milestone. RC16 is local-only; Planner acceptance, human/manual acceptance, detached review, and publication remain separate gates. The RC13 local final-gate live triage was performed only in disposable roots.
+- M10 remains the latest accepted milestone. RC16 is local-only; Planner acceptance, human/manual acceptance, and publication remain separate gates. The RC13 local final-gate live triage was performed only in disposable roots.
 
 ## Stable / accepted capabilities
 
