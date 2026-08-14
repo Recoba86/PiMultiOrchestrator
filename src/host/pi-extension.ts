@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -2530,8 +2530,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const backupPath = join(root, "before.json");
 		try {
 			await memory.backup(backupPath);
+			const snapshotGeneration = routingMemoryMutationGeneration(JSON.parse(await readFile(backupPath, "utf8")) as unknown);
+			if (snapshotGeneration === undefined) throw new Error("routing-memory-generation-unavailable");
 			return {
-				rollback: async (expectedGeneration) => { await Promise.resolve(memory.restore(backupPath, { expectedGeneration })); },
+				rollback: async (expectedGeneration) => {
+					if (expectedGeneration === snapshotGeneration) return;
+					if (expectedGeneration !== snapshotGeneration + 1) throw new Error("routing-memory-concurrent-write");
+					await Promise.resolve(memory.restore(backupPath, { expectedGeneration }));
+				},
 				dispose: async () => { await rm(root, { recursive: true, force: true }); },
 			};
 		} catch {

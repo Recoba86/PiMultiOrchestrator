@@ -748,6 +748,48 @@ describe("Pi 9Router host adapter", () => {
 		}
 	});
 
+	it("[U][fixture-pi-0.84.1] does not roll back over a pre-mutation routing-memory write", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-smart-cancel-prewrite-"));
+		const store = createMissionStore({ root: join(root, "missions") });
+		const memory = new RoutingMemoryStore({ root: join(root, "memory"), id: (() => { let id = 0; return () => `cancel-prewrite-rule-${++id}`; })() });
+		let observeStarted!: () => void;
+		const observeStartedPromise = new Promise<void>((resolve) => { observeStarted = resolve; });
+		let releaseObserve!: () => void;
+		const observeGate = new Promise<void>((resolve) => { releaseObserve = resolve; });
+		const originalObserve = memory.observeChoice.bind(memory);
+		memory.observeChoice = (async (...args: Parameters<RoutingMemoryStore["observeChoice"]>) => {
+			observeStarted();
+			await observeGate;
+			await memory.addExplicitMissionRule("Always orchestrate a pre-mutation concurrent update", { id: "pre-mutation-concurrent-update" });
+			return originalObserve(args[0], args[1]);
+		}) as RoutingMemoryStore["observeChoice"];
+		const notifications: string[] = [];
+		const controller = new AbortController();
+		try {
+			const pi = piFixture();
+			createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store, smartRoutingStore: new SmartRoutingSettingsStore({ root: join(root, "routing") }), routingMemoryStore: memory });
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+			const pending = handleInput({ type: "input", text: "Fix the bug in src/auth.ts and add tests, then verify independently", source: "interactive" }, {
+				cwd: root,
+				mode: "tui",
+				hasUI: true,
+				signal: controller.signal,
+				isIdle: () => true,
+				ui: { select: async () => "Run as Mission", notify: (message: string) => notifications.push(message) },
+			} as unknown as ExtensionContext);
+			await observeStartedPromise;
+			controller.abort();
+			releaseObserve();
+			assert.deepEqual(await pending, { action: "handled" });
+			assert.equal((await memory.listViews()).some((rule) => rule.id === "pre-mutation-concurrent-update"), true);
+			assert.ok(notifications.some((message) => message.includes("cancellation cleanup failed")));
+		} finally {
+			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("[U][fixture-pi-0.84.1] learns Always, auto-missions strong matches, and suppresses repeated normal noise", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-memory-host-"));
 		const missionRoot = join(root, "missions");
