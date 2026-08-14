@@ -785,7 +785,9 @@ export class RoutingMemoryStore {
 				for (const stored of await this.readHistory()) if (stored.generation === sourceOrGeneration) { target = stored; break; }
 			} else {
 				try {
-					const parsed = parseStored(JSON.parse(await readFile(sourceOrGeneration, "utf8")) as unknown);
+					const bytes = await readFile(sourceOrGeneration);
+					if (bytes.length > MAX_ACTIVE_BYTES) throw new Error("backup-size-limit");
+					const parsed = parseStored(JSON.parse(bytes.toString("utf8")) as unknown);
 					if (parsed.diagnostics.length > 0) throw new Error("backup-contains-invalid-rules");
 					target = parsed.stored;
 				}

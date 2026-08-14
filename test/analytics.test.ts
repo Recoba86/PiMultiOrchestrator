@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -58,6 +59,26 @@ test("analytics recommendation persistence is allowlisted", () => {
 	assert.equal(stored.includes("RAW_RECOMMENDATION_FIELD"), false);
 	assert.equal(stored.includes("baselineOrder"), true);
 	store.close();
+});
+
+test("legacy recommendation rows are sanitized before read and status updates", () => {
+	const root = mkdtempSync(join(tmpdir(), "pmo-analytics-legacy-recommendation-"));
+	const store = new SQLiteAnalyticsStore({ root, enabled: true });
+	store.saveRecommendation({ recommendationId: "rec-legacy", poolId: "implementation", proposedRouteId: "route-a", sampleSize: 10, score: 0.9, formulaVersion: "quality-v1", evidence: ["safe"], limitations: ["fixture"], proposedDiff: { baselineOrder: ["route-a"] }, status: "proposed" });
+	store.close();
+	const raw = new DatabaseSync(join(root, "analytics.sqlite"));
+	raw.prepare("UPDATE analytics_recommendations SET payload_json=? WHERE recommendation_id=?").run(JSON.stringify({ recommendationId: "rec-legacy", poolId: "implementation", proposedRouteId: "route-a", sampleSize: 10, score: 0.9, formulaVersion: "quality-v1", evidence: ["prompt: LEGACY_PRIVATE_PROMPT"], limitations: ["fixture"], proposedDiff: { baselineOrder: ["route-a"], content: "LEGACY_PRIVATE_FIELD" }, status: "proposed", prompt: "LEGACY_PRIVATE_PROMPT" }), "rec-legacy");
+	raw.close();
+	const reopened = new SQLiteAnalyticsStore({ root, enabled: true });
+	const safe = reopened.listRecommendations()[0];
+	assert.equal(JSON.stringify(safe).includes("LEGACY_PRIVATE"), false);
+	assert.deepEqual(safe?.proposedDiff, { baselineOrder: ["route-a"] });
+	assert.equal(reopened.updateRecommendationStatus("rec-legacy", "ignored"), true);
+	reopened.close();
+	const verified = new DatabaseSync(join(root, "analytics.sqlite"));
+	const payload = verified.prepare("SELECT payload_json FROM analytics_recommendations WHERE recommendation_id=?").get("rec-legacy") as { payload_json: string };
+	assert.equal(payload.payload_json.includes("LEGACY_PRIVATE"), false);
+	verified.close();
 });
 
 test("disabled analytics does not persist and unknown cost is not zero", () => {

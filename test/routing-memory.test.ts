@@ -305,6 +305,9 @@ test("history stays bounded and backup restore is atomic and private", async () 
 		invalidBackup.rules.push({ ...invalidBackup.rules[0], id: "invalid-backup-rule", prompt: "RAW_BACKUP_PROMPT" });
 		await writeFile(invalidBackupPath, JSON.stringify(invalidBackup));
 		await assert.rejects(() => store.restore(invalidBackupPath), /Configuration recovery failed/);
+		const oversizedBackupPath = join(root, "oversized-backup.json");
+		await writeFile(oversizedBackupPath, `${await readFile(backupPath, "utf8")}\n${" ".repeat(1_000_001)}`);
+		await assert.rejects(() => store.restore(oversizedBackupPath), /Configuration recovery failed/);
 		assert.equal((await store.match(complexPrompt)).kind, "none");
 		await store.restore(backupPath);
 		assert.equal((await store.match(complexPrompt)).mode, "AUTO_MISSION");
