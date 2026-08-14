@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -127,6 +127,27 @@ test("release and review-bundle force modes refuse unrelated directories", () =>
 	assert.equal(readFileSync(join(bundleOutput, "user-data.txt"), "utf8"), marker);
 	rmSync(releaseOutput, { recursive: true, force: true });
 	rmSync(bundleOutput, { recursive: true, force: true });
+});
+
+test("release output rejects symlink targets and symlinked paths into the checkout", () => {
+	const target = mkdtempSync(join(tmpdir(), "pi-multi-release-symlink-target-"));
+	const link = join(tmpdir(), `pi-multi-release-symlink-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+	const checkoutLink = join(tmpdir(), `pi-multi-release-checkout-link-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+	try {
+		symlinkSync(target, link, "dir");
+		symlinkSync(root, checkoutLink, "dir");
+		let linkError: unknown;
+		try { execFileSync(process.execPath, [script, "--output", link], { cwd: root, stdio: "pipe" }); } catch (error) { linkError = error; }
+		assert.match((linkError as { stderr?: Buffer }).stderr?.toString() ?? String(linkError), /real directory/u);
+		assert.deepEqual(readdirSync(target), []);
+		let checkoutError: unknown;
+		try { execFileSync(process.execPath, [script, "--output", join(checkoutLink, "release")], { cwd: root, stdio: "pipe" }); } catch (error) { checkoutError = error; }
+		assert.match((checkoutError as { stderr?: Buffer }).stderr?.toString() ?? String(checkoutError), /outside the source checkout/u);
+	} finally {
+		rmSync(link, { force: true });
+		rmSync(checkoutLink, { force: true });
+		rmSync(target, { recursive: true, force: true });
+	}
 });
 
 test("force modes reject spoofed output markers and current review docs reject stale RC instructions", () => {

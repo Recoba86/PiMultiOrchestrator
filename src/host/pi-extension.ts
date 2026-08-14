@@ -1,3 +1,5 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type {
@@ -111,8 +113,13 @@ interface RoutingMemoryHostAdapter {
 	deleteRule(ruleId: string): MaybePromise<unknown>;
 	forgetLearned(): MaybePromise<unknown>;
 	reset(): MaybePromise<unknown>;
-	backup?(destinationPath?: string): Promise<string>;
-	restore?(backupPath: string): MaybePromise<unknown>;
+	backup(destinationPath?: string): Promise<string>;
+	restore(backupPath: string): MaybePromise<unknown>;
+}
+
+interface RoutingMemoryRollback {
+	rollback(): Promise<void>;
+	dispose(): Promise<void>;
 }
 
 const routingMemoryRecord = (value: unknown): Record<string, unknown> | undefined => typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -2513,6 +2520,43 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const result = routingMemoryRecord(value);
 		return result?.created === true || result?.ruleCreated === true;
 	};
+	const prepareRoutingMemoryRollback = async (memory: RoutingMemoryHostAdapter): Promise<RoutingMemoryRollback> => {
+		const root = await mkdtemp(join(tmpdir(), "pi-multi-routing-memory-cancel-"));
+		const backupPath = join(root, "before.json");
+		try {
+			await memory.backup(backupPath);
+			return {
+				rollback: async () => { await Promise.resolve(memory.restore(backupPath)); },
+				dispose: async () => { await rm(root, { recursive: true, force: true }); },
+			};
+		} catch {
+			await rm(root, { recursive: true, force: true }).catch(() => undefined);
+			throw new Error("routing-memory-backup-failed");
+		}
+	};
+	const runCancellableMemoryMutation = async <T>(memory: RoutingMemoryHostAdapter, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<{ readonly value?: T; readonly cancelled: boolean }> => {
+		if (signal?.aborted) return { cancelled: true };
+		const rollback = signal === undefined ? undefined : await prepareRoutingMemoryRollback(memory);
+		let rolledBack = false;
+		const rollbackIfNeeded = async (): Promise<void> => {
+			if (rolledBack || rollback === undefined) return;
+			rolledBack = true;
+			await rollback.rollback();
+		};
+		try {
+			if (signal?.aborted) return { cancelled: true };
+			const value = await operation();
+			if (!signal?.aborted) return { value, cancelled: false };
+			await rollbackIfNeeded();
+			return { cancelled: true };
+		} catch (error) {
+			if (!signal?.aborted) throw error;
+			await rollbackIfNeeded();
+			return { cancelled: true };
+		} finally {
+			try { await rollback?.dispose(); } catch { /* temporary cleanup is non-critical */ }
+		}
+	};
 	const discardCancelledMemoryRule = async (memory: RoutingMemoryHostAdapter, value: unknown): Promise<void> => {
 		const result = routingMemoryRecord(value);
 		if (!result || !memoryRuleWasCreated(result)) return;
@@ -2610,13 +2654,20 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				}
 				if (routingMemory && smartSettings.learnFromRoutingChoices) {
 					try {
-						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "mission", memoryCallOptions));
+						const mutation = await runCancellableMemoryMutation(routingMemory, ctx.signal, () => Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "mission", memoryCallOptions)));
+						if (mutation.cancelled) {
+							await discardCancelledMemoryRule(routingMemory, mutation.value);
+							return { action: "handled" };
+						}
+						const learned = mutation.value;
 						if (inputCancelled()) {
 							await discardCancelledMemoryRule(routingMemory, learned);
 							return { action: "handled" };
 						}
 						if (memoryRuleWasCreated(learned)) recordRoutingDecision(decision, "rule_created_learned", decision.memory);
-					} catch { /* learning is non-critical */ }
+					} catch {
+						if (inputCancelled()) ctx.ui.notify("Routing Memory cancellation cleanup failed; saved preferences need review.", "error");
+					}
 				}
 				if (inputCancelled()) return { action: "handled" };
 				recordRoutingDecision(decision, "run_as_mission", decision.memory);
@@ -2628,13 +2679,20 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				// the input handler, so no string sentinel or recursive dispatch is needed.
 				if (routingMemory && smartSettings.learnFromRoutingChoices) {
 					try {
-						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "normal", memoryCallOptions));
+						const mutation = await runCancellableMemoryMutation(routingMemory, ctx.signal, () => Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "normal", memoryCallOptions)));
+						if (mutation.cancelled) {
+							await discardCancelledMemoryRule(routingMemory, mutation.value);
+							return { action: "handled" };
+						}
+						const learned = mutation.value;
 						if (inputCancelled()) {
 							await discardCancelledMemoryRule(routingMemory, learned);
 							return { action: "handled" };
 						}
 						if (memoryRuleWasCreated(learned)) recordRoutingDecision(decision, "rule_created_learned", decision.memory);
-					} catch { /* learning is non-critical */ }
+					} catch {
+						if (inputCancelled()) ctx.ui.notify("Routing Memory cancellation cleanup failed; saved preferences need review.", "error");
+					}
 				}
 				if (inputCancelled()) return { action: "handled" };
 				recordRoutingDecision(decision, "run_normally", decision.memory);
@@ -2654,14 +2712,22 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					}
 					let explicitRuleCreated = false;
 					try {
-						const saved = routingMemoryRecord(await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature, memoryCallOptions)));
+						const mutation = await runCancellableMemoryMutation(routingMemory, ctx.signal, () => Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature, memoryCallOptions)));
+						if (mutation.cancelled) {
+							await discardCancelledMemoryRule(routingMemory, mutation.value);
+							return { action: "handled" };
+						}
+						const saved = routingMemoryRecord(mutation.value);
 						explicitRuleCreated = saved?.created === true;
 						if (inputCancelled()) {
 							await discardCancelledMemoryRule(routingMemory, saved);
 							return { action: "handled" };
 						}
 					} catch {
-						if (inputCancelled()) return { action: "handled" };
+						if (inputCancelled()) {
+							ctx.ui.notify("Routing Memory cancellation cleanup failed; saved preferences need review.", "error");
+							return { action: "handled" };
+						}
 						ctx.ui.notify("Mission created; the explicit routing preference could not be saved.", "warning");
 						recordRoutingDecision(decision, "run_as_mission", decision.memory);
 						return { action: "handled" };
