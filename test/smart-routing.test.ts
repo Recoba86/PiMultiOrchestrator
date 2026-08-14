@@ -170,10 +170,12 @@ test("M12.2 routing telemetry stores bounded metadata only", async () => {
 			eventId: "routing-1",
 			occurredAt: "2026-08-14T00:00:00.000Z",
 			eventType: "routing",
+			routeId: "selected-route",
 			routing: { decision: "suggest_mission", localPath: "ambiguous", triageCalls: 2, fallbackUsed: true, reasonCodes: ["investigation", "prompt contents must not persist"], action: "run_normally", failureClass: "timeout" },
 		});
 		const events = store.list();
 		assert.equal(events.length, 1);
+		assert.equal(events[0]?.routeId, "selected-route");
 		assert.deepEqual(events[0]?.routing?.reasonCodes, ["investigation"]);
 		assert.equal(store.summary().routing?.fallbackCalls, 1);
 		assert.equal(JSON.stringify(events).includes("prompt contents"), false);

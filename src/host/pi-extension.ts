@@ -2336,6 +2336,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			eventId: `routing-${Date.now()}-${routingEventSequence}`,
 			occurredAt: new Date().toISOString(),
 			eventType: "routing",
+			...(decision.triage?.routeId === undefined ? {} : { routeId: decision.triage.routeId }),
 			...(decision.triage === undefined ? {} : { durationMs: decision.triage.latencyMs }),
 			routing,
 		});
