@@ -513,7 +513,7 @@ async function callWithTimeout(client: TriageClient, request: TriageRequest, rou
 export class SmartRouter {
 	private readonly timeoutMs: number;
 	constructor(private readonly options: SmartRouterOptions) {
-		this.timeoutMs = Math.max(250, options.triageTimeoutMs ?? 4_000);
+		this.timeoutMs = Math.max(250, options.triageTimeoutMs ?? 8_000);
 	}
 
 	async decide(prompt: string, signal?: AbortSignal, _context?: SmartRoutingContext): Promise<SmartRoutingDecision> {
