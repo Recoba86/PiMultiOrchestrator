@@ -1,3 +1,33 @@
+# M12 final external release review — RC15
+
+Status: `EXTERNAL_REVIEW_PENDING`. This packet is local-only and is not a
+public, accepted, or production-ready release.
+
+The RC15 repair baseline is commit `4416a85`. The final review must inspect the
+exact detached artifact and review bundle, then independently confirm the
+following dispositions:
+
+- RC13/RC14 identity drift: superseded by the exact RC15 candidate;
+- external backup pre-parse size, legacy analytics recommendation sanitization,
+  and malformed numbered-history restore: fixed at their shared recovery paths;
+- trusted-worker publication/exfiltration shell commands and direct Node script
+  execution: rejected by the bounded command policy;
+- learned NORMAL on sensitive/high-risk work, corrupt Smart Routing settings,
+  nonterminal/cross-Mission verification targets, cancellation races, and
+  unbounded triage input: fixed with regression coverage;
+- release force-mode deletion, stale artifact/version binding, skipped/todo TAP
+  acceptance, review-bundle privacy, Mission text normalization, and Always
+  preference ordering: fixed with regression coverage;
+- remaining low observations (explicit rule-ID collision, backup preview UX,
+  and pre-restore backup UX) are non-blocking and outside the release blocker/
+  high-impact repair set.
+
+The exact command boundary is the detached `run-release-verification.mjs`
+pipeline with its independent test rerun, `20/20` integrity attacks, Pi
+`0.84.1` isolated lifecycle, privacy scan, worker-safety evidence, and
+externally supplied review-bundle root digest. No live Pi/provider/Keychain
+state, public tag, push, npm publication, or GitHub release is authorized.
+
 # M11 external review bundle
 
 The review bundle is generated outside the checkout from a clean candidate:

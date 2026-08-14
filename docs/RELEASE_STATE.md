@@ -13,7 +13,7 @@ This file records releasable product state. It does not promote development prog
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.13` — M12 final-gate local release candidate only |
+| Development manifest version | `0.1.0-rc.15` — final external-review local release candidate only |
 | Release tag | NONE |
 | Release commit | NONE |
 | GitHub release | NONE |
@@ -50,6 +50,7 @@ Milestone acceptance does not itself create a product release.
 | M12.3 focused independent review | Exact source commit `56dbbb150fd184240db55e58e4bffc20efdd5c5f`; PASS with no unresolved blocker/high findings; optional medium/low limitations recorded separately and do not block local evidence |
 | M12 final routing gate local evidence | RC13 source commit `8d8e36a9526c6edd106d36fa8cb5069cda517405`; `214/214 PASS`, `20/20` integrity attacks, balanced `360`-case bilingual corpus, isolated Pi lifecycle dogfood, bounded real 9Router Triage, privacy, worker safety, latency, and clean worktree; local-only |
 | M12 final RC13 verifier | Artifact SHA-256 `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`; source tree `d5d06e16e4a2266d9b04d3afd79c6dd181df9345`; source digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`; review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`; External Review #5 remains pending |
+| M12 RC15 final-review candidate | Repair baseline `4416a85`; clean-checkout full suite `221/221 PASS` across 13 suites; focused safety/routing/host/mission tests `69/69 PASS`; detached artifact and bundle identities are recorded only after final verification; external review pending |
 | Typecheck | PASS |
 | Aggregate check | PASS |
 | Tested Pi version | `0.84.1` |
@@ -66,13 +67,13 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 ## Known release blockers and limitations
 
 - No public artifact, tag, GitHub release, npm publication, or production-ready install exists. The local M11 RC and its verification metadata are not a public release.
-- Focused M12.3 review of source commit `56dbbb150fd184240db55e58e4bffc20efdd5c5f` found no unresolved blocker/high. Non-blocking limitations are that numeric internal-history restore ignores invalid rows, legacy analytics recommendation rows are not re-sanitized on read, and external backup files have no separate pre-parse size cap; the external backup path still rejects invalid rules before activation.
+- RC15 addresses the previously noted M12.3 recovery limitations: malformed numbered history now rejects the restore, legacy analytics recommendation rows are sanitized before read/status update, and external backup bytes are capped before JSON parsing. Final external review of RC15 remains pending.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
 - Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and public release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
 - Human keyboard-driven TUI smoke remains pending as open validation, but is not an M10 acceptance blocker. M10 automated safety/recovery evidence is `159/159 PASS`; M12.1 isolated offline Pi TUI evidence passed separately.
 - Autonomous RC.8 Computer-Use dogfood and canonical M7 real-route verification passed; final human sanity smoke, live metadata limits, fully independent External Review #5, and Planner acceptance remain open validation.
 - M12.1 RC.9 changes are local-only. Its focused UX review, isolated offline TUI evidence, and final release verifier passed; independent review, Planner/manual acceptance, and publication remain separate gates. M12.2 RC.11 and M12.3 RC.12 are local-only and keep M10 as the latest accepted milestone. RC.10 exposed an additive empty analytics summary field and was superseded before final verification.
-- M12.2 and M12 final live-route triage were executed only through the secure auth bridge and disposable roots. The user Pi configuration, provider account, Keychain, credential values, and source checkout were not modified. The M12 final routing gate passed locally on RC13; External Review #5, Planner/manual acceptance, and publication remain pending.
+- M12.2 and M12 final live-route triage were executed only through the secure auth bridge and disposable roots. The user Pi configuration, provider account, Keychain, credential values, and source checkout were not modified. The M12 final routing gate passed locally on RC13; RC15 adds the final external-review repairs, while external review, Planner/manual acceptance, and publication remain pending.
 - M10's application-level policy is not an OS/kernel sandbox. Stage 4A proves the bounded supported route and product path only; it does not promote M11 to accepted or production-ready.
 - Pi `0.84.1` must be given the extracted `directory-source/` derived from the verified RC `.tgz`; direct `pi install <artifact>.tgz` is not a supported local workflow. The source checkout is never installed.
 - Review #3 rejected rc.2 after reproducing arbitrary caller-supplied custom-tool execution. R6 closed that bypass, but Review #4 rejected rc.3 for evidence-integrity weaknesses. R8 builds rc.4 only from commit `ae39f24937988ef95975b2b45c018f4c45efd23c`, binds source/test/tool identities, preserves authentic M10 state across upgrade and rollback, rejects all 20 required attacks, and anchors the recursively hashed review bundle to a separately supplied root digest. It remains external-review evidence, not acceptance or publication.

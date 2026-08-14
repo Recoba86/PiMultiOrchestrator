@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC13 verification and bounded live dogfood passed. M10 remains the latest accepted milestone.
+Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC15 is the final external-review candidate after release and runtime repairs. M10 remains the latest accepted milestone.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -291,3 +291,22 @@ The local final gate is not a public release or acceptance handoff. External
 Review #5 is `EXTERNAL_REVIEW_PENDING`; Planner/manual acceptance, human
 acceptance, tags, push, npm publication, and GitHub release remain pending or
 unauthorized.
+
+### M12 Final External Release Review — RC15
+
+Status: FINAL EXTERNAL REVIEW IN PROGRESS; not accepted, public, or production-ready.
+
+The RC15 repair baseline is commit `4416a85`. It closes the adversarial
+findings carried forward from the RC13 review surface: release-tool force
+cleanup and stale-version checks, bundle privacy scanning, skipped/todo TAP
+rejection, trusted-worker network/publication shell commands, sensitive learned
+NORMAL suppression, Mission/M7 verification target binding, corrupt Smart
+Routing fail-closed loading, bounded/cancellable Triage, malformed history
+rejection, Mission text normalization, and Always-rule persistence ordering.
+Clean-checkout validation is `221/221 PASS` across 13 suites; focused
+safety/routing/host/mission validation is `69/69 PASS`; typecheck is PASS.
+
+The final detached verifier and independent external review must bind the exact
+RC15 artifact and review bundle before this section can record PASS. No live Pi
+configuration, provider account, credential, public tag, push, npm publication,
+or GitHub release is authorized by this local candidate.
