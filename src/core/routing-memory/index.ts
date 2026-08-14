@@ -100,6 +100,7 @@ export interface RoutingMemoryStoreOptions extends RoutingMemoryPolicy {
 
 export interface RoutingMemoryCallOptions extends RoutingMemoryPolicy {
 	readonly expectedGeneration?: number;
+	readonly signal?: AbortSignal;
 }
 
 export type RoutingMemoryMatchKind = "none" | "conflict" | "strong";
@@ -556,6 +557,10 @@ const cloneRules = (rules: readonly RoutingMemoryRule[]): RoutingMemoryRule[] =>
 const sameRules = (left: readonly RoutingMemoryRule[], right: readonly RoutingMemoryRule[]): boolean =>
 	deterministicJson(left) === deterministicJson(right);
 
+const throwIfAborted = (signal?: AbortSignal): void => {
+	if (signal?.aborted) throw new Error("routing-memory-cancelled");
+};
+
 export class RoutingMemoryStore {
 	private readonly root: string;
 	private readonly activeFile: string;
@@ -661,7 +666,9 @@ export class RoutingMemoryStore {
 		if (action !== "mission" && action !== "normal") return Promise.reject(new TypeError("action-invalid"));
 		const signature = this.inputSignature(input);
 		return this.enqueue(async () => {
+			throwIfAborted(options.signal);
 			const current = await this.readCurrentForMutation();
+			throwIfAborted(options.signal);
 			const now = this.timestamp();
 			const rules = cloneRules(current?.rules ?? []);
 			const existing = rules
@@ -684,6 +691,7 @@ export class RoutingMemoryStore {
 				rule = { id, schemaVersion: ROUTING_MEMORY_SCHEMA_VERSION, action, source: "explicit", signature, confidence: 1, observations: 1, enabled: true, createdAt: now, updatedAt: now, lastObservedAt: now };
 				rules.push(rule);
 			}
+			throwIfAborted(options.signal);
 			await this.commit(rules, current, options.expectedGeneration);
 			return { ...toPublicRule(rule), created };
 		});
@@ -699,7 +707,9 @@ export class RoutingMemoryStore {
 		const policy = this.resolvePolicy(options);
 		if (!policy.enabled || !policy.learnFromChoices) return this.noopObserve();
 		return this.enqueue(async () => {
+			throwIfAborted(options.signal);
 			const current = await this.readCurrentForMutation();
+			throwIfAborted(options.signal);
 			const now = this.timestamp();
 			const rules = cloneRules(current?.rules ?? []);
 			const matching = rules
@@ -732,6 +742,7 @@ export class RoutingMemoryStore {
 				rule = { id, schemaVersion: ROUTING_MEMORY_SCHEMA_VERSION, action, source: "learned", signature, confidence: 0.6, observations: 1, enabled: true, createdAt: now, updatedAt: now, lastObservedAt: now };
 				rules.push(rule);
 			}
+			throwIfAborted(options.signal);
 			const mutation = await this.commit(rules, current, options.expectedGeneration);
 			return { ...mutation, learned: true, created, ruleCreated: created, rule: toPublicRule(rule), ...(prunedRuleId === undefined ? {} : { prunedRuleId }) };
 		});

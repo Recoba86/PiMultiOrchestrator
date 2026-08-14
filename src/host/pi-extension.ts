@@ -104,8 +104,8 @@ type MaybePromise<T> = T | Promise<T>;
 
 interface RoutingMemoryHostAdapter {
 	match(signature: unknown): MaybePromise<unknown>;
-	addExplicitMissionRule(signature: unknown): MaybePromise<unknown>;
-	observeChoice(signature: unknown, action: "mission" | "normal"): MaybePromise<unknown>;
+	addExplicitMissionRule(signature: unknown, options?: { readonly signal?: AbortSignal }): MaybePromise<unknown>;
+	observeChoice(signature: unknown, action: "mission" | "normal", options?: { readonly signal?: AbortSignal }): MaybePromise<unknown>;
 	listViews(): MaybePromise<readonly unknown[]>;
 	setEnabled(ruleId: string, enabled: boolean): MaybePromise<unknown>;
 	deleteRule(ruleId: string): MaybePromise<unknown>;
@@ -2513,6 +2513,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const result = routingMemoryRecord(value);
 		return result?.created === true || result?.ruleCreated === true;
 	};
+	const discardCancelledMemoryRule = async (memory: RoutingMemoryHostAdapter, value: unknown): Promise<void> => {
+		const result = routingMemoryRecord(value);
+		if (!result || !memoryRuleWasCreated(result)) return;
+		const rule = routingMemoryRecord(result.rule) ?? result;
+		const ruleId = typeof rule?.id === "string" ? rule.id : undefined;
+		if (ruleId === undefined) return;
+		try { await Promise.resolve(memory.deleteRule(ruleId)); } catch { /* cancellation cleanup is best effort */ }
+	};
 
 	const recordRoutingDecision = (decision: SmartRoutingDecision, action: AnalyticsRoutingTelemetryV1["action"], memory?: SmartRoutingDecision["memory"]): void => {
 		if (!analyticsStore) return;
@@ -2553,6 +2561,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		if (!invocation) {
 			if (event.streamingBehavior !== undefined) return { action: "continue" };
 			const inputCancelled = (): boolean => ctx.signal?.aborted === true;
+			const memoryCallOptions = ctx.signal === undefined ? {} : { signal: ctx.signal };
 			const smartSettings = await loadSmartRoutingSettings();
 			const memoryProbe = await routingMemoryMatch(event.text, smartSettings);
 			const memoryContext = routingMemoryContext(memoryProbe.match);
@@ -2601,10 +2610,15 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				}
 				if (routingMemory && smartSettings.learnFromRoutingChoices) {
 					try {
-						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "mission"));
+						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "mission", memoryCallOptions));
+						if (inputCancelled()) {
+							await discardCancelledMemoryRule(routingMemory, learned);
+							return { action: "handled" };
+						}
 						if (memoryRuleWasCreated(learned)) recordRoutingDecision(decision, "rule_created_learned", decision.memory);
 					} catch { /* learning is non-critical */ }
 				}
+				if (inputCancelled()) return { action: "handled" };
 				recordRoutingDecision(decision, "run_as_mission", decision.memory);
 				return { action: "handled" };
 			}
@@ -2614,10 +2628,15 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				// the input handler, so no string sentinel or recursive dispatch is needed.
 				if (routingMemory && smartSettings.learnFromRoutingChoices) {
 					try {
-						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "normal"));
+						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "normal", memoryCallOptions));
+						if (inputCancelled()) {
+							await discardCancelledMemoryRule(routingMemory, learned);
+							return { action: "handled" };
+						}
 						if (memoryRuleWasCreated(learned)) recordRoutingDecision(decision, "rule_created_learned", decision.memory);
 					} catch { /* learning is non-critical */ }
 				}
+				if (inputCancelled()) return { action: "handled" };
 				recordRoutingDecision(decision, "run_normally", decision.memory);
 				return { action: "continue" };
 			}
@@ -2635,13 +2654,19 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					}
 					let explicitRuleCreated = false;
 					try {
-						const saved = routingMemoryRecord(await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature)));
+						const saved = routingMemoryRecord(await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature, memoryCallOptions)));
 						explicitRuleCreated = saved?.created === true;
+						if (inputCancelled()) {
+							await discardCancelledMemoryRule(routingMemory, saved);
+							return { action: "handled" };
+						}
 					} catch {
+						if (inputCancelled()) return { action: "handled" };
 						ctx.ui.notify("Mission created; the explicit routing preference could not be saved.", "warning");
 						recordRoutingDecision(decision, "run_as_mission", decision.memory);
 						return { action: "handled" };
 					}
+					if (inputCancelled()) return { action: "handled" };
 					if (explicitRuleCreated) recordRoutingDecision(decision, "rule_created_explicit", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
 				recordRoutingDecision(decision, "run_as_mission", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
 				return { action: "handled" };
@@ -2655,6 +2680,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			ctx.ui.notify("Add a goal after @orchestrator.", "warning");
 			return { action: "handled" };
 		}
+		if (ctx.signal?.aborted === true) return { action: "continue" };
 		const requeueOriginal = (): InputEventResult => {
 			const sendUserMessage = (pi as unknown as {
 				sendUserMessage?: (content: string, options?: { readonly deliverAs?: "steer" | "followUp" }) => void;

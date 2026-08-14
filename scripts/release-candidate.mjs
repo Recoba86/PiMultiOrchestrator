@@ -560,6 +560,23 @@ export async function verifyReleaseDirectory(directory) {
 	if (!manifest.piIdentity || manifest.piIdentity.package !== PI_PACKAGE || manifest.piIdentity.version !== "0.84.1" || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.packageJsonSha256) || !/^[0-9a-f]{64}$/u.test(manifest.piIdentity.cliSha256)) fail("release manifest has no bound Pi identity");
 	const artifactName = manifest.artifact?.file;
 	if (typeof artifactName !== "string" || artifactName !== artifactName.split(/[\\/]/u).pop() || artifactName !== `pi-multi-orchestrator-${EXPECTED_RELEASE_VERSION}.tgz`) fail("release manifest has an invalid or stale artifact filename");
+	const allowedRootEntries = new Set([
+		"artifact-files.txt",
+		"directory-source",
+		"m10-baseline",
+		"m10-baseline.tgz",
+		"m10-baseline.tgz.sha256",
+		"pi-install-evidence.json",
+		"privacy-report.json",
+		"release-integrity-evidence.json",
+		"release-manifest.json",
+		"test-evidence.json",
+		"verification.json",
+		"worker-safety-evidence.json",
+		artifactName,
+		`${artifactName}.sha256`,
+	]);
+	for (const entry of await readdir(root)) if (!allowedRootEntries.has(entry)) fail(`release directory contains unexpected root entry: ${entry}`);
 	const artifactPath = join(root, artifactName);
 	const artifactHash = await verifyArtifactChecksum(artifactPath, join(root, `${artifactName}.sha256`));
 	if (manifest.artifact.sha256 !== artifactHash || verification.sha256 !== artifactHash) fail("release metadata checksum does not match artifact");

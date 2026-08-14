@@ -677,6 +677,66 @@ describe("Pi 9Router host adapter", () => {
 			assert.deepEqual(result, { action: "continue" });
 			assert.equal(store.listMissions().length, 0);
 			assert.equal(selections, 0);
+
+			const explicitStore = createMissionStore({ root: join(root, "explicit-missions") });
+			try {
+				const explicitPi = piFixture();
+				createPiHost(explicitPi.pi, { manager: managerFixture(projection()), missionStore: explicitStore });
+				const explicitResult = await explicitPi.inputHandlers[0]!({ type: "input", text: "@orchestrator explicit cancelled goal", source: "interactive" }, {
+					cwd: root,
+					mode: "tui",
+					hasUI: true,
+					signal: controller.signal,
+					isIdle: () => true,
+					ui: { notify: () => {} },
+				} as unknown as ExtensionContext);
+				assert.deepEqual(explicitResult, { action: "continue" });
+				assert.equal(explicitStore.listMissions().length, 0);
+			} finally {
+				explicitStore.close();
+			}
+		} finally {
+			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][fixture-pi-0.84.1] fences asynchronous routing-memory writes after cancellation", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-smart-cancel-race-"));
+		const store = createMissionStore({ root: join(root, "missions") });
+		const memory = new RoutingMemoryStore({ root: join(root, "memory"), id: (() => { let id = 0; return () => `cancel-rule-${++id}`; })() });
+		let observeStarted!: () => void;
+		const observeStartedPromise = new Promise<void>((resolve) => { observeStarted = resolve; });
+		let releaseObserve!: () => void;
+		const observeGate = new Promise<void>((resolve) => { releaseObserve = resolve; });
+		const originalObserve = memory.observeChoice.bind(memory);
+		memory.observeChoice = (async (...args: Parameters<RoutingMemoryStore["observeChoice"]>) => {
+			observeStarted();
+			await observeGate;
+			return originalObserve(args[0], args[1]);
+		}) as RoutingMemoryStore["observeChoice"];
+		const analytics = analyticsFixture();
+		const controller = new AbortController();
+		try {
+			const pi = piFixture();
+			createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store, smartRoutingStore: new SmartRoutingSettingsStore({ root: join(root, "routing") }), routingMemoryStore: memory, analyticsStore: analytics });
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+			const pending = handleInput({ type: "input", text: "Fix the bug in src/auth.ts and add tests, then verify independently", source: "interactive" }, {
+				cwd: root,
+				mode: "tui",
+				hasUI: true,
+				signal: controller.signal,
+				isIdle: () => true,
+				ui: { select: async () => "Run as Mission", notify: () => {} },
+			} as unknown as ExtensionContext);
+			await observeStartedPromise;
+			controller.abort();
+			releaseObserve();
+			assert.deepEqual(await pending, { action: "handled" });
+			assert.equal(store.listMissions().length, 1);
+			assert.equal((await memory.listViews()).filter((rule) => rule.source === "learned").length, 0);
+			assert.equal(analytics.list().length, 4);
 		} finally {
 			store.close();
 			await rm(root, { recursive: true, force: true });

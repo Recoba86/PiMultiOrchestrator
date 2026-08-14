@@ -91,6 +91,10 @@ test("release script emits a verified artifact outside the checkout", () => {
 	assert.match(releaseManifest.sourceDigest, /^[0-9a-f]{64}$/u);
 	assert.equal(releaseManifest.testDefinition.command, "npm run check");
 	assert.match(releaseManifest.testDefinition.digest, /^[0-9a-f]{64}$/u);
+	writeFileSync(join(output, "unrelated-user-file.txt"), "must not be force-deleted", "utf8");
+	const unexpectedEntryCode = `import { verifyReleaseDirectory } from ${JSON.stringify(join(root, "scripts", "release-candidate.mjs"))}; try { await verifyReleaseDirectory(process.argv[1]); process.exit(1); } catch { console.log("rejected"); }`;
+	assert.equal(execFileSync(process.execPath, ["--input-type=module", "-e", unexpectedEntryCode, output], { cwd: root, encoding: "utf8" }).trim(), "rejected");
+	rmSync(join(output, "unrelated-user-file.txt"), { force: true });
 	releaseManifest.package.version = "0.1.0-rc.13";
 	writeFileSync(join(output, "release-manifest.json"), `${JSON.stringify(releaseManifest)}\n`, "utf8");
 	const verifierCode = `import { verifyReleaseDirectory } from ${JSON.stringify(join(root, "scripts", "release-candidate.mjs"))}; try { await verifyReleaseDirectory(process.argv[1]); process.exit(1); } catch { console.log("rejected"); }`;
