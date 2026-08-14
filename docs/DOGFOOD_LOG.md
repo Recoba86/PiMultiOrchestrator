@@ -6,7 +6,34 @@ they are not current RC16 acceptance evidence.
 This is an auditable local record. It contains no raw prompts, transcripts, tool
 output, credentials, or provider response bodies.
 
-## RC16 final Planner/manual acceptance attempt — HARD BLOCKED
+## RC17 final Planner/manual acceptance — PASS
+
+- **Date:** 2026-08-15; local-only and unpublished. Candidate `0.1.0-rc.17`
+  is bound to source commit `5def791b31a7ad940ed87f6e720aabb0228500e7`, tree
+  `c23424f26600e988e6d96cbd794a0d22cc121ecd`, artifact SHA-256
+  `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`, and
+  bundle-root SHA-256
+  `f5f58cdf255580b4cdd772b0b5885fde531232fc4130b7e352972fe7be9b9bcf`.
+- **Canonical Mission:** Mission
+  `mission-b5a2cc76-d2b1-41d4-9c31-a922e7727d53` → Task
+  `task-2b48f5e6-d3d2-4282-8318-6259a1a4e399` → Implementation attempt
+  `attempt-783ba966-d696-4dfd-9230-f7094c8bedae` completed on the pinned ag
+  route and created exact `rc17-smoke.json`; the disposable project contained
+  only its README and that file.
+- **M7 result:** Verification
+  `verification-f5ea93ba-deea-41c3-a6ae-8c9d009102a4` completed at round 0;
+  reviewer run `run-msthhb41-1` submitted one valid structured result and
+  decision `decision-30772023-ebec-4ce9-a2cf-ba90e4e191c1` was `pass`. All four
+  criteria were satisfied; reviewer potential mutation was false.
+- **Technical TUI:** isolated offline Pi `0.84.1` dashboard, Routing & Fallback,
+  Missions, Back navigation, clean exit, and no credential text all passed.
+- **Offline/release:** `231/231` tests, typecheck/build, detached release
+  verification, Pi compatibility, privacy, worker safety, and `20/20` integrity
+  attacks passed. No live Pi configuration, provider account, Keychain value,
+  source checkout, tag, push, npm publication, GitHub release, or production
+  installation was modified. `PMO_FINAL_PLANNER_ACCEPTANCE_PASS`.
+
+## Historical RC16 final Planner/manual acceptance attempt — HARD BLOCKED
 
 - **Date:** 2026-08-15; local-only and unpublished. The exact RC16 candidate is
   bound to source commit `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99` and artifact

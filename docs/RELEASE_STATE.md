@@ -13,9 +13,9 @@ This file records releasable product state. It does not promote development prog
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.16` — current detached-release candidate, local only |
-| Final Planner/manual acceptance | HARD BLOCKED — live canonical M7 reviewer produced no valid structured submission |
-| Local technical release readiness | NOT CLEARED — detached verification passes, current live M7 gate does not |
+| Development manifest version | `0.1.0-rc.17` — final local candidate, locally accepted; not public |
+| Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
+| Local technical release readiness | CLEARED LOCALLY — detached verification, live canonical M7, and technical TUI gates pass; publication is not authorized |
 | Release tag | NONE |
 | Release commit | NONE |
 | GitHub release | NONE |
@@ -25,6 +25,16 @@ This file records releasable product state. It does not promote development prog
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC17 final Planner/manual acceptance
+
+- **Disposition:** `PMO_FINAL_PLANNER_ACCEPTANCE_PASS`. RC17 is the successor
+  candidate after RC16's live reviewer handoff block. It is locally accepted
+  for this mission, but remains unpublished and not a production installation.
+- **Identity:** source commit `5def791b31a7ad940ed87f6e720aabb0228500e7`, tree `c23424f26600e988e6d96cbd794a0d22cc121ecd`, source digest `04935d63c419c56c4c9b92214abf06d4151bfe13ebc7a255b08475895c7d7f2c`, build digest `aaefde527e8f18a6accbd1dc79e9fffb87ae0f6df832c876911a4cd509373b58`, artifact SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`, and independent bundle-root SHA-256 `f5f58cdf255580b4cdd772b0b5885fde531232fc4130b7e352972fe7be9b9bcf`.
+- **Offline evidence:** `231/231` tests across 13 suites, zero failed/cancelled/skipped/todo, typecheck/build, detached release verification, Pi `0.84.1` compatibility/install/upgrade/rollback/rescue, privacy, worker safety, and `20/20` integrity attacks all passed.
+- **Live evidence:** Mission `mission-b5a2cc76-d2b1-41d4-9c31-a922e7727d53` → Task `task-2b48f5e6-d3d2-4282-8318-6259a1a4e399` → Implementation attempt `attempt-783ba966-d696-4dfd-9230-f7094c8bedae` → Verification `verification-f5ea93ba-deea-41c3-a6ae-8c9d009102a4` → pass decision `decision-30772023-ebec-4ce9-a2cf-ba90e4e191c1`, all on the explicitly configured ag route. The reviewer captured one valid `submit_verification_result` with four satisfied criteria and no mutation.
+- **TUI/boundary:** isolated offline Pi `0.84.1` RPC passed dashboard, Routing & Fallback, Missions, Back, clean exit, and no credential text. No live Pi configuration, provider account, Keychain value, public tag, push, npm publication, GitHub release, or production installation was modified. Disposable evidence paths are omitted.
 
 ## Compatibility and verification evidence
 
@@ -53,8 +63,9 @@ Milestone acceptance does not itself create a product release.
 | M12 final routing gate local evidence | RC13 source commit `8d8e36a9526c6edd106d36fa8cb5069cda517405`; `214/214 PASS`, `20/20` integrity attacks, balanced `360`-case bilingual corpus, isolated Pi lifecycle dogfood, bounded real 9Router Triage, privacy, worker safety, latency, and clean worktree; local-only |
 | M12 final RC13 verifier | Artifact SHA-256 `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`; source tree `d5d06e16e4a2266d9b04d3afd79c6dd181df9345`; source digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`; review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`; External Review #5 remains pending |
 | M12 RC15 historical final-review candidate | Historical final external review PASS; superseded by RC16 |
-| M12 RC16 final-review candidate | Exact detached verifier PASS on commit `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`, tree `0e7e01ff02abf269891fc55556d57e64d5a1f111`; source digest `7dd0e1c84ad6e980a19269eafddf1f1501cc1aa1f9cf330afca172584daa1b87`; artifact SHA-256 `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`; bundle root `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`; clean `npm run check` `231/231 PASS`, Pi `0.84.1`, privacy, worker-safety, and `20/20` integrity PASS |
-| RC16 final Planner/manual attempt | 2026-08-15 disposable live smoke: AI Triage structured fallback PASS; canonical single-route Implementation created exact `rc16-smoke.json`; two same-route Verification attempts stopped before valid `submit_verification_result`, no M7 decision; technical TUI PASS; acceptance HARD BLOCKED |
+| M12 RC16 final-review candidate | Historical detached verifier PASS; superseded by RC17 after the live M7 handoff block |
+| M12 RC17 final-review candidate | Exact detached verifier PASS on commit `5def791b31a7ad940ed87f6e720aabb0228500e7`, tree `c23424f26600e988e6d96cbd794a0d22cc121ecd`; source digest `04935d63c419c56c4c9b92214abf06d4151bfe13ebc7a255b08475895c7d7f2c`; artifact SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`; bundle root `f5f58cdf255580b4cdd772b0b5885fde531232fc4130b7e352972fe7be9b9bcf`; clean `npm run check` `231/231 PASS`, Pi `0.84.1`, privacy, worker-safety, and `20/20` integrity PASS |
+| RC17 final Planner/manual attempt | PASS: disposable Mission → Task → Implementation → Verification Pool → `submit_verification_result` → M7 decision; technical TUI PASS; no live configuration mutation |
 | Typecheck | PASS |
 | Aggregate check | PASS — `231/231`; exact detached release verification PASS |
 | Tested Pi version | `0.84.1` |
@@ -72,12 +83,12 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 - No public artifact, tag, GitHub release, npm publication, or production-ready install exists. The local M11 RC and its verification metadata are not a public release.
 - RC16 addresses the M12.1/M7 and recovery findings carried forward from RC15 review: explicit-entry failure preserves the original prompt, completion requires Boss authorization and passed M7 evidence, cross-Mission evidence is rejected, corrupt routing state is repairable, Unicode and input sizes are bounded, worker timeouts honor route ceilings, and the TypeScript launcher is provenance-bound. Detached release evidence passes; final development acceptance remains separate.
-- The 2026-08-15 final RC16 acceptance attempt is hard-blocked at current live canonical M7 reviewer submission: the already-proven `r9-ninerouter-ag-claude-opus-4-6-think-fe2f756e1d848cbb05ca` route produced no valid `submit_verification_result` payload in two bounded attempts. No source-level defect or alternate compatible Verification route was established; do not publish or claim technical release readiness.
+- The 2026-08-15 RC16 acceptance attempt is historical and was hard-blocked at the live canonical M7 reviewer handoff. RC17 resolved that handoff with the smallest source-bound reviewer instruction and a regression assertion; the RC17 live Verification Pool run captured one valid submission and passed M7.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
 - Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and public release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
-- Human keyboard-driven TUI smoke remains pending as open validation, but is not an M10 acceptance blocker. M10 automated safety/recovery evidence is `159/159 PASS`; M12.1 isolated offline Pi TUI evidence passed separately.
+- RC17 technical TUI smoke passed in isolated offline Pi `0.84.1` RPC, including dashboard, Routing & Fallback, Missions, Back, clean exit, and no credential text. This is a local candidate gate, not a claim of public installation or live keyboard acceptance.
 - Historical M11 RC.8 Computer-Use dogfood and canonical M7 real-route verification passed; final human sanity smoke, live metadata limits, and Planner acceptance remain open validation. RC15 is historical; RC16 detached verification passed.
-- M12.1 RC.9 changes are local-only. Its focused UX review, isolated offline TUI evidence, and final release verifier passed; independent review, Planner/manual acceptance, and publication remain separate gates. M12.2 RC.11 and M12.3 RC.12 are local-only and keep M10 as the latest accepted milestone. RC.10 exposed an additive empty analytics summary field and was superseded before final verification.
+- M12.1 RC.9 changes are historical local evidence. RC17 is the current local candidate for the combined M12 final acceptance; M12.2 RC.11 and M12.3 RC.12 remain historical local candidates, and M10 remains the latest accepted development milestone.
 - M12.2 and M12 final live-route triage were executed only through the secure auth bridge and disposable roots. The user Pi configuration, provider account, Keychain, credential values, and source checkout were not modified. The M12 final routing gate passed locally on RC13; RC16 carries the follow-on M12.1/M7/recovery repairs. Planner/manual acceptance and publication remain pending.
 - Residual low-risk notes accepted for the supported local workflow: local Smart Router signal analysis runs over the supplied Pi prompt before the separately bounded Triage payload, and numbered internal Routing Memory history is retention-bounded but not independently byte-capped. These are application-level resource limits; supported restore paths fail closed and no release-blocking finding remains open.
 - M10's application-level policy is not an OS/kernel sandbox. Stage 4A proves the bounded supported route and product path only; it does not promote M11 to accepted or production-ready.

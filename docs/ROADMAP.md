@@ -196,7 +196,19 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC16 is the exact locally verified candidate after entry, Mission/M7, recovery, and provenance repairs. The 2026-08-15 final Planner/manual acceptance attempt is HARD-BLOCKED at the current live canonical M7 structured-result gate. M10 remains the latest accepted milestone; publication remains pending.
+Status: COMPLETE / LOCAL PLANNER ACCEPTANCE PASS. RC17 is the locally accepted final candidate after the bounded reviewer-handoff repair; M10 remains the latest accepted development milestone, and publication remains unauthorized.
+
+### M12 final Planner/manual acceptance — RC17
+
+Exit evidence: `PMO_FINAL_PLANNER_ACCEPTANCE_PASS`; source-bound RC17 detached
+verification and independent review passed; clean `npm run check` passed
+`231/231` across 13 suites with zero failed/cancelled/skipped/todo; Pi
+`0.84.1` compatibility, privacy, worker safety, and `20/20` integrity attacks
+passed. A disposable live Mission → Task → Implementation → Verification Pool
+→ `submit_verification_result` → M7 path passed at round 0 on the explicit ag
+route, and the isolated offline technical TUI passed with clean Back/exit and
+no credential text. The candidate remains local-only; no publication or live
+configuration mutation occurred.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -210,7 +222,7 @@ Deliverables:
 - clear `Direct Workers` and canonical Mission/M7 terminology without changing `/verify-task` semantics; and
 - deterministic parser, persistence, menu-equivalence, ordinary-input, and direct-worker regression coverage.
 
-Exit gate: PASS — local typecheck/build/full tests, focused UX review, isolated offline Pi `0.84.1` checks, and detached RC16 release verification pass; M10 remains the latest accepted milestone and Planner/manual acceptance/publication remain separate.
+Exit gate: PASS — local typecheck/build/full tests, focused UX review, isolated offline Pi `0.84.1` checks, and detached RC17 release verification pass; the combined M12 Planner/manual acceptance is recorded above and publication remains separate.
 
 ### M12.2 — Hybrid Smart Router
 
@@ -295,7 +307,7 @@ acceptance handoff. At that time External Review #5 was
 verification. Planner/manual acceptance, human acceptance, tags, push, npm
 publication, and GitHub release remain pending or unauthorized.
 
-### M12 Final External Release Review — RC16
+### Historical M12 Final External Release Review — RC16
 
 Status: FINAL EXTERNAL REVIEW PASS on the exact detached local candidate. RC16
 is not accepted, public, or production-ready.
@@ -322,11 +334,11 @@ artifact SHA-256
 and bundle-root SHA-256
 `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`.
 
-Final Planner/manual acceptance attempt on 2026-08-15: HARD BLOCKED. The
+Final Planner/manual acceptance attempt on 2026-08-15: HISTORICAL HARD BLOCK,
+superseded by RC17. The
 disposable live canonical Mission Implementation leg succeeded on the pinned
 `9router/ag/claude-opus-4-6-thinking` route and created the exact smoke JSON;
 the same Verification route stopped before valid `submit_verification_result`
 capture in two bounded attempts, leaving M7 blocked with no decision. The
-isolated offline Pi `0.84.1` technical TUI path passed. This is not an RC16
-acceptance or publication handoff; no source change or RC17 is justified by
-the evidence currently available.
+isolated offline Pi `0.84.1` technical TUI path passed. RC17 is the accepted
+local successor; publication remains a separate unauthorized gate.

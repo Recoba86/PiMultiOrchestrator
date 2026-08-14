@@ -4,10 +4,48 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
-## M12 final Planner/manual acceptance attempt — RC16 HARD BLOCKED
+## M12 final Planner/manual acceptance — RC17 PASS
 
 - **Date:** 2026-08-15.
-- **Status:** `PMO_FINAL_PLANNER_ACCEPTANCE_HARD_BLOCK`; M10 remains the latest
+- **Status:** `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for local candidate
+  `0.1.0-rc.17`; M10 remains the latest accepted development milestone. RC17 is
+  not public, production-ready, or published.
+- **Source/release identity:** source commit
+  `5def791b31a7ad940ed87f6e720aabb0228500e7`, tree
+  `c23424f26600e988e6d96cbd794a0d22cc121ecd`, source digest
+  `04935d63c419c56c4c9b92214abf06d4151bfe13ebc7a255b08475895c7d7f2c`, build
+  digest `aaefde527e8f18a6accbd1dc79e9fffb87ae0f6df832c876911a4cd509373b58`,
+  artifact SHA-256
+  `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`, and
+  independent bundle root
+  `f5f58cdf255580b4cdd772b0b5885fde531232fc4130b7e352972fe7be9b9bcf`.
+- **Repair:** bounded reviewer instructions plus a deterministic provider-host
+  assertion stopped exploratory `grep`/`find` failures from stranding the
+  required structured M7 submission. The source fix was committed before the
+  RC17 artifact; the later documentation handoff is docs-only.
+- **Offline validation:** `npm run check` passed `231/231` across 13 suites
+  with zero failed/cancelled/skipped/todo; typecheck/build, detached release
+  verification, Pi `0.84.1` compatibility/install/upgrade/rollback/rescue,
+  privacy, worker safety, and `20/20` integrity attacks passed.
+- **Live canonical path:** Mission
+  `mission-b5a2cc76-d2b1-41d4-9c31-a922e7727d53`, Task
+  `task-2b48f5e6-d3d2-4282-8318-6259a1a4e399`, Implementation attempt
+  `attempt-783ba966-d696-4dfd-9230-f7094c8bedae`, Verification
+  `verification-f5ea93ba-deea-41c3-a6ae-8c9d009102a4`, reviewer run
+  `run-msthhb41-1`, and pass decision
+  `decision-30772023-ebec-4ce9-a2cf-ba90e4e191c1`. The run created exact
+  `rc17-smoke.json`, satisfied all four criteria, and observed no reviewer
+  mutation or fallback/repair/escalation.
+- **Technical TUI/boundary:** isolated offline Pi `0.84.1` RPC passed dashboard,
+  Routing & Fallback, Missions, Back, clean exit, and no credential text. No
+  live Pi configuration, provider account, Keychain value, public tag, push,
+  npm publication, GitHub release, or production installation was modified.
+
+## Historical M12 final Planner/manual acceptance attempt — RC16 HARD BLOCKED
+
+- **Date:** 2026-08-15.
+- **Status:** `PMO_FINAL_PLANNER_ACCEPTANCE_HARD_BLOCK` (superseded by RC17);
+  M10 remains the latest
   accepted milestone. RC16 is not accepted, public, or production-ready.
 - **Identity:** all candidate claims remain bound to source commit
   `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`, tree
