@@ -205,7 +205,7 @@ export async function verifyReviewBundle(bundleDir, expectedRootSha256) {
 	const manifest = JSON.parse(await readFile(join(bundle, "release-manifest.json"), "utf8"));
 	const artifact = manifest.artifact?.file;
 	if (typeof artifact !== "string") fail("bundle manifest has no artifact");
-	await verifyReleaseDirectory(bundle);
+	await verifyReleaseDirectory(bundle, { reviewBundle: true });
 	await assertBundlePrivacy(bundle, artifact);
 	const expected = new Set([...REQUIRED_ROOT_FILES, ...M10_BASELINE_ENTRIES, ...REVIEW_DOCS, artifact, `${artifact}.sha256`, DIRECTORY_SOURCE]);
 	const actual = await readdir(bundle);

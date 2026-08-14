@@ -544,7 +544,7 @@ const verifyEvidenceBinding = async (root, manifest, verification) => {
 	return manifest.evidence;
 };
 
-export async function verifyReleaseDirectory(directory) {
+export async function verifyReleaseDirectory(directory, { reviewBundle = false } = {}) {
 	const root = resolve(directory);
 	const rootDetails = await lstat(root);
 	if (rootDetails.isSymbolicLink() || !rootDetails.isDirectory()) fail("release directory must be a real directory");
@@ -576,6 +576,7 @@ export async function verifyReleaseDirectory(directory) {
 		artifactName,
 		`${artifactName}.sha256`,
 	]);
+	if (reviewBundle) for (const entry of ["COMPATIBILITY.md", "DOGFOOD_LOG.md", "RELEASE_CHECKLIST.md", "RELEASE_REVIEW.md", "REVIEW_EVIDENCE.json", "REVIEW_PROMPT.md", "package.json", "review-bundle-files.json"]) allowedRootEntries.add(entry);
 	for (const entry of await readdir(root)) if (!allowedRootEntries.has(entry)) fail(`release directory contains unexpected root entry: ${entry}`);
 	const artifactPath = join(root, artifactName);
 	const artifactHash = await verifyArtifactChecksum(artifactPath, join(root, `${artifactName}.sha256`));
