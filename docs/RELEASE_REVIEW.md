@@ -38,7 +38,9 @@ embedded bundle review marker remains `EXTERNAL_REVIEW_PENDING` by design: the
 bundle is audit material and its root digest is checked separately; it is not
 the trust root. Residual limitations are application-level safety, a bounded
 recursive scan, check/use race exposure, other OS/Pi versions, human TUI
-smoke, real-provider smoke, Planner acceptance, and publication. These do not
+smoke, real-provider smoke, Planner acceptance, and publication. Local signal
+analysis and numbered internal Routing Memory history are not independently
+byte-capped, although supported restore paths fail closed. These do not
 promote RC15 to public or production-ready status.
 
 Historical M11 and earlier RC evidence remains in Git history and the

@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC15 is the final external-review candidate after release and runtime repairs. M10 remains the latest accepted milestone.
+Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC15 is the exact candidate and final external-review PASS after release and runtime repairs. M10 remains the latest accepted milestone; Planner/manual acceptance and publication remain pending.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -210,7 +210,7 @@ Deliverables:
 - clear `Direct Workers` and canonical Mission/M7 terminology without changing `/verify-task` semantics; and
 - deterministic parser, persistence, menu-equivalence, ordinary-input, and direct-worker regression coverage.
 
-Exit gate: PASS — local typecheck/build/full tests, release verification, focused UX review, and isolated offline Pi `0.84.1` checks pass; M10 remains the latest accepted milestone, with independent review, Planner/manual acceptance, and publication gates still separate.
+Exit gate: PASS — local typecheck/build/full tests, release verification, focused UX review, and isolated offline Pi `0.84.1` checks pass; this milestone record is historical. RC15 final external review is complete, while M10 remains the latest accepted milestone and Planner/manual acceptance/publication remain separate.
 
 ### M12.2 — Hybrid Smart Router
 
@@ -234,8 +234,9 @@ M12.2 adds the bounded hybrid Smart Router for ordinary Pi input:
 Local evidence: typecheck/build, the full test suite, focused Smart Router and
 Pi host regression suites, isolated Pi `0.84.1` TUI dogfood, and bounded live
 English/Persian Primary/Fallback/degradation dogfood pass in disposable roots.
-No credential value or live Pi state was manufactured or modified. M12.2 is
-still local-only pending independent review and Planner/manual acceptance.
+No credential value or live Pi state was manufactured or modified. This M12.2
+evidence is local-only and historical; RC15 supersedes its candidate and final
+external review now passes. Planner/manual acceptance remains separate.
 
 ### M12.3 — Adaptive Routing Memory
 
@@ -261,10 +262,11 @@ Local evidence: Analytics `9/9`, Routing Memory `14/14`, Smart Router `14/14`,
 provider host `25/25`, and isolated Pi `0.84.1` RPC/TUI dogfood passed. The
 detached RC13 verifier passed `214/214` tests, `20/20` integrity attacks, Pi
 install/upgrade/rollback/rescue, privacy, and worker safety. Focused review of
-the exact source commit found no unresolved blocker/high. External review,
-Planner/manual acceptance, and publication remain separate pending gates.
+the exact source commit found no unresolved blocker/high. This M12.3 evidence
+is historical; RC15 supersedes its candidate and final external review now
+passes. Planner/manual acceptance and publication remain separate.
 
-### M12 Final Gate — Routing Dogfood
+### M12 Final Gate — historical RC13 Routing Dogfood evidence
 
 Status: COMPLETE / LOCAL PASS; not accepted, public, or production-ready.
 
@@ -287,10 +289,11 @@ Evidence:
   digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`,
   review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
 
-The local final gate is not a public release or acceptance handoff. External
-Review #5 is `EXTERNAL_REVIEW_PENDING`; Planner/manual acceptance, human
-acceptance, tags, push, npm publication, and GitHub release remain pending or
-unauthorized.
+This RC13 final-gate record is historical and is not a public release or
+acceptance handoff. At that time External Review #5 was
+`EXTERNAL_REVIEW_PENDING`; RC15 supersedes that pending state and passes final
+external review. Planner/manual acceptance, human acceptance, tags, push, npm
+publication, and GitHub release remain pending or unauthorized.
 
 ### M12 Final External Release Review — RC15
 

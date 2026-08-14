@@ -115,16 +115,20 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   `4d417b1360cbb9b3a8a9e6f529470cf85f24bcbc37194f802d3c4b276f6ce8fd`, and
   review-bundle root SHA-256 is
   `69e55e37731c44d6540950056664e729fa56b7898eccadc8b417669cc1327ce8`.
-  Focused independent review of the exact source commit is PASS with no
-  unresolved blocker/high. The M12 Final Routing Gate, external review,
-  Planner/manual acceptance, and publication remain separate.
+  Focused review of this historical RC12 source found no unresolved
+  blocker/high. RC15 supersedes that candidate and its verifier; the M12 Final
+  Routing Gate and final external review now PASS on RC15. Planner/manual
+  acceptance and publication remain separate.
 - No live Pi configuration, provider account, credential, public tag, push,
   npm publication, or GitHub release was modified. M10 remains the latest
   accepted milestone; M12.3 and the M12 final gate remain local-only pending
-  RC15 external review, Planner/manual acceptance, and publication gates.
+  Planner/manual acceptance and publication gates. RC15 external review is
+  complete.
 
-## M12 Final Routing Gate — local pass only
+## M12 Final Routing Gate — historical RC13 local pass; superseded by RC15
 
+- This section preserves RC13 evidence only; RC15 is the current exact
+  candidate and final external-review result.
 - **Candidate/source:** RC13 `0.1.0-rc.13`, source commit
   `8d8e36a9526c6edd106d36fa8cb5069cda517405`; worktree clean after the
   documentation closeout. M10 remains the latest accepted milestone.
@@ -154,10 +158,11 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   source tree `d5d06e16e4a2266d9b04d3afd79c6dd181df9345`; source digest
   `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`;
   review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
-- **Boundary:** focused review found no unresolved blocker/high. External
-  review remains `EXTERNAL_REVIEW_PENDING`; Planner/manual acceptance,
-  publication, tags, push, and live Pi configuration changes remain outside
-  this local pass.
+- **Historical boundary:** focused review found no unresolved blocker/high.
+  At the time of RC13, External Review #5 remained
+  `EXTERNAL_REVIEW_PENDING`; RC15 supersedes that pending state. Planner/manual
+  acceptance, publication, tags, push, and live Pi configuration changes remain
+  outside this local pass.
 
 ## M12.2 current implementation
 
@@ -203,9 +208,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - The entry and `/orchestrator` → Context & Mission Settings → Create mission menu call the shared `createCanonicalMission` operation and persist through the real MissionStore.
 - Empty entry is handled with `Add a goal after @orchestrator.`; no empty Mission is written. Direct Workers are labeled separately from canonical Mission/M7 verification.
 - No routing memory was included in M12.2. M12.2 Smart Routing is documented above; M12.3 Adaptive Routing Memory is documented separately above.
-- Local evidence: typecheck/build/check and the full `177/177` test suite passed; release verification passed with `20/20` integrity attacks; the independently checked review bundle remains `EXTERNAL_REVIEW_PENDING`.
+- Local evidence: typecheck/build/check and the full `177/177` test suite passed; release verification passed with `20/20` integrity attacks. The RC15 final external review is now complete; the historical M12.1 bundle marker remains `EXTERNAL_REVIEW_PENDING` by design.
 - Offline Pi `0.84.1` TUI evidence used disposable roots: English Mission `mission-68626594-683d-4b3a-a273-b9e1a9b83df5`, Persian Mission `mission-40224d4f-55d5-4cb6-9cad-0fe7c8eca6ea`, empty warning, ordinary-input isolation, `/missions` persistence, and Control Center `Direct Workers`/Back navigation all passed. No live provider, credential, or user Pi configuration was used.
-- M10 remains the latest accepted milestone. External review, Planner acceptance, human/manual acceptance, and publication remain separate gates; the RC13 local final-gate live triage was performed only in disposable roots.
+- M10 remains the latest accepted milestone. RC15 final external review is complete; Planner acceptance, human/manual acceptance, and publication remain separate gates. The RC13 local final-gate live triage was performed only in disposable roots.
 
 ## Stable / accepted capabilities
 

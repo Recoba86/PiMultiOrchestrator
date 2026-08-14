@@ -1025,10 +1025,11 @@ source commit is `56dbbb150fd184240db55e58e4bffc20efdd5c5f`; source tree is
 review-bundle root SHA-256 is
 `69e55e37731c44d6540950056664e729fa56b7898eccadc8b417669cc1327ce8`.
 Focused independent review of that exact commit is PASS with no unresolved
-blocker/high; the M12 Final Routing Gate, external review, Planner/manual
-acceptance, and publication remain separate.
+blocker/high. This RC12 evidence is historical; RC15 supersedes its candidate
+and passes final external review. Planner/manual acceptance and publication
+remain separate.
 
-## 22. M12 Final Routing Gate evidence
+## 22. M12 Final Routing Gate evidence — historical RC13 record
 
 The RC13 local final-gate run revalidated the M12.1–M12.3 boundary and the
 end-to-end routing surface without promoting the result to product acceptance:
@@ -1055,6 +1056,7 @@ end-to-end routing surface without promoting the result to product acceptance:
   review-bundle root
   `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`.
 
-External Review #5 remains `EXTERNAL_REVIEW_PENDING`; Planner/manual acceptance,
-public release, tags, push, npm publication, and GitHub release remain separate
-pending or unauthorized gates.
+This RC13 record is historical. At the time, External Review #5 remained
+`EXTERNAL_REVIEW_PENDING`; RC15 supersedes that pending state and passes final
+external review. Planner/manual acceptance, public release, tags, push, npm
+publication, and GitHub release remain separate pending or unauthorized gates.
