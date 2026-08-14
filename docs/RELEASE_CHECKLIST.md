@@ -1,4 +1,4 @@
-# M12 RC15 external release checklist
+# M12 RC16 external release checklist
 
 Run from a clean checkout. Keep all generated output outside the repository.
 The exact candidate identity comes from the generated release manifest.
@@ -6,13 +6,13 @@ The exact candidate identity comes from the generated release manifest.
 ```sh
 npm run check
 npm pack --dry-run --ignore-scripts --json
-npm run release:candidate -- --output /tmp/pi-m12-rc15-release --force
+npm run release:candidate -- --output /tmp/pi-m12-rc16-release --force
 node scripts/run-release-verification.mjs \
-  --output /tmp/pi-m12-rc15-release-final \
-  --bundle /tmp/pi-m12-rc15-review-bundle \
+  --output /tmp/pi-m12-rc16-release-final \
+  --bundle /tmp/pi-m12-rc16-review-bundle \
   --force
 node scripts/create-review-bundle.mjs --verify \
-  /tmp/pi-m12-rc15-review-bundle \
+  /tmp/pi-m12-rc16-review-bundle \
   --expected-root-sha256 <independently-supplied-root-sha256>
 ```
 

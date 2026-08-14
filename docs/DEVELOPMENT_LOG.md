@@ -4,10 +4,20 @@ Last updated: 2026-08-14
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## M12.1 autonomous mission entry and RC16 candidate
+
+- **Date:** 2026-08-14.
+- **Status:** IMPLEMENTED BUT NOT ACCEPTED; RC16 is a local candidate pending detached artifact, privacy, Pi, integrity, and independently anchored bundle verification. M10 remains the latest accepted milestone.
+- **Implementation:** explicit-entry failure preserves the original prompt; canonical Mission completion is Boss-only and requires completed/passed M7 evidence; verification, evidence, escalation, and backup validation enforce Mission/task identity and quality lineage.
+- **Routing/recovery:** bounded input is checked before local analysis, zero-width Unicode cannot bypass NORMAL safety, corrupt Smart Routing and Routing Memory state can be repaired, malformed history is isolated, and direct worker timeouts cannot exceed the configured ceiling.
+- **Release provenance:** build scripts invoke the validated TypeScript package directly and bind its launcher hash. Package version is `0.1.0-rc.16`.
+- **Validation:** clean `npm run check` passed `231/231` tests across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build passed. Fresh detached release verification and bundle-root verification remain pending.
+- **Boundary:** no live Pi configuration, provider account, Keychain, credential value, public tag, push, npm publication, GitHub release, or production-ready claim was made. Planner/manual acceptance and publication remain separate.
+
 ## M12 Final External Release Review — RC15 candidate
 
 - **Date:** 2026-08-14.
-- **Status:** FINAL EXTERNAL REVIEW PASS on the exact detached local candidate. M10 remains the latest accepted milestone; RC15 is local-only and not production-ready.
+- **Status:** HISTORICAL FINAL EXTERNAL REVIEW PASS on the exact detached local candidate. RC16 supersedes RC15; M10 remains the latest accepted milestone.
 - **Baseline:** source-review commit `3101fd7` followed the RC13/RC14 review surface. RC13 remains historical; RC15 is the next candidate identity.
 - **Repairs:** in addition to the prior release, routing, recovery, and Mission/M7 fixes, the worker boundary now rejects shell expansion/globs and recursive shell reads, scans bounded recursive built-in reads for credential-like descendants and symlinks, removes npm lifecycle commands from the allowlist, and blocks worker Git content inspection.
 - **Validation:** focused worker-safety tests `7/7 PASS`; clean-checkout full suite `227/227 PASS` across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build PASS. The final detached verifier passed exact source/artifact binding, privacy, Pi `0.84.1` install/upgrade/rollback/rescue, worker safety, and `20/20` integrity attacks. The generated packet records the artifact and bundle identities; the embedded bundle marker remains audit-only `EXTERNAL_REVIEW_PENDING`.

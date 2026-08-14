@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC15 is the exact candidate and final external-review PASS after release and runtime repairs. M10 remains the latest accepted milestone; Planner/manual acceptance and publication remain pending.
+Status: IN PROGRESS. M12.1, M12.2, M12.3, and the M12 Final Gate are local-pass work; RC16 is the current candidate pending detached release verification after entry, Mission/M7, recovery, and provenance repairs. M10 remains the latest accepted milestone; Planner/manual acceptance and publication remain pending.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -210,7 +210,7 @@ Deliverables:
 - clear `Direct Workers` and canonical Mission/M7 terminology without changing `/verify-task` semantics; and
 - deterministic parser, persistence, menu-equivalence, ordinary-input, and direct-worker regression coverage.
 
-Exit gate: PASS — local typecheck/build/full tests, release verification, focused UX review, and isolated offline Pi `0.84.1` checks pass; this milestone record is historical. RC15 final external review is complete, while M10 remains the latest accepted milestone and Planner/manual acceptance/publication remain separate.
+Exit gate: PASS — local typecheck/build/full tests, focused UX review, and isolated offline Pi `0.84.1` checks pass; detached RC16 release verification and final external review remain pending, while M10 remains the latest accepted milestone and Planner/manual acceptance/publication remain separate.
 
 ### M12.2 — Hybrid Smart Router
 
@@ -235,8 +235,8 @@ Local evidence: typecheck/build, the full test suite, focused Smart Router and
 Pi host regression suites, isolated Pi `0.84.1` TUI dogfood, and bounded live
 English/Persian Primary/Fallback/degradation dogfood pass in disposable roots.
 No credential value or live Pi state was manufactured or modified. This M12.2
-evidence is local-only and historical; RC15 supersedes its candidate and final
-external review now passes. Planner/manual acceptance remains separate.
+evidence is local-only and historical; RC16 supersedes its candidate pending
+detached release verification. Planner/manual acceptance remains separate.
 
 ### M12.3 — Adaptive Routing Memory
 
@@ -263,8 +263,8 @@ provider host `25/25`, and isolated Pi `0.84.1` RPC/TUI dogfood passed. The
 detached RC13 verifier passed `214/214` tests, `20/20` integrity attacks, Pi
 install/upgrade/rollback/rescue, privacy, and worker safety. Focused review of
 the exact source commit found no unresolved blocker/high. This M12.3 evidence
-is historical; RC15 supersedes its candidate and final external review now
-passes. Planner/manual acceptance and publication remain separate.
+is historical; RC16 supersedes its candidate pending detached release
+verification. Planner/manual acceptance and publication remain separate.
 
 ### M12 Final Gate — historical RC13 Routing Dogfood evidence
 
@@ -291,31 +291,25 @@ Evidence:
 
 This RC13 final-gate record is historical and is not a public release or
 acceptance handoff. At that time External Review #5 was
-`EXTERNAL_REVIEW_PENDING`; RC15 supersedes that pending state and passes final
-external review. Planner/manual acceptance, human acceptance, tags, push, npm
+`EXTERNAL_REVIEW_PENDING`; RC16 supersedes that pending state pending detached
+verification. Planner/manual acceptance, human acceptance, tags, push, npm
 publication, and GitHub release remain pending or unauthorized.
 
-### M12 Final External Release Review — RC15
+### M12 Final External Release Review — RC16
 
-Status: FINAL EXTERNAL REVIEW PASS on the exact detached local candidate. RC15
-is not accepted, public, or production-ready.
+Status: EXTERNAL_REVIEW_PENDING on the current local candidate. RC16 is not
+accepted, public, or production-ready.
 
-The RC15 source-review baseline is commit `3101fd7`. It closes the adversarial
-findings carried forward from the RC13 review surface and the final worker
-boundary review: release-tool force cleanup and stale-version checks, bundle
-privacy scanning, skipped/todo TAP rejection, trusted-worker
-network/publication shell commands, sensitive learned NORMAL suppression,
-Mission/M7 verification target binding, corrupt Smart Routing fail-closed
-loading, bounded/cancellable Triage, malformed history rejection, Mission
-text normalization, Always-rule persistence ordering, shell/glob/recursive
-read bypasses, npm lifecycle execution, nested credential/symlink descendants,
-and worker Git content inspection. Clean-checkout validation is `227/227 PASS`
-across 13 suites with zero failed/cancelled/skipped/todo; focused worker-safety
-validation is `7/7 PASS`; typecheck and build are PASS.
+The RC16 implementation adds the fresh M12.1/M7 and recovery repairs: explicit
+entry failure preserves user input, completion is Boss-only and evidence-gated,
+M7 verification is bound to succeeded attempts and unique decisions, corrupt
+routing state is repairable, zero-width Unicode and oversized inputs are
+bounded, worker timeouts honor route ceilings, and release builds use a
+validated TypeScript launcher. Clean-checkout validation is `231/231 PASS`
+across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build
+are PASS.
 
-The final detached verifier bound the exact RC15 artifact and review bundle,
-with clean source/build identity, privacy, Pi `0.84.1`, worker-safety, and
-`20/20` integrity evidence. No live Pi configuration, provider account,
-credential, public tag, push, npm publication, or GitHub release is authorized
-by this local candidate. Planner/manual acceptance and publication remain
-separate gates.
+The final detached verifier and independently anchored review bundle remain
+pending for RC16. No live Pi configuration, provider account, credential,
+public tag, push, npm publication, or GitHub release is authorized by this local
+candidate. Planner/manual acceptance and publication remain separate gates.

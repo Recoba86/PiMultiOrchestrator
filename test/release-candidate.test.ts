@@ -175,7 +175,7 @@ test("force modes reject spoofed output markers and current review docs reject s
 		let bundleError: unknown;
 		try { execFileSync(process.execPath, [join(root, "scripts", "create-review-bundle.mjs"), "--release-dir", root, "--output", bundleOutput, "--force"], { cwd: root, stdio: "pipe" }); } catch (error) { bundleError = error; }
 		assert.match((bundleError as { stderr?: Buffer }).stderr?.toString() ?? String(bundleError), /verified review-bundle output/u);
-		assert.match(readFileSync(join(root, "docs", "RELEASE_REVIEW.md"), "utf8"), /RC15/iu);
+		assert.match(readFileSync(join(root, "docs", "RELEASE_REVIEW.md"), "utf8"), /RC16/iu);
 		assert.doesNotMatch(readFileSync(join(root, "docs", "RELEASE_CHECKLIST.md"), "utf8"), /rc\.4/u);
 		assert.doesNotMatch(readFileSync(join(root, "docs", "COMPATIBILITY.md"), "utf8"), /rc\.4/u);
 	} finally {
