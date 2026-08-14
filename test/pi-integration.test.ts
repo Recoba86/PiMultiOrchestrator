@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -23,6 +23,7 @@ import {
 import { createMissionStore } from "../src/core/mission/index.js";
 import { ContextBroker, missionStoreContextRepository } from "../src/core/context/index.js";
 import { AnalyticsQueryService, SQLiteAnalyticsStore } from "../src/core/analytics/index.js";
+import { TrustStore } from "../src/core/security/index.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // `npm test` compiles src/** into dist-test/** and runs this file from there.
@@ -239,6 +240,38 @@ function parseJsonLines(value: string): Record<string, unknown>[] {
 				return [];
 			}
 		});
+}
+
+type RpcEventHandler = (event: Record<string, unknown>, send: (value: Record<string, unknown>) => void, close: () => void) => void;
+
+function runRpcSession(cwd: string, env: NodeJS.ProcessEnv, handle: RpcEventHandler, timeoutMs = 45_000): Promise<PiRunResult> {
+	return new Promise((resolvePromise, reject) => {
+		const child = spawn(piCommand, ["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--mode", "rpc"], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+		let stdout = "";
+		let stderr = "";
+		let buffer = "";
+		let settled = false;
+		const deadline = setTimeout(() => { child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 500).unref(); }, timeoutMs);
+		const send = (value: Record<string, unknown>): void => { if (!child.stdin.destroyed) child.stdin.write(`${JSON.stringify(value)}\n`); };
+		const close = (): void => { if (!child.stdin.destroyed) child.stdin.end(); };
+		const fail = (error: unknown): void => { if (settled) return; settled = true; clearTimeout(deadline); child.kill("SIGTERM"); reject(error); };
+		child.stdout.on("data", (chunk: Buffer) => {
+			stdout += chunk.toString();
+			buffer += chunk.toString();
+			let newline = buffer.indexOf("\n");
+			while (newline >= 0) {
+				const line = buffer.slice(0, newline).replace(/\r$/u, "");
+				buffer = buffer.slice(newline + 1);
+				newline = buffer.indexOf("\n");
+				if (!line.trim().startsWith("{")) continue;
+				try { handle(JSON.parse(line) as Record<string, unknown>, send, close); } catch (error) { fail(error); return; }
+			}
+		});
+		child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+		child.once("error", fail);
+		child.once("close", (code, signal) => { if (settled) return; settled = true; clearTimeout(deadline); resolvePromise({ code, signal, stdout, stderr }); });
+		send({ type: "get_commands", id: "commands" });
+	});
 }
 
 async function withFixture<T>(run: (server: FakeNineRouter, root: string) => Promise<T>, options: { readonly toolCallFlow?: boolean; readonly customToolBypassFlow?: boolean; readonly customToolMarker?: string; readonly qualityLoopFlow?: boolean; readonly analystFlow?: "support" | "oppose" | "insufficient_evidence" | "infra-failure"; readonly analystSecret?: string; readonly analyticsEnabled?: boolean; readonly fallbackEnabled?: boolean; readonly failModels?: readonly string[] } = {}): Promise<T> {
@@ -710,6 +743,128 @@ test("[P][fixture-v1] Pi M7 quality loop persists reject, repair, and re-verific
 			assert.equal(summary.qualityRejects, 1, JSON.stringify(summary));
 			assert.equal(summary.qualityPasses, 1, JSON.stringify(summary));
 			assert.ok(summary.byMission?.["mission-m7"], JSON.stringify(summary));
+			analyticsStore.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	}, { toolCallFlow: true, qualityLoopFlow: true, analyticsEnabled: true });
+});
+
+test("[P][M12 final][fixture-pi-0.84.1] Smart-routed Mission reaches Task Run and M7 PASS", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-final-smart-m7-"));
+		const fixtureRoot = join(root, "fixture");
+		const agentRoot = join(root, "agent");
+		const sessionsRoot = join(root, "sessions");
+		await mkdir(fixtureRoot, { recursive: true, mode: 0o700 });
+		await mkdir(agentRoot, { recursive: true, mode: 0o700 });
+		await mkdir(sessionsRoot, { recursive: true, mode: 0o700 });
+		await writeFile(join(fixtureRoot, "package.json"), JSON.stringify({ name: "m12-final-fixture", version: "1.0.0", private: true }, null, 2));
+		new TrustStore({ root: join(orchestratorRoot, "trust") }).trust(fixtureRoot, "M12 final disposable fixture");
+		const env = isolatedEnv(server, agentRoot, orchestratorRoot, sessionsRoot);
+		const goal = "Audit the bounded fixture, fix findings, add tests, and verify independently";
+		let missionId: string | undefined;
+		let smartMissionChoice = false;
+		let taskFinished = false;
+		let phase = "commands";
+		const first = await runRpcSession(fixtureRoot, env, (event, send, close) => {
+			if (phase === "commands" && event.type === "response" && event.command === "get_commands") {
+				phase = "smart";
+				send({ type: "prompt", message: goal, id: "smart-entry" });
+				return;
+			}
+			if (phase === "smart" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Orchestrator recommended") {
+				smartMissionChoice = true;
+				phase = "smart-created";
+				send({ type: "extension_ui_response", id: String(event.id), value: "Run as Mission" });
+				return;
+			}
+			if (phase === "smart-created" && event.type === "response" && event.command === "prompt" && event.id === "smart-entry") {
+				const store = createMissionStore({ root: orchestratorRoot });
+				const mission = store.listMissions().find((item) => item.goal === goal);
+				assert.ok(mission, "Smart Routing did not create the canonical Mission");
+				missionId = mission.missionId;
+				store.createTask({ missionId: mission.missionId, taskId: "task-smart-m7", roleId: "implementer", executionClass: "implementation", poolId: "implementation", objective: "Read the bounded package fixture", acceptanceCriteria: ["reviewer approves"], status: "ready" });
+				store.close();
+				phase = "mission-menu";
+				send({ type: "prompt", message: `/missions ${mission.missionId}`, id: "mission-menu" });
+				return;
+			}
+			if (event.type !== "extension_ui_request") return;
+			const id = String(event.id);
+			const title = typeof event.title === "string" ? event.title : "";
+			const method = event.method;
+			const options = Array.isArray(event.options) ? event.options.filter((value): value is string => typeof value === "string") : [];
+			if (method === "select" && missionId !== undefined && title.startsWith(`mission: ${missionId}`)) send({ type: "extension_ui_response", id, value: "Tasks" });
+			else if (method === "select" && missionId !== undefined && title.startsWith(`Tasks for ${missionId}`)) send({ type: "extension_ui_response", id, value: options.find((value) => value.startsWith("task-smart-m7 ")) ?? "Back" });
+			else if (method === "select" && title.startsWith("task: task-smart-m7")) send({ type: "extension_ui_response", id, value: "Run task" });
+			else if (method === "confirm" && title === "Run implementation task?") send({ type: "extension_ui_response", id, confirmed: true });
+			else if (method === "notify" && typeof event.message === "string" && event.message.includes("Task task-smart-m7 finished")) {
+				taskFinished = true;
+				close();
+			}
+		}, 60_000);
+		try {
+			assert.equal(first.code, 0, safePiDiagnostic(first, server.token));
+			assert.equal(first.signal, null);
+			assert.equal(smartMissionChoice, true, first.stdout);
+			assert.equal(taskFinished, true, first.stdout);
+			assert.equal(first.stdout.includes(server.token), false);
+			assert.equal(first.stderr.includes(server.token), false);
+			assert.ok(missionId);
+
+			const afterRun = createMissionStore({ root: orchestratorRoot });
+			assert.equal(afterRun.getMission(missionId!)?.goal, goal);
+			assert.equal(afterRun.getTask("task-smart-m7")?.status, "execution_completed");
+			afterRun.close();
+
+			phase = "commands";
+			let qualityFinished = false;
+			const quality = await runRpcSession(fixtureRoot, env, (event, send, close) => {
+				if (phase === "commands" && event.type === "response" && event.command === "get_commands") {
+					phase = "quality-menu";
+					send({ type: "prompt", message: `/missions ${missionId!}`, id: "quality-menu" });
+					return;
+				}
+				if (event.type !== "extension_ui_request") return;
+				const id = String(event.id);
+				const title = typeof event.title === "string" ? event.title : "";
+				const method = event.method;
+				const options = Array.isArray(event.options) ? event.options.filter((value): value is string => typeof value === "string") : [];
+				if (method === "select" && title.startsWith(`mission: ${missionId!}`)) send({ type: "extension_ui_response", id, value: "Tasks" });
+				else if (method === "select" && title.startsWith(`Tasks for ${missionId!}`)) send({ type: "extension_ui_response", id, value: options.find((value) => value.startsWith("task-smart-m7 ")) ?? "Back" });
+				else if (method === "select" && title.startsWith("task: task-smart-m7")) send({ type: "extension_ui_response", id, value: "Run quality loop" });
+				else if (method === "confirm" && title === "Run bounded quality loop?") send({ type: "extension_ui_response", id, confirmed: true });
+				else if (method === "notify" && typeof event.message === "string" && event.message.includes("Quality loop passed")) {
+					qualityFinished = true;
+					close();
+				}
+			}, 60_000);
+			assert.equal(quality.code, 0, safePiDiagnostic(quality, server.token));
+			assert.equal(quality.signal, null);
+			assert.equal(qualityFinished, true, quality.stdout);
+			assert.equal(quality.stdout.includes(server.token), false);
+			assert.equal(quality.stderr.includes(server.token), false);
+
+			const reopened = createMissionStore({ root: orchestratorRoot });
+			assert.equal(reopened.getTaskQualityStatus("task-smart-m7")?.status, "passed");
+			assert.equal(reopened.getTaskQualityStatus("task-smart-m7")?.qualityRound, 1);
+			assert.equal(reopened.listVerificationRuns(missionId!, "task-smart-m7").length, 2);
+			assert.equal(reopened.listQualityDecisions(missionId!, "task-smart-m7").map((decision) => decision.verdict).join(","), "reject,pass");
+			assert.equal(reopened.listQualityEscalations(missionId!, "task-smart-m7").length, 1);
+			reopened.close();
+			const reviewerRequests = server.chatRequests.filter((request) => request.toolNames?.includes("submit_verification_result"));
+			const repairRequests = server.chatRequests.filter((request) => request.toolNames?.includes("submit_agent_result"));
+			assert.equal(reviewerRequests.length, 4);
+			assert.equal(repairRequests.length, 4, "two implementation calls plus two bounded quality-loop repair calls");
+			assert.equal(reviewerRequests.every((request) => request.toolNames?.includes("delegate_agent") !== true), true);
+			assert.equal(reviewerRequests.every((request) => request.toolNames?.includes("bash") !== true), true);
+			const analyticsStore = new SQLiteAnalyticsStore({ root: orchestratorRoot, enabled: true });
+			const summary = new AnalyticsQueryService(analyticsStore).overview();
+			assert.ok((summary.routing?.decisions ?? 0) >= 1, JSON.stringify(summary));
+			assert.ok((summary.routing?.suggestions ?? 0) >= 1, JSON.stringify(summary));
+			assert.equal(summary.qualityRejects, 1);
+			assert.equal(summary.qualityPasses, 1);
 			analyticsStore.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });

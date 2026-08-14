@@ -39,6 +39,32 @@ test("M12.2 local analyzer keeps ordinary questions and narrow edits fast", () =
 	for (const prompt of cases) assert.equal(analyzeLocalSignals(prompt).path, "simple", prompt);
 });
 
+test("M12 final local analyzer does not turn informational keywords into Mission work", () => {
+	for (const prompt of [
+		"What is a release?",
+		"What does a security review mean?",
+		"Why does this pure function return the same value?",
+		"Give a short example of a retry policy.",
+		"این امنیت چیست؟",
+		"هدف یک بازبینی امنیتی چیست؟",
+		"چرا این تابع همیشه همین خروجی را دارد؟",
+		"این security review یعنی چه؟",
+		"Explain how to deploy this service.",
+		"Explain این security review briefly.",
+	]) assert.equal(analyzeLocalSignals(prompt).path, "simple", prompt);
+
+	for (const prompt of [
+		"Can you review this code and add tests?",
+		"How should I fix the authentication bug, add regression tests, and verify independently?",
+		"این مشکل امنیتی را بررسی و اصلاح کن.",
+		"Implement API and UI changes.",
+		"Deploy staging and verify health.",
+		"این workflow را somehow بهتر کن.",
+		"برای این مشکل یک کاری بکن.",
+	]) assert.notEqual(analyzeLocalSignals(prompt).path, "simple", prompt);
+	assert.equal(analyzeLocalSignals("What is the difference between API and UI?").path, "simple");
+});
+
 test("M12.2 local analyzer recognizes bilingual multi-stage work without length-only rules", () => {
 	const cases = [
 		"Fix the bug in src/auth.ts and add tests, then verify independently",

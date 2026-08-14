@@ -284,19 +284,19 @@ const normalize = (value: string): string => value.normalize("NFKC").replaceAll(
 export const containsPersian = (value: string): boolean => /[\u0600-\u06ff]/u.test(value);
 const word = (value: string, pattern: RegExp): boolean => pattern.test(value);
 const clauseCount = (value: string): number => value.split(/(?:\r?\n|[.!?؟؛;]|\b(?:then|after|before|next|first|finally|سپس|بعد|قبل|اول|درنهایت)\b)/iu).map((part) => part.trim()).filter(Boolean).length;
-const uncertaintyPattern = /\b(?:if needed|if necessary|as needed|when appropriate|sometimes|somehow|may be|might be|could you improve|maybe|if possible|do something|whatever|decide what to do|not sure|not certain|as you see fit|when you have time|make this better|improve this)\b|(?:اگر لازم|در صورت نیاز|گاهی|شاید|بهترش کن|نمی.?دانم|هر طور صلاح می.?دانی)/iu;
+const uncertaintyPattern = /\b(?:if needed|if necessary|as needed|when appropriate|sometimes|somehow|may be|might be|could you improve|maybe|if possible|do something|whatever|decide what to do|not sure|not certain|as you see fit|when you have time|make this better|make it better|improve this)\b|(?:اگر لازم|در صورت نیاز|گاهی|شاید|بهتر(?:ش)? کن|نمی.?دانم|هر طور صلاح می.?دانی|اگر ممکن|اگر می.?شود|اگر وقت داشتی|یک کاری بکن)/iu;
 
 const signalPatterns: Readonly<Record<Exclude<LocalSignalCode, "explanation_only" | "question_only" | "debug_and_fix" | "multiple_roles" | "research_and_implementation" | "explicit_goal">, RegExp>> = {
 	action_requested: /\b(?:make|run|take|handle|add|remove|change|update|create|build|implement|fix|check|review|investigate|diagnose|deploy|release)\b|(?:لطفا|لطفاً|می.?خواهم|انجام|بساز|ایجاد|بررسی|اصلاح|تغییر|حذف|اجرا|پیاده|مستقر|منتشر)/iu,
 	repository_scope: /(?:\/|\\|\.(?:ts|tsx|js|jsx|py|go|rs|json|md|sql)\b|\b(?:repo(?:sitory)?|project|codebase|file|folder|branch|commit|git|package|module|مخزن|پروژه|کد|فایل|پوشه|شاخه|کامیت|ماژول)\b)/iu,
 	mutation: /\b(?:add|change|create|delete|remove|edit|modify|update|write|refactor|implement|patch|fix|migrate|rename|replace|upgrade|downgrade)\b|(?:اضافه|تغییر|ایجاد|حذف|پاک|ویرایش|اصلاح|به.?روزرسان|بازنویسی|پیاده|مهاجرت|جایگزین|ارتقا)/iu,
-	investigation: /\b(?:investigate|diagnose|debug|analy[sz]e|inspect|find out|why|root cause|trace|research|understand|look into|look at)\b|(?:بررسی|عیب.?یابی|اشکال.?زدایی|تحقیق|تحلیل|ریشه|علت|چرا|ردیابی|بفهم|متوجه|نگاهی|بنداز|عجیب رفتار)/iu,
+	investigation: /\b(?:investigate|diagnose|debug|analy[sz]e|inspect|find out|root cause|trace|research|understand|look into|look at)\b|(?:بررسی|عیب.?یابی|اشکال.?زدایی|تحقیق|تحلیل|ریشه|علت|ردیابی|بفهم|متوجه|نگاهی|بنداز|عجیب رفتار)/iu,
 	multi_step: /(?:\b(?:then|after that|before|next|finally|until|step\s*\d|first)\b|(?:سپس|بعد از آن|قبل|درنهایت|تا وقتی|مرحله|اول)\b|(?:\d+[.)]|[-*])\s+[^\n]+)/iu,
-	multiple_deliverables: /\b(?:code|implementation|tests?|test suite|docs?|documentation|report|plan|patch|review|summary)\b[^\n]*(?:\band\b|,)[^\n]*\b(?:tests?|docs?|report|plan|review|summary|code)\b|(?:کد|پیاده.?سازی|تست|مستند|گزارش|برنامه|پچ|بازبینی|خلاصه)[^\n]*(?:و|،)[^\n]*(?:تست|مستند|گزارش|بازبینی|کد)/iu,
+	multiple_deliverables: /\b(?:code|implementation|tests?|test suite|docs?|documentation|report|plan|patch|review|summary)\b[^\n]*(?:\band\b|,)[^\n]*\b(?:tests?|docs?|report|plan|review|summary|code)\b|\b(?:api|ui|frontend|backend|server|client|clients)\b[^\n]*(?:\band\b|,|و)[^\n]*\b(?:api|ui|frontend|backend|server|client|clients)\b|(?:کد|پیاده.?سازی|تست|مستند|گزارش|برنامه|پچ|بازبینی|خلاصه)[^\n]*(?:و|،)[^\n]*(?:تست|مستند|گزارش|بازبینی|کد)/iu,
 	tests_requested: /\b(?:tests?|test suite|coverage|assertions?|verify|validate|smoke test|regression)\b|(?:تست|آزمون|پوشش|اعتبارسنج|تأیید|تایید|رگرسیون|اسموک)/iu,
 	independent_verification: /\b(?:independent(?:ly)?|second review|separate review|cross.?check|verify separately|independent verification)\b|(?:مستقل|بازبینی جدا|بررسی جدا|تأیید مستقل|تایید مستقل)/iu,
 	audit_review: /\b(?:audit|security review|code review|review|compliance|vulnerabilit(?:y|ies)|remediation)\b|(?:ممیزی|امنیت|بازبینی|بررسی کد|آسیب پذیری|آسیب‌پذیری|رفع)/iu,
-	iteration_until_success: /\b(?:until|keep trying|retry|iterate|repeat|again|fix all|until green|until it passes)\b|(?:تا وقتی|ادامه بده|دوباره|تکرار|همه را اصلاح|موفق شود|سبز شود|قبول شود)/iu,
+	iteration_until_success: /\b(?:until|keep trying|iterate|repeat|again|fix all|until green|until it passes)\b|(?:تا وقتی|ادامه بده|دوباره|تکرار|همه را اصلاح|موفق شود|سبز شود|قبول شود)/iu,
 	release_deployment: /\b(?:release|deploy|deployment|publish|production|staging|tag|ship|rollout)\b|(?:انتشار|استقرار|تولید|محیط آزمایشی|برچسب|تحویل)/iu,
 	high_consequence: /\b(?:production|live|financial|payment|database|migration|customer|security|credential|permission|auth)\b|(?:تولید|زنده|مالی|پرداخت|پایگاه.?داده|مهاجرت|مشتری|امنیت|اعتبارنامه|دسترسی)/iu,
 	destructive_sensitive: /\b(?:delete|drop|reset|destroy|wipe|purge|revoke|secret|token|password|credential|private key)\b|(?:حذف|پاک|ریست|نابود|ابطال|رمز|توکن|گذرواژه|کلید خصوصی)/iu,
@@ -323,12 +323,14 @@ export function analyzeLocalSignals(prompt: string): LocalSignalAnalysis {
 	const verification = word(text, signalPatterns.independent_verification);
 	const audit = word(text, signalPatterns.audit_review);
 	const research = word(text, researchPattern);
+	const release = word(text, signalPatterns.release_deployment);
 	const clauses = clauseCount(text);
 	const question = questionPattern.test(text);
 	const explanation = explanationPattern.test(text);
 	const uncertain = uncertaintyPattern.test(text);
-	const questionOnly = question && !action && !mutation && !investigation && !audit && !research;
-	const explanationOnly = explanation && !mutation && !investigation && !audit && !research && !signalPatterns.release_deployment.test(text);
+	const informationalLead = /^(?:what|why|how|which|where|when|who|explain|describe|tell me|this|that|فرق|چیست|چرا|چطور|چگونه|کدام|توضیح|شرح|این|آن)/iu.test(text);
+	const questionOnly = question && !mutation && !investigation && !research && !tests && !verification && !uncertain && (!action || informationalLead);
+	const explanationOnly = explanation && !mutation && !investigation && !research && !tests && !verification && !uncertain;
 	add("explanation_only", explanationOnly);
 	add("question_only", questionOnly);
 	add("action_requested", action);
@@ -342,7 +344,7 @@ export function analyzeLocalSignals(prompt: string): LocalSignalAnalysis {
 	add("audit_review", audit);
 	add("debug_and_fix", investigation && mutation);
 	add("iteration_until_success", word(text, signalPatterns.iteration_until_success));
-	add("release_deployment", word(text, signalPatterns.release_deployment));
+	add("release_deployment", release);
 	add("high_consequence", word(text, signalPatterns.high_consequence));
 	add("destructive_sensitive", word(text, signalPatterns.destructive_sensitive));
 	const researchAndImplementation = research && mutation;
@@ -378,7 +380,7 @@ export function analyzeLocalSignals(prompt: string): LocalSignalAnalysis {
 	const strongSignals = signals.filter((code) => ["mutation", "investigation", "multi_step", "multiple_deliverables", "independent_verification", "audit_review", "debug_and_fix", "iteration_until_success", "release_deployment", "high_consequence", "destructive_sensitive", "multiple_roles", "research_and_implementation"].includes(code)).length;
 	const singleNarrowMutation = mutation && strongSignals === 1 && !tests && !verification && !investigation && !audit && !word(text, signalPatterns.multi_step) && !word(text, signalPatterns.iteration_until_success) && !word(text, signalPatterns.release_deployment) && !broadGoalPattern.test(text);
 	const clearlySimple = (questionOnly || explanationOnly || (strongSignals === 0 && missionScore <= 0.22) || singleNarrowMutation) && !multipleRoles && !uncertain;
-	const clearlyComplex = !clearlySimple && !uncertain && (strongSignals >= 2 || multipleRoles || (mutation && (tests || verification) && (investigation || repository)) || (audit && (tests || verification)) || (researchAndImplementation && clauses >= 2));
+	const clearlyComplex = !clearlySimple && !uncertain && (strongSignals >= 2 || multipleRoles || (mutation && (tests || verification) && (investigation || repository)) || (audit && (tests || verification)) || (release && (tests || verification)) || (researchAndImplementation && clauses >= 2));
 	const path: LocalSignalPath = clearlySimple ? "simple" : clearlyComplex ? "complex" : "ambiguous";
 	const confidence = path === "simple" ? 0.92 : path === "complex" ? clamp(0.66 + strongSignals * 0.06) : clamp(0.52 + Math.abs(missionScore - 0.38) * 0.25);
 	return { missionScore: Math.round(missionScore * 1000) / 1000, confidence: Math.round(confidence * 1000) / 1000, signals, path };
