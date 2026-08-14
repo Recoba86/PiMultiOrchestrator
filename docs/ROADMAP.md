@@ -257,11 +257,13 @@ reset with explicit confirmation. Routing telemetry is allowlisted metadata;
 raw prompts, transcripts, tool output, provider responses, and credentials are
 excluded.
 
-Local evidence: Routing Memory `14/14`, Smart Router `28/28`, provider host
-`25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1` pass. The
-detached RC.12 verifier also passed `211/211` tests, `20/20` integrity attacks,
-Pi install/upgrade/rollback, privacy, and worker safety. Focused independent
-review and the M12 Final Routing Gate remain separate pending gates.
+Local evidence: Analytics `9/9`, Routing Memory `14/14`, Smart Router `13/13`,
+provider host `25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1`
+pass (`61/61` focused tests). The detached RC.12 verifier also passed `212/212`
+tests, `20/20` integrity attacks, Pi install/upgrade/rollback/rescue, privacy,
+and worker safety. Focused independent review of the exact source commit passed
+with no unresolved blocker/high; the M12 Final Routing Gate, external review,
+Planner/manual acceptance, and publication remain separate pending gates.
 
 ### M12 Final Gate — Routing Dogfood
 

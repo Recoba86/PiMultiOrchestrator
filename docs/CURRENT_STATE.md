@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M12.3 local RC.12 implementation, isolated Pi dogfood, and detached RC.12 verification PASS; M12 final gate, M11 acceptance, independent review, Planner, and publication gates pending |
+| Development phase | M10 accepted; M12.3 local RC.12 implementation, isolated Pi dogfood, detached RC.12 verification, and focused independent review PASS; M12 final gate, M11 acceptance, external review, Planner, and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -24,7 +24,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | M12.2 candidate | `0.1.0-rc.11` — local, not public; implementation commit `8219c083577bc21a31046ade4ee1f982fe28abc6`; RC.10 superseded |
-| M12.3 candidate | `0.1.0-rc.12` — local, not public; detached verifier bound to source commit `f077ae90ffe95187f821a64dd08cc8cc7e15b166` |
+| M12.3 candidate | `0.1.0-rc.12` — local, not public; detached verifier bound to source commit `56dbbb150fd184240db55e58e4bffc20efdd5c5f` |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
 | M11 candidate | `0.1.0-rc.8` — historical local candidate; not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
@@ -78,25 +78,29 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   Learned Behaviors controls. The user can inspect abstract metadata, enable or
   disable a rule, delete a rule, forget learned rules, reset all memory, and
   create/restore validated abstract-only backups. Disabling retains state.
-- Local evidence: Routing Memory `14/14`, Smart Router `28/28`, provider host
-  `25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1` pass. The real
+- Local evidence: analytics `9/9`, Routing Memory `14/14`, Smart Router `13/13`,
+  provider host `25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1`
+  pass (`61/61` focused tests). The real
   disposable run created first Mission
-  `mission-32c154d2-8105-46c0-a16c-0d009ec12c73`, follow-up Mission
-  `mission-acfb193b-aee9-4938-bafa-f579b41203e7`, and explicit rule
-  `rm-1b480f08-0135-4d40-a870-155835a95f9d`; the run verified cross-language
+  `mission-dbf51b4d-e375-4d78-86d6-fd85360a20f0`, follow-up Mission
+  `mission-ff22dc19-3b6e-4f2a-ac88-89a4fb5c70f2`, and explicit rule
+  `rm-2440fb64-ab9f-4415-8ce7-4a204436caaf`; the run verified cross-language
   auto-routing, disable, restart persistence, abstract-only storage, and zero
-  provider calls. The detached RC.12 verifier passed `211/211` tests, `20/20`
-  integrity attacks, Pi `0.84.1` install/upgrade/rollback, privacy, and worker
-  safety; artifact SHA-256 is
-  `b5de508bf7c47cccd894a12c4c74c6e123f292d7b8e839471c70f51073446670`, source
-  digest is `ebc5aa2bd3969c6e13155f9e264bbd8e33bf1e01a34cdbde033deec668ace657`,
-  and review-bundle root SHA-256 is
-  `c02c72dc5042d3dc02c6b66cb03afa1f8e0a89f2f1a477bae05e3e28dba58cfe`.
-  Focused independent review and the M12 Final Routing Gate remain separate.
+  provider calls. The detached RC.12 verifier passed `212/212` tests, `20/20`
+  integrity attacks, Pi `0.84.1` install/upgrade/rollback/rescue, privacy, and
+  worker safety; artifact SHA-256 is
+  `84cabb6553a5599d548be15646c92fc872c6010778e4eaeda2e05c63a158dc30`,
+  source tree is `7f795881954033d75618a57e9dba30b9b0314dc2`, source digest is
+  `4d417b1360cbb9b3a8a9e6f529470cf85f24bcbc37194f802d3c4b276f6ce8fd`, and
+  review-bundle root SHA-256 is
+  `69e55e37731c44d6540950056664e729fa56b7898eccadc8b417669cc1327ce8`.
+  Focused independent review of the exact source commit is PASS with no
+  unresolved blocker/high. The M12 Final Routing Gate, external review,
+  Planner/manual acceptance, and publication remain separate.
 - No live Pi configuration, provider account, credential, public tag, push,
   npm publication, or GitHub release was modified. M10 remains the latest
   accepted milestone; M12.3 remains local-only pending the final routing gate,
-  independent review, Planner/manual acceptance, and publication gates.
+  external review, Planner/manual acceptance, and publication gates.
 
 ## M12.2 current implementation
 

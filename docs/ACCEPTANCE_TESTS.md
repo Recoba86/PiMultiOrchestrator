@@ -1013,12 +1013,17 @@ securely available route and remain separate gates when unavailable.
 The 53 mission criteria map to the tests above as follows: 1–7 → M12.3-01;
 8–11, 22, 42–43, 46 → M12.3-02; 12–18 → M12.3-03; 19–24, 37–38 →
 M12.3-04; 25–36 → M12.3-05; 39–41, 45, 47–48 → M12.3-06; 49–53 →
-M12.3-07. The M12.3 local focused evidence is Routing Memory `14/14`, Smart
-Router `28/28`, provider host `25/25`, and isolated Pi dogfood `1/1`; the
-detached exact-Git RC.12 verifier then passed `211/211` tests, `20/20`
-integrity attacks, Pi `0.84.1` install/upgrade/rollback, privacy, and worker
-safety. Artifact SHA-256 is
-`b5de508bf7c47cccd894a12c4c74c6e123f292d7b8e839471c70f51073446670`; source
-commit is `f077ae90ffe95187f821a64dd08cc8cc7e15b166`; review-bundle root
-SHA-256 is `c02c72dc5042d3dc02c6b66cb03afa1f8e0a89f2f1a477bae05e3e28dba58cfe`.
-Focused independent review and the M12 Final Routing Gate remain separate.
+M12.3-07. The M12.3 local focused evidence is analytics `9/9`, Routing
+Memory `14/14`, Smart Router `13/13`, provider host `25/25`, and isolated Pi
+dogfood `1/1` (`61/61` focused tests); the detached exact-Git RC.12 verifier
+then passed `212/212` tests, `20/20` integrity attacks, Pi `0.84.1`
+install/upgrade/rollback/rescue, privacy, and worker safety. Artifact SHA-256
+is `84cabb6553a5599d548be15646c92fc872c6010778e4eaeda2e05c63a158dc30`;
+source commit is `56dbbb150fd184240db55e58e4bffc20efdd5c5f`; source tree is
+`7f795881954033d75618a57e9dba30b9b0314dc2`; source digest is
+`4d417b1360cbb9b3a8a9e6f529470cf85f24bcbc37194f802d3c4b276f6ce8fd`; and
+review-bundle root SHA-256 is
+`69e55e37731c44d6540950056664e729fa56b7898eccadc8b417669cc1327ce8`.
+Focused independent review of that exact commit is PASS with no unresolved
+blocker/high; the M12 Final Routing Gate, external review, Planner/manual
+acceptance, and publication remain separate.
