@@ -123,6 +123,29 @@ test("release and review-bundle force modes refuse unrelated directories", () =>
 	rmSync(bundleOutput, { recursive: true, force: true });
 });
 
+test("force modes reject spoofed output markers and current review docs reject stale RC instructions", () => {
+	const releaseOutput = mkdtempSync(join(tmpdir(), "pi-multi-release-force-spoof-"));
+	const bundleOutput = mkdtempSync(join(tmpdir(), "pi-multi-bundle-force-spoof-"));
+	try {
+		for (const file of ["release-manifest.json", "verification.json", "artifact-files.txt", "privacy-report.json"]) writeFileSync(join(releaseOutput, file), "spoof", "utf8");
+		for (const file of ["review-bundle-files.json", "REVIEW_EVIDENCE.json", "release-manifest.json"]) writeFileSync(join(bundleOutput, file), "spoof", "utf8");
+		writeFileSync(`${bundleOutput}.root.sha256`, `${"0".repeat(64)}  ${bundleOutput.split("/").at(-1)}/review-bundle-files.json\n`, "utf8");
+		let releaseError: unknown;
+		try { execFileSync(process.execPath, [script, "--output", releaseOutput, "--force"], { cwd: root, stdio: "pipe" }); } catch (error) { releaseError = error; }
+		assert.match((releaseError as { stderr?: Buffer }).stderr?.toString() ?? String(releaseError), /verified release-tool output/u);
+		let bundleError: unknown;
+		try { execFileSync(process.execPath, [join(root, "scripts", "create-review-bundle.mjs"), "--release-dir", root, "--output", bundleOutput, "--force"], { cwd: root, stdio: "pipe" }); } catch (error) { bundleError = error; }
+		assert.match((bundleError as { stderr?: Buffer }).stderr?.toString() ?? String(bundleError), /verified review-bundle output/u);
+		assert.match(readFileSync(join(root, "docs", "RELEASE_REVIEW.md"), "utf8"), /RC15/iu);
+		assert.doesNotMatch(readFileSync(join(root, "docs", "RELEASE_CHECKLIST.md"), "utf8"), /rc\.4/u);
+		assert.doesNotMatch(readFileSync(join(root, "docs", "COMPATIBILITY.md"), "utf8"), /rc\.4/u);
+	} finally {
+		rmSync(releaseOutput, { recursive: true, force: true });
+		rmSync(bundleOutput, { recursive: true, force: true });
+		rmSync(`${bundleOutput}.root.sha256`, { force: true });
+	}
+});
+
 test("release verification rejects synthetic secrets and ignores caller test claims", () => {
 	const fixture = mkdtempSync(join(tmpdir(), "pi-multi-release-privacy-test-"));
 	try {

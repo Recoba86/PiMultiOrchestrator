@@ -74,6 +74,8 @@ describe("SQLite mission store", () => {
 		assert.throws(() => store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: other.attemptId }), MissionValidationError);
 		const verification = store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: running.attemptId });
 		assert.equal(verification.targetRunId, running.attemptId);
+		assert.throws(() => store.updateVerificationRun(verification.verificationId, { targetRunId: other.attemptId }), MissionValidationError);
+		assert.throws(() => store.recordQualityDecision({ missionId: "m1", taskId: task1.taskId, verificationId: verification.verificationId, targetRunId: other.attemptId, round: 0, reviewerSummary: "mismatch", gate: { verdict: "blocked", reasons: [], criterionResults: [], mechanicalChecks: [] } }), MissionValidationError);
 		store.close();
 	}));
 

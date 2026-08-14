@@ -1,4 +1,7 @@
-# M11 staged dogfooding log
+# Local dogfooding log
+
+Historical M11 and earlier candidate rows below are retained for traceability;
+they are not current RC15 release evidence.
 
 This is an auditable local record. It contains no prompts, transcripts, tool
 output, credentials, or live-provider data.

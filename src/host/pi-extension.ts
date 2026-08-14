@@ -2552,6 +2552,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const invocation = parseOrchestratorInvocation(event.text);
 		if (!invocation) {
 			if (event.streamingBehavior !== undefined) return { action: "continue" };
+			const inputCancelled = (): boolean => ctx.signal?.aborted === true;
 			const smartSettings = await loadSmartRoutingSettings();
 			const memoryProbe = await routingMemoryMatch(event.text, smartSettings);
 			const memoryContext = routingMemoryContext(memoryProbe.match);
@@ -2561,7 +2562,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				ctx.ui.notify("Smart Routing unavailable; continuing with the original prompt.", "warning");
 				return { action: "continue" };
 			}
+			if (inputCancelled() || decision.triage?.failureClass === "cancelled") return { action: "continue" };
 			if (decision.mode === "AUTO_MISSION") {
+				if (inputCancelled()) return { action: "continue" };
 				const mission = createInputMission(ctx, event.text);
 				if (!mission) {
 					recordRoutingDecision(decision, "failed", decision.memory);
@@ -2590,6 +2593,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				return { action: "continue" };
 			}
 			if (action === "Run as Mission") {
+				if (inputCancelled()) return { action: "continue" };
 				const mission = createInputMission(ctx, event.text);
 				if (!mission) {
 					recordRoutingDecision(decision, "failed", decision.memory);
@@ -2605,6 +2609,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				return { action: "handled" };
 			}
 			if (action === "Run Normally") {
+				if (inputCancelled()) return { action: "continue" };
 				// Pi's input runner continues this exact event once; it does not re-emit
 				// the input handler, so no string sentinel or recursive dispatch is needed.
 				if (routingMemory && smartSettings.learnFromRoutingChoices) {
@@ -2622,6 +2627,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					recordRoutingDecision(decision, "failed", decision.memory);
 					return { action: "continue" };
 				}
+					if (inputCancelled()) return { action: "continue" };
 					const mission = createInputMission(ctx, event.text);
 					if (!mission) {
 						recordRoutingDecision(decision, "failed", decision.memory);

@@ -16,7 +16,6 @@ const REVIEW_DOCS = ["COMPATIBILITY.md", "RELEASE_CHECKLIST.md", "DOGFOOD_LOG.md
 const RELEASE_EVIDENCE_FILES = ["test-evidence.json", "pi-install-evidence.json", "worker-safety-evidence.json", "release-integrity-evidence.json"];
 const M10_BASELINE_ENTRIES = ["m10-baseline", "m10-baseline.tgz", "m10-baseline.tgz.sha256"];
 export const BUNDLE_MANIFEST = "review-bundle-files.json";
-const BUNDLE_OUTPUT_MARKERS = [BUNDLE_MANIFEST, "REVIEW_EVIDENCE.json", "release-manifest.json"];
 const REQUIRED_ROOT_FILES = ["artifact-files.txt", "release-manifest.json", "verification.json", "package.json", "privacy-report.json", ...RELEASE_EVIDENCE_FILES, "REVIEW_PROMPT.md", "REVIEW_EVIDENCE.json", BUNDLE_MANIFEST];
 const RELEASE_ROOT_FILES = ["artifact-files.txt", "release-manifest.json", "verification.json"];
 
@@ -79,10 +78,9 @@ const assertEmptyOrForce = async (output, force) => {
 	});
 	if (entries.length > 0 && !force) fail(`review bundle output is not empty: ${output}; use --force to overwrite it`);
 	if (entries.length > 0) {
-		for (const marker of BUNDLE_OUTPUT_MARKERS) {
-			const details = await lstat(join(output, marker)).catch(() => undefined);
-			if (!details || details.isSymbolicLink() || !details.isFile()) fail("refusing --force on a directory that is not a review-bundle output");
-		}
+		const rootFile = `${output}.root.sha256`;
+		const expectedRootSha256 = (await readFile(rootFile, "utf8").catch(() => "")).trim().split(/\s+/u)[0];
+		try { await verifyReviewBundle(output, expectedRootSha256); } catch { fail("refusing --force on a directory that is not a verified review-bundle output"); }
 		await rm(output, { recursive: true, force: true });
 	}
 	await mkdir(output, { recursive: true });
@@ -159,11 +157,11 @@ export async function createReviewBundle({ releaseDir, output, force = false }) 
 	await cp(join(source, DIRECTORY_SOURCE), join(target, DIRECTORY_SOURCE), { recursive: true });
 	await cp(join(source, DIRECTORY_SOURCE, "package.json"), join(target, "package.json"));
 	for (const name of REVIEW_DOCS) await cp(join(root, "docs", name), join(target, name));
-	await writeFile(join(target, "REVIEW_PROMPT.md"), `# Independent M11 review
+	await writeFile(join(target, "REVIEW_PROMPT.md"), `# Independent external release review
 
 Status: EXTERNAL_REVIEW_PENDING
 
-Inspect ${artifact} for ${manifest.package?.name ?? "unknown"}@${manifest.package?.version ?? "unknown"}. Verify the copied SHA-256 sidecar, extracted directory source, recursive bundle manifest, separately supplied bundle-root SHA-256, exact Git source, independent test execution, isolated Pi install/upgrade/rollback, rescue path, authentic M10 baseline, compatibility claims, and privacy boundary. The supported Pi 0.84.1 install input is the copied \`${DIRECTORY_SOURCE}/\` directory, not the \`.tgz\` path. Treat bundled claims as audit material; the separately supplied root digest is the bundle trust anchor. Do not treat this bundle as Planner acceptance or a public release. Record reviewer identity, separate context/process, result, and blocker/high findings in a separate handoff.
+Inspect ${artifact} for ${manifest.package?.name ?? "unknown"}@${manifest.package?.version ?? "unknown"}. Bind the review to Git commit \`${manifest.gitCommit}\`, tree \`${manifest.gitTree}\`, source digest \`${manifest.sourceDigest}\`, and artifact SHA-256 \`${manifest.artifact?.sha256 ?? "unknown"}\`. Verify the copied SHA-256 sidecar, extracted directory source, recursive bundle manifest, separately supplied bundle-root SHA-256, exact Git source, independent test execution, isolated Pi install/upgrade/rollback, rescue path, authentic M10 baseline, compatibility claims, and privacy boundary. The supported Pi 0.84.1 install input is the copied \`${DIRECTORY_SOURCE}/\` directory, not the \`.tgz\` path. Treat bundled claims as audit material; the separately supplied root digest is the bundle trust anchor. Do not treat this bundle as Planner acceptance or a public release. Record reviewer identity, separate context/process, result, and blocker/high findings in a separate handoff.
 `, "utf8");
 	const verification = JSON.parse(await readFile(join(source, "verification.json"), "utf8"));
 	const digestNames = {

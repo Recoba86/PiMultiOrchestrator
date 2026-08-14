@@ -655,6 +655,34 @@ describe("Pi 9Router host adapter", () => {
 		}
 	});
 
+	it("[U][fixture-pi-0.84.1] does not commit a cancelled Smart Routing recommendation", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-smart-cancel-"));
+		const store = createMissionStore({ root: join(root, "missions") });
+		try {
+			const pi = piFixture();
+			createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store, smartRoutingStore: new SmartRoutingSettingsStore({ root: join(root, "routing") }) });
+			const controller = new AbortController();
+			controller.abort();
+			let selections = 0;
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+			const result = await handleInput({ type: "input", text: "Fix the bug in src/auth.ts and add tests, then verify independently", source: "interactive" }, {
+				cwd: root,
+				mode: "tui",
+				hasUI: true,
+				signal: controller.signal,
+				isIdle: () => true,
+				ui: { select: async () => { selections += 1; return "Run as Mission"; }, notify: () => {} },
+			} as unknown as ExtensionContext);
+			assert.deepEqual(result, { action: "continue" });
+			assert.equal(store.listMissions().length, 0);
+			assert.equal(selections, 0);
+		} finally {
+			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("[U][fixture-pi-0.84.1] learns Always, auto-missions strong matches, and suppresses repeated normal noise", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-memory-host-"));
 		const missionRoot = join(root, "missions");

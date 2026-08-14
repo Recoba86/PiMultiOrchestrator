@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -85,6 +85,33 @@ test("SQLite backups are validated and explicit restore never invents state", as
 		const analyticsRestored = await restoreAnalyticsStore({ root: join(root, "analytics-restored"), enabled: true }, analyticsBackup); assert.equal(analyticsRestored.list().length, 1); analyticsRestored.close();
 		const emptyBackup = join(root, "empty.sqlite"); const empty = new DatabaseSync(emptyBackup); empty.close(); await assert.rejects(restoreMissionStore({ root: join(root, "invalid-restore") }, emptyBackup));
 	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("SQLite backup and restore reject normalized and inode aliases", async () => {
+	const root = await tempRoot("pmo-alias-");
+	try {
+		const mission = createMissionStore({ root });
+		mission.createMission({ missionId: "m1", goal: "alias" });
+		await assert.rejects(() => mission.backup!(`${root}/./mission.sqlite`), /destination-matches-source/u);
+		await symlink(join(root, "mission.sqlite"), join(root, "mission-alias.sqlite"));
+		await assert.rejects(() => mission.backup!(join(root, "mission-alias.sqlite")), /destination-matches-source/u);
+		const missionBackup = join(root, "mission-backup.sqlite");
+		await mission.backup!(missionBackup);
+		mission.close();
+		await assert.rejects(() => restoreMissionStore({ root, databasePath: `${root}/./mission-backup.sqlite` }, missionBackup), /source-matches-destination/u);
+
+		const analyticsRoot = join(root, "analytics");
+		const analytics = new SQLiteAnalyticsStore({ root: analyticsRoot, enabled: true });
+		await assert.rejects(() => analytics.backup(`${analyticsRoot}/./analytics.sqlite`), /destination-matches-source/u);
+		await symlink(join(analyticsRoot, "analytics.sqlite"), join(analyticsRoot, "analytics-alias.sqlite"));
+		await assert.rejects(() => analytics.backup(join(analyticsRoot, "analytics-alias.sqlite")), /destination-matches-source/u);
+		const analyticsBackup = join(analyticsRoot, "analytics-backup.sqlite");
+		await analytics.backup(analyticsBackup);
+		analytics.close();
+		await assert.rejects(() => restoreAnalyticsStore({ root: analyticsRoot, databasePath: `${analyticsRoot}/./analytics-backup.sqlite`, enabled: true }, analyticsBackup), /source-matches-destination/u);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });
 
 test("corrupt analytics schema degrades to diagnostics instead of taking down callers", async () => {

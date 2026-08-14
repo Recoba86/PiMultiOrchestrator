@@ -12,7 +12,6 @@ const EXPECTED_FILES = ["dist/**/*.js", "dist/**/*.d.ts", "README.md"];
 const OPTIONAL_FILES = ["docs/OPERATOR_GUIDE.md"];
 const ENTRYPOINT = "dist/host/pi-extension.js";
 const EXPECTED_RELEASE_VERSION = "0.1.0-rc.15";
-const RELEASE_OUTPUT_MARKERS = ["release-manifest.json", "verification.json", "artifact-files.txt"];
 const PI_PACKAGE = "@earendil-works/pi-coding-agent";
 const PI_PACKAGE_ROOT = join(REPO_ROOT, "node_modules", "@earendil-works", "pi-coding-agent");
 const PI_CLI = join(PI_PACKAGE_ROOT, "dist", "cli.js");
@@ -517,7 +516,7 @@ export const validateTestEvidence = (evidence, manifest) => {
 	if (evidence.commands?.check !== "npm run check" || evidence.commands?.packDryRun !== "npm pack --dry-run --ignore-scripts --json") fail("test evidence commands are not strict release commands");
 	const tests = evidence.check?.tests;
 	const values = tests && [tests.total, tests.passed, tests.failed, tests.cancelled, tests.skipped, tests.todo];
-	if (!values || values.some((value) => !Number.isSafeInteger(value) || value < 0) || evidence.check.code !== 0 || evidence.check.signal !== null || tests.total <= 0 || tests.passed <= 0 || tests.failed !== 0 || tests.cancelled !== 0 || tests.total !== tests.passed + tests.failed + tests.cancelled + tests.skipped + tests.todo) fail("test evidence TAP totals are not a non-empty passing complete summary");
+	if (!values || values.some((value) => !Number.isSafeInteger(value) || value < 0) || evidence.check.code !== 0 || evidence.check.signal !== null || tests.total <= 0 || tests.passed <= 0 || tests.failed !== 0 || tests.cancelled !== 0 || tests.skipped !== 0 || tests.todo !== 0 || tests.total !== tests.passed + tests.failed + tests.cancelled + tests.skipped + tests.todo) fail("test evidence TAP totals are not a non-empty passing complete summary");
 	for (const digest of [evidence.check?.stdoutSha256, evidence.check?.stderrSha256, evidence.pack?.stdoutSha256, evidence.pack?.stderrSha256]) if (!/^[0-9a-f]{64}$/u.test(digest ?? "")) fail("test evidence is missing output digests");
 	if (evidence.pack?.code !== 0 || evidence.pack?.signal !== null || !evidence.pack?.evidence?.filename || !Number.isSafeInteger(evidence.pack.evidence.fileCount) || evidence.pack.evidence.fileCount <= 0) fail("pack evidence is incomplete");
 	return tests;
@@ -660,10 +659,7 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 	});
 	if (targetEntries.length > 0 && !force) fail(`release output is not empty: ${target}; use --force to overwrite it`);
 	if (targetEntries.length > 0 && force) {
-		for (const marker of RELEASE_OUTPUT_MARKERS) {
-			const details = await lstat(join(target, marker)).catch(() => undefined);
-			if (!details || details.isSymbolicLink() || !details.isFile()) fail("refusing --force on a directory that is not a release-tool output");
-		}
+		try { await verifyReleaseDirectory(target); } catch { fail("refusing --force on a directory that is not a verified release-tool output"); }
 		await rm(target, { recursive: true, force: true });
 	}
 	await mkdir(target, { recursive: true });
@@ -740,7 +736,7 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 			gitCommitTimestamp: sourceIdentity.gitCommitTimestamp,
 			dirty: false,
 			trackedClean: true,
-			untrackedCount: finalSourceIdentity.untrackedCount,
+			untrackedCount: sourceIdentity.untrackedCount,
 			untrackedIncluded: false,
 			sourceDigest: sourceIdentity.sourceDigest,
 			sourceDigestAlgorithm: sourceIdentity.sourceDigestAlgorithm,

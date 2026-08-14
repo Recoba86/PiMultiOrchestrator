@@ -1,6 +1,6 @@
 import { backup as sqliteBackup, DatabaseSync } from "node:sqlite";
 import { chmodSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { MISSION_STORE_MIGRATION_1_TO_2_SQL, MISSION_STORE_SCHEMA_SQL, MISSION_STORE_SCHEMA_V1_SQL, CURRENT_MISSION_STORE_SCHEMA_VERSION } from "./schema.js";
 import {
@@ -277,7 +277,7 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 	updateVerificationRun(verificationId: string, patch: Partial<VerificationRunRecord>): VerificationRunRecord {
 		return this.tx(() => {
 			const row = this.db.prepare("SELECT * FROM verification_runs WHERE verification_id=?").get(verificationId) as Row | undefined; if (!row) throw new MissionNotFoundError("verification", verificationId);
-			const current = this.verificationFrom(row); if (patch.missionId !== undefined && String(patch.missionId) !== String(current.missionId)) throw new MissionValidationError([{ path: "missionId", message: "verification identity is immutable" }]); if (patch.taskId !== undefined && String(patch.taskId) !== String(current.taskId)) throw new MissionValidationError([{ path: "taskId", message: "verification identity is immutable" }]); if (current.status !== "running" && patch.status !== undefined && patch.status !== current.status) throw new MissionValidationError([{ path: "status", message: "verification is already terminal" }]);
+			const current = this.verificationFrom(row); if (patch.missionId !== undefined && String(patch.missionId) !== String(current.missionId)) throw new MissionValidationError([{ path: "missionId", message: "verification identity is immutable" }]); if (patch.taskId !== undefined && String(patch.taskId) !== String(current.taskId)) throw new MissionValidationError([{ path: "taskId", message: "verification identity is immutable" }]); if (patch.targetRunId !== undefined && String(patch.targetRunId) !== String(current.targetRunId)) throw new MissionValidationError([{ path: "targetRunId", message: "verification target is immutable" }]); if (current.status !== "running" && patch.status !== undefined && patch.status !== current.status) throw new MissionValidationError([{ path: "status", message: "verification is already terminal" }]);
 			const next = { ...current, ...patch } as VerificationRunRecord; if (!["running", "completed", "interrupted", "blocked"].includes(next.status)) throw new MissionValidationError([{ path: "status", message: "verification status is invalid" }]);
 			if (!Number.isSafeInteger(next.round) || next.round < 0) throw new MissionValidationError([{ path: "round", message: "round must be a non-negative integer" }]);
 			const failure = next.failureSummary === undefined ? null : this.text(next.failureSummary, "failureSummary"); const at = next.completedAt ?? (next.status === "running" ? null : nowIso(this.clock));
@@ -289,7 +289,7 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 	recordQualityDecision(input: QualityDecisionInput): QualityDecisionRecord {
 		return this.tx(() => {
 			const mission = this.missionRow(String(input.missionId)); const task = this.db.prepare("SELECT mission_id FROM tasks WHERE task_id=?").get(String(input.taskId)) as Row | undefined; if (!task) throw new MissionNotFoundError("task", String(input.taskId)); if (String(task.mission_id) !== String(input.missionId)) throw new MissionValidationError([{ path: "taskId", message: "task does not belong to mission" }]);
-			const verification = this.getVerificationRun(input.verificationId); if (!verification) throw new MissionNotFoundError("verification", input.verificationId); if (String(verification.missionId) !== String(input.missionId) || String(verification.taskId) !== String(input.taskId)) throw new MissionValidationError([{ path: "verificationId", message: "verification does not belong to target" }]);
+			const verification = this.getVerificationRun(input.verificationId); if (!verification) throw new MissionNotFoundError("verification", input.verificationId); if (String(verification.missionId) !== String(input.missionId) || String(verification.taskId) !== String(input.taskId)) throw new MissionValidationError([{ path: "verificationId", message: "verification does not belong to target" }]); if (String(input.targetRunId) !== String(verification.targetRunId)) throw new MissionValidationError([{ path: "targetRunId", message: "decision target does not match verification" }]);
 			if (!Number.isSafeInteger(input.round) || input.round < 0) throw new MissionValidationError([{ path: "round", message: "round must be a non-negative integer" }]); if (input.round !== verification.round) throw new MissionValidationError([{ path: "round", message: "decision round does not match verification" }]); if (!["pass", "reject", "blocked"].includes(input.gate.verdict)) throw new MissionValidationError([{ path: "gate.verdict", message: "quality verdict is invalid" }]);
 			const id = idOf(input.decisionId, "decision", this.makeId); if (this.db.prepare("SELECT 1 FROM quality_decisions WHERE decision_id=?").get(id)) throw new MissionValidationError([{ path: "decisionId", message: "duplicate decision id" }]); const at = nowIso(this.clock); const summary = this.text(input.reviewerSummary, "reviewerSummary");
 			const findings = this.qualityList(input.findings ?? input.gate.findings ?? [], "quality.findings"); const requiredFixes = this.qualityList(input.requiredFixes ?? input.gate.requiredFixes ?? [], "quality.requiredFixes"); const risks = this.qualityList(input.risks ?? input.gate.risks ?? [], "quality.risks");
@@ -355,7 +355,7 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 	/** Create a SQLite-native, self-consistent backup and publish it atomically. */
 	async backup(destinationPath = join(this.root, "backups", `mission-${new Date().toISOString().replaceAll(/[:.]/gu, "-")}.sqlite`)): Promise<string> {
 		this.ensureOpen();
-		if (destinationPath === this.databasePath) throw new MissionPersistenceError("backup", "destination-matches-source");
+		if (sameFile(destinationPath, this.databasePath)) throw new MissionPersistenceError("backup", "destination-matches-source");
 		const parent = dirname(destinationPath);
 		mkdirSync(parent, { recursive: true, mode: 0o700 });
 		const temporary = `${destinationPath}.tmp-${randomUUID()}`;
@@ -376,7 +376,7 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 		if (!backupPath) throw new MissionPersistenceError("restore", "backup-path-required");
 		validateSqliteBackup(backupPath);
 		const target = options.databasePath ?? join(options.root, "mission.sqlite");
-		if (target === backupPath) throw new MissionPersistenceError("restore", "source-matches-destination");
+		if (sameFile(target, backupPath)) throw new MissionPersistenceError("restore", "source-matches-destination");
 		mkdirSync(options.root, { recursive: true, mode: 0o700 });
 		const temporary = `${target}.restore-${randomUUID()}`;
 		const source = new DatabaseSync(backupPath, { readOnly: true });
@@ -414,6 +414,10 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 }
 
 function statSafe(path: string): ReturnType<typeof statSync> | undefined { try { return statSync(path); } catch { return undefined; } }
+function sameFile(left: string, right: string): boolean {
+	if (resolve(left) === resolve(right)) return true;
+	try { const a = statSync(left); const b = statSync(right); return a.dev === b.dev && a.ino === b.ino; } catch { return false; }
+}
 function removeSqliteSidecars(path: string): void { for (const sidecar of [`${path}-wal`, `${path}-shm`]) { try { unlinkSync(sidecar); } catch { /* absent or already cleaned by SQLite */ } } }
 function validateSqliteBackup(path: string): void {
 	const db = new DatabaseSync(path, { readOnly: true });
