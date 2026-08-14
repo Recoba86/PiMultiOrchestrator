@@ -51,7 +51,7 @@ Milestone acceptance does not itself create a product release.
 | M12 final routing gate local evidence | RC13 source commit `8d8e36a9526c6edd106d36fa8cb5069cda517405`; `214/214 PASS`, `20/20` integrity attacks, balanced `360`-case bilingual corpus, isolated Pi lifecycle dogfood, bounded real 9Router Triage, privacy, worker safety, latency, and clean worktree; local-only |
 | M12 final RC13 verifier | Artifact SHA-256 `abbfaf8580008a5f2d297a28a49fe3a0c962b1f3c512944b9f680c74e630085b`; source tree `d5d06e16e4a2266d9b04d3afd79c6dd181df9345`; source digest `0c5d0b49a2c637b592e039b31548bd549e31eee5c0854c20487a74324185d074`; review-bundle root `f3183574deed6dc96e6a15953a5949bdbb4858f34a9a26b5378437a81ca7075c`; External Review #5 remains pending |
 | M12 RC15 historical final-review candidate | Historical final external review PASS; superseded by RC16 |
-| M12 RC16 final-review candidate | Exact detached verifier PASS; clean `npm run check` `231/231 PASS` across 13 suites with zero failed/cancelled/skipped/todo; artifact, privacy, Pi `0.84.1`, worker-safety, and `20/20` integrity evidence PASS |
+| M12 RC16 final-review candidate | Exact detached verifier PASS on commit `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`, tree `0e7e01ff02abf269891fc55556d57e64d5a1f111`; source digest `7dd0e1c84ad6e980a19269eafddf1f1501cc1aa1f9cf330afca172584daa1b87`; artifact SHA-256 `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`; bundle root `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`; clean `npm run check` `231/231 PASS`, Pi `0.84.1`, privacy, worker-safety, and `20/20` integrity PASS |
 | Typecheck | PASS |
 | Aggregate check | PASS — `231/231`; exact detached release verification PASS |
 | Tested Pi version | `0.84.1` |

@@ -79,7 +79,17 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - **Validation:** clean `npm run check` passed `231/231` tests across 13
   suites with zero failed/cancelled/skipped/todo; typecheck and build passed.
   The fresh detached release verifier and independently anchored review bundle
-  passed; exact identities are recorded in the generated release packet.
+  passed.
+- **Exact identity:** source commit `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`,
+  tree `0e7e01ff02abf269891fc55556d57e64d5a1f111`, source digest
+  `7dd0e1c84ad6e980a19269eafddf1f1501cc1aa1f9cf330afca172584daa1b87`,
+  build digest `3c7cc151497cb596fe01fe1075d97e3534d418707b250e9bd8edd3b655a5a756`,
+  artifact SHA-256 `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`,
+  and independently verified bundle-root SHA-256
+  `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`.
+- **Evidence paths:** release directory
+  `/private/tmp/pi-m12-rc16-verify-release.PvsZlL`; review bundle
+  `/private/tmp/pi-m12-rc16-bundle-release.fGJW2z`.
 - **Boundary:** no live Pi configuration, provider account, credential,
   public tag, push, npm publication, or GitHub release was modified.
 

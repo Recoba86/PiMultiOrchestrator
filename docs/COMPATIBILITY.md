@@ -19,6 +19,10 @@ release evidence.
 The package has no runtime npm dependencies and declares Pi as a peer
 dependency. Runtime databases, credentials, sessions, `.git`, source paths,
 and live configuration are outside the package allowlist. RC16 source and
-detached compatibility checks pass on the repaired worker boundary; M10
-remains the latest accepted milestone, and RC16 remains local until
+detached compatibility checks pass on the repaired worker boundary; the exact
+source commit is `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`, artifact
+SHA-256 is `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`,
+and bundle-root SHA-256 is
+`6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`.
+M10 remains the latest accepted milestone, and RC16 remains local until
 Planner/manual acceptance and publication are separately recorded.

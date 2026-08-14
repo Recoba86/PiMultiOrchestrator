@@ -12,6 +12,7 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 - **Routing/recovery:** bounded input is checked before local analysis, zero-width Unicode cannot bypass NORMAL safety, corrupt Smart Routing and Routing Memory state can be repaired, malformed history is isolated, and direct worker timeouts cannot exceed the configured ceiling.
 - **Release provenance:** build scripts invoke the validated TypeScript package directly and bind its launcher hash. Package version is `0.1.0-rc.16`.
 - **Validation:** clean `npm run check` passed `231/231` tests across 13 suites with zero failed/cancelled/skipped/todo; typecheck and build passed. Fresh detached release verification passed artifact binding, privacy, Pi `0.84.1` compatibility, worker safety, `20/20` integrity attacks, and independent bundle-root verification.
+- **Exact identity:** commit `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`, tree `0e7e01ff02abf269891fc55556d57e64d5a1f111`, source digest `7dd0e1c84ad6e980a19269eafddf1f1501cc1aa1f9cf330afca172584daa1b87`, artifact SHA-256 `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`, bundle root `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`.
 - **Boundary:** no live Pi configuration, provider account, Keychain, credential value, public tag, push, npm publication, GitHub release, or production-ready claim was made. Planner/manual acceptance and publication remain separate.
 
 ## M12 Final External Release Review — RC15 candidate

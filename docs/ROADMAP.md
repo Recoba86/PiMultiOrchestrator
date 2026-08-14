@@ -313,3 +313,11 @@ The final detached verifier and independently anchored review bundle passed for
 RC16. No live Pi configuration, provider account, credential,
 public tag, push, npm publication, or GitHub release is authorized by this local
 candidate. Planner/manual acceptance and publication remain separate gates.
+
+Evidence identity: commit `1ffcbed8d776c4d0379a6bf7f832967fae7dbb99`, tree
+`0e7e01ff02abf269891fc55556d57e64d5a1f111`, source digest
+`7dd0e1c84ad6e980a19269eafddf1f1501cc1aa1f9cf330afca172584daa1b87`,
+artifact SHA-256
+`72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`,
+and bundle-root SHA-256
+`6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`.
