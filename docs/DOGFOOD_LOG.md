@@ -3,6 +3,16 @@
 This is an auditable local record. It contains no prompts, transcripts, tool
 output, credentials, or live-provider data.
 
+## M12.3 — Adaptive Routing Memory closeout
+
+- **Date:** 2026-08-14.
+- **Candidate:** `pi-multi-orchestrator@0.1.0-rc.12`, local source candidate only; final detached RC.12 verifier pending at this documentation point.
+- **Environment:** Pi `0.84.1`, `--offline`, fake 9Router fixture, disposable agent/session/project roots, and the compiled extension. No live Pi configuration, provider account, credential value, public release, or external provider call was used.
+- **Real isolated RPC/TUI path:** A complex English prompt selected `Always orchestrate similar tasks`, creating exactly one canonical Mission and an explicit rule. A semantically similar Persian prompt then auto-routed to one canonical Mission without a second confirmation. Routing & Fallback showed `Routing Memory (ON)` and `Learn from routing choices (ON)`; Learned Behaviors exposed the abstract rule, and disabling it persisted `enabled: false`. A risky escalation was not silently auto-routed, and a restart preserved the Mission/control-center path.
+- **Sanitized evidence IDs:** first Mission `mission-76f2c61b-859c-4b1a-8d86-a3e5a8bd4e4c`; follow-up Mission `mission-97a73bf2-6ea4-4e83-9c49-531b41f49846`; explicit rule `rm-1e0969ac-6c27-4597-82af-d218789cf787`. The stored sidecar contained neither tested prompt, Persian text, nor provider data; fake provider chat requests were `0`.
+- **Deterministic/host coverage:** Routing Memory `14/14`, Smart Router `28/28`, and provider host `25/25` cover repeated Mission/Normal learning, confidence/provenance, conflict and complexity gates, settings/persistence/migration/corruption, backup/restore, telemetry privacy, M12.1/M12.2 preservation, and canonical Mission/no-loop behavior.
+- **Result:** Isolated M12.3 dogfood `1/1 PASS`; M12.3 is COMPLETE / LOCAL PASS only. The M12 Final Routing Gate, final release verification, independent review, Planner/manual acceptance, and publication remain separate gates.
+
 | Stage | Result | Evidence / boundary |
 |---|---|---|
 | Stage 0 — repository baseline | PASS | Full rc.4 `npm run check` and exact-Git independent rerun each passed `169/169`; release-integrity attacks `20/20`; Pi `0.84.1`, Node `v22.23.0` |

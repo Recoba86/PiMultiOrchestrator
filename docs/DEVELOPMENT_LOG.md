@@ -4,6 +4,17 @@ Last updated: 2026-08-14
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## M12.3 — Adaptive Routing Memory
+
+- **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.3 is not a public or production-ready release.
+- **Candidate:** `0.1.0-rc.12`; local source candidate only. The M12 Final Routing Gate, independent review, Planner/manual acceptance, and publication remain separate gates.
+- **Purpose:** Make Smart Routing usefully personal without storing prompt history: explicit Always rules, repeated Mission/Normal learning, conservative matching, reversible controls, and safe cross-language behavior.
+- **Major outcomes:** A versioned `routing-memory.json` sidecar stores abstract signatures, source/provenance, confidence, observations, enabled state, and bounded history. Explicit Always creates exactly one canonical Mission and durable explicit rule. Learned rules require three consistent choices; explicit rules outrank learned rules; conflicts, lexical-only overlap, and materially escalated current work fail safe. Strong explicit and learned Mission matches use canonical AUTO_MISSION; strong learned Normal matches continue without recommendation noise.
+- **UX and recovery:** Routing & Fallback exposes Routing Memory, Auto-Learn, Learned Behaviors, and validated abstract-only backup/restore. Users can inspect, enable/disable, delete, forget learned rules separately, or reset all memory with confirmation. Disabling retains state; malformed rows are isolated and schema version 0 migrates per row.
+- **Privacy:** No prompt, transcript, source text, tool result, provider response, credential, or secret is persisted in memory or routing telemetry. Telemetry is allowlisted bounded metadata only.
+- **Evidence:** Routing Memory `14/14`, Smart Router `28/28`, provider host `25/25`, and isolated Pi `0.84.1` RPC/TUI dogfood `1/1` passed. The disposable run recorded first Mission `mission-76f2c61b-859c-4b1a-8d86-a3e5a8bd4e4c`, follow-up Mission `mission-97a73bf2-6ea4-4e83-9c49-531b41f49846`, and explicit rule `rm-1e0969ac-6c27-4597-82af-d218789cf787`; provider calls were zero and only abstract memory state remained.
+- **Live boundary:** No live Pi configuration, provider account, credential value, public tag, push, npm publication, or GitHub release was modified. Full RC.12 validation and detached release verification remain pending before the final handoff.
+
 ## M12.2 — Hybrid Smart Router
 
 - **Status:** COMPLETE / LOCAL PASS; M10 remains the latest accepted milestone and M12.2 is not a public or production-ready release.

@@ -902,6 +902,127 @@ test("[P][fixture-v1] Pi RPC exposes M2-M6 commands without live configuration",
 	});
 });
 
+test("[P][M12.3][fixture-pi-0.84.1] isolated Pi RPC dogfood covers explicit memory, cross-language auto-routing, disable, and restart", { skip: integrationSkip }, async () => {
+	await withFixture(async (server, orchestratorRoot) => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-3-memory-rpc-"));
+		const env = isolatedEnv(server, join(root, "agent"), orchestratorRoot, join(root, "sessions"));
+		const args = ["--offline", "--no-extensions", "-e", builtEntry, "--no-session", "--no-context-files", "--mode", "rpc"];
+		const runSession = (handle: (event: Record<string, unknown>, send: (value: Record<string, unknown>) => void, close: () => void) => void): Promise<PiRunResult> => new Promise((resolvePromise, reject) => {
+			const child = spawn(piCommand, args, { cwd: repoRoot, env, stdio: ["pipe", "pipe", "pipe"] });
+			let stdout = "";
+			let stderr = "";
+			let buffer = "";
+			let settled = false;
+			const deadline = setTimeout(() => { child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 500).unref(); }, 30_000);
+			const send = (value: Record<string, unknown>): void => { if (!child.stdin.destroyed) child.stdin.write(`${JSON.stringify(value)}\n`); };
+			const close = (): void => { if (!child.stdin.destroyed) child.stdin.end(); };
+			const failSession = (error: unknown): void => { if (settled) return; settled = true; clearTimeout(deadline); child.kill("SIGTERM"); reject(error); };
+			child.stdout.on("data", (chunk: Buffer) => {
+				stdout += chunk.toString();
+				buffer += chunk.toString();
+				let newline = buffer.indexOf("\n");
+				while (newline >= 0) {
+					const line = buffer.slice(0, newline).replace(/\r$/u, "");
+					buffer = buffer.slice(newline + 1);
+					newline = buffer.indexOf("\n");
+					if (!line.trim().startsWith("{")) continue;
+					try { handle(JSON.parse(line) as Record<string, unknown>, send, close); } catch (error) { failSession(error); return; }
+				}
+			});
+			child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+			child.once("error", failSession);
+			child.once("close", (code, signal) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(deadline);
+				resolvePromise({ code, signal, stdout, stderr });
+			});
+			send({ type: "get_commands", id: "commands" });
+		});
+		try {
+			let phase = "commands";
+			const first = "Audit the repository, fix findings, add tests, and verify independently";
+			const similar = "این ریپو را بررسی کن، مشکلاتش را درست کن، تست بزن و مستقل verify کن";
+			const risky = "Investigate the production payment bug, fix it, add rollback tests, and verify independently";
+			const firstSession = await runSession((event, send, close) => {
+				if (phase === "commands" && event.type === "response" && event.command === "get_commands") {
+					phase = "first";
+					send({ type: "prompt", message: first, id: "first" });
+				} else if (phase === "first" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Orchestrator recommended") {
+					phase = "explicit-selected";
+					send({ type: "extension_ui_response", id: String(event.id), value: "Always orchestrate similar tasks" });
+				} else if (phase === "explicit-selected" && event.type === "response" && event.command === "prompt" && event.id === "first") {
+					phase = "cross-language";
+					send({ type: "prompt", message: similar, id: "similar" });
+				} else if (phase === "cross-language" && event.type === "response" && event.command === "prompt" && event.id === "similar") {
+					phase = "center";
+					send({ type: "prompt", message: "/orchestrator", id: "center" });
+				} else if (phase === "center" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Pi Multi-Orchestrator") {
+					phase = "routing-settings";
+					send({ type: "extension_ui_response", id: String(event.id), value: "Routing & Fallback" });
+				} else if (phase === "routing-settings" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Routing & Fallback") {
+					const options = Array.isArray(event.options) ? event.options.map(String) : [];
+					assert.ok(options.some((option) => option.startsWith("Routing Memory (ON)")), options.join("\n"));
+					assert.ok(options.some((option) => option.startsWith("Learn from routing choices (ON)")), options.join("\n"));
+					phase = "learned-behaviors";
+					send({ type: "extension_ui_response", id: String(event.id), value: "Learned Behaviors" });
+				} else if (phase === "learned-behaviors" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Learned Behaviors") {
+					const options = Array.isArray(event.options) ? event.options.map(String) : [];
+					const rule = options.find((option) => !option.startsWith("Forget ") && !option.startsWith("Reset ") && option !== "Back");
+					assert.ok(rule, options.join("\n"));
+					phase = "rule-detail";
+					send({ type: "extension_ui_response", id: String(event.id), value: rule! });
+				} else if (phase === "rule-detail" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Routing rule") {
+					phase = "close-center";
+					send({ type: "extension_ui_response", id: String(event.id), value: "Disable" });
+				} else if (phase === "close-center" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Pi Multi-Orchestrator") {
+					phase = "escalation";
+					send({ type: "extension_ui_response", id: String(event.id), value: null });
+				} else if (phase === "escalation" && event.type === "response" && event.command === "prompt" && event.id === "center") {
+					phase = "risk-choice";
+					send({ type: "prompt", message: risky, id: "risky" });
+				} else if (phase === "risk-choice" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Orchestrator recommended") {
+					phase = "finish";
+					send({ type: "extension_ui_response", id: String(event.id), value: "Run Normally" });
+				} else if (phase === "finish" && event.type === "response" && event.command === "prompt" && event.id === "risky") {
+					close();
+				}
+			});
+			assert.equal(firstSession.code, 0, safePiDiagnostic(firstSession, server.token));
+			assert.equal(firstSession.signal, null);
+			const missions = createMissionStore({ root: orchestratorRoot });
+			assert.equal(missions.listMissions().length, 2, "Always plus cross-language AUTO_MISSION create exactly two Missions");
+			missions.close();
+			const memoryPath = join(orchestratorRoot, "routing-memory.json");
+			const memoryText = await readFile(memoryPath, "utf8");
+			assert.equal(memoryText.includes(first), false);
+			assert.equal(memoryText.includes(similar), false);
+			assert.match(memoryText, /"enabled": false/u);
+			assert.equal(server.chatRequests.length, 0, "offline routing dogfood does not need provider inference");
+			if (process.env.M12_3_DOGFOOD_EVIDENCE === "1") {
+				const missionIds = [...firstSession.stdout.matchAll(/"missionId":"([^"]+)"/gu)].map((match) => match[1]).filter((value): value is string => value !== undefined);
+				const stored = JSON.parse(memoryText) as { readonly rules?: readonly { readonly id?: string; readonly source?: string }[] };
+				console.log("M12_3_DOGFOOD_EVIDENCE", JSON.stringify({ firstMissionId: missionIds[0], followupMissionId: missionIds[1], explicitRuleId: stored.rules?.find((rule) => rule.source === "explicit")?.id }));
+			}
+
+			phase = "commands";
+			const restart = await runSession((event, send, close) => {
+				if (phase === "commands" && event.type === "response" && event.command === "get_commands") {
+					phase = "missions";
+					send({ type: "prompt", message: "/missions", id: "restart-missions" });
+				} else if (phase === "missions" && event.type === "extension_ui_request" && event.method === "select" && event.title === "Missions") {
+					phase = "done";
+					send({ type: "extension_ui_response", id: String(event.id), value: "Back" });
+				} else if (phase === "done" && event.type === "response" && event.command === "prompt" && event.id === "restart-missions") close();
+			});
+			assert.equal(restart.code, 0, safePiDiagnostic(restart, server.token));
+			assert.equal(restart.signal, null);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
 test("[P][fixture-v1] Pi RPC route-health reset clears persisted cooldown without provider calls", { skip: integrationSkip }, async () => {
 	await withFixture(async (server, orchestratorRoot) => {
 		const root = await mkdtemp(join(tmpdir(), "pi-m4-health-rpc-"));

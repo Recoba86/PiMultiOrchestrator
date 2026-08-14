@@ -58,7 +58,17 @@ message where applicable.
   Fallback only for a capability failure. If triage is unavailable, the user
   still receives the Mission-or-normal choice. Settings are stored in the
   versioned, atomic, rollback-capable `smart-routing.json` sidecar; stale route
-  IDs remain visible and never silently select a replacement. **Health &
+  IDs remain visible and never silently select a replacement. Routing Memory is
+  also ON by default and stores only abstract bilingual signatures. The Mission
+  recommendation includes `Always orchestrate similar tasks`, which creates
+  one canonical Mission and an explicit durable rule. Repeated Mission or
+  Normal choices learn only after consistent observations; strong authorized
+  matches can use AUTO_MISSION, while conflicts and materially more complex or
+  sensitive work return to a safe user choice. **Learned Behaviors** lets the
+  user inspect provenance, confidence, observations, language, task family,
+  risk, and enabled state, then enable/disable/delete rules, forget learned
+  rules, or reset all memory. Prompts, transcripts, source text, tool output,
+  provider responses, and credentials are never displayed or persisted. **Health &
   Quotas** shows observed route health and cooldowns. Provider quota remaining
   is `UNKNOWN` unless an authoritative value exists.
 - **Budget / Quality Profiles** shows quality gates, metadata-only analytics
@@ -77,8 +87,9 @@ message where applicable.
   credentials, or stack traces. Unknown projects are untrusted by default.
 - **Backup / Restore** exposes ConfigStore generation/history, safe export, and
   confirmation-gated restore. MissionStore and AnalyticsStore offer validated,
-  confirmation-gated SQLite-native backup snapshots; invalid or corrupt
-  snapshots are rejected rather than replaced with empty state.
+  confirmation-gated SQLite-native backup snapshots; Routing Memory offers a
+  validated abstract-only JSON backup/restore. Invalid or corrupt snapshots
+  are rejected rather than replaced with empty state.
 
 ## Recommendations and analyst
 

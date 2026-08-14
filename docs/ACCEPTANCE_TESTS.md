@@ -930,3 +930,90 @@ M12.1 does not add automatic prompt classification, smart routing, Routing Memor
 M12.2 local evidence is not acceptance of M12 or a public release. Real-route
 English/Persian triage and controlled real fallback require an authorized,
 securely available route and remain separate gates when unavailable.
+
+## 21. M12.3 Adaptive Routing Memory
+
+### M12.3-01 — Abstract durable memory and privacy boundary
+
+- **Level:** U/I
+- **Action:** create explicit and learned rules, inspect the sidecar and public
+  views, restart the store, inject prompt/source/tool/credential-like decoys,
+  corrupt individual rows, and load version 0/current/unknown envelopes.
+- **Pass:** the sidecar is versioned and atomic; signatures contain bounded
+  abstract concepts only; English, Persian, mixed, and cross-language cases
+  work; raw content and credentials are absent; valid rows survive bad rows;
+  supported legacy rows migrate and unsupported envelopes fail safely.
+
+### M12.3-02 — Explicit Always Mission rule
+
+- **Level:** U/P fixture
+- **Action:** submit a complex prompt and select `Always orchestrate similar
+  tasks`, then submit a strong bilingual equivalent and restart Pi.
+- **Pass:** exactly one canonical Mission is created for the selected prompt,
+  one durable explicit rule is written, the strong match uses AUTO_MISSION with
+  no repeated confirmation or AI call, and restart retains the state. Explicit
+  `@orchestrator` still wins first and uses the shared canonical creation path.
+
+### M12.3-03 — Repeated Mission/Normal learning
+
+- **Level:** I/P fixture
+- **Action:** choose Run as Mission three times for one semantic family and Run
+  Normally three times for another; test one-choice, mixed-choice, and
+  materially escalated variants.
+- **Pass:** learned rules expose source/confidence/observations, do not activate
+  after one choice, strong learned Mission can AUTO_MISSION, strong learned
+  Normal remains NORMAL, contradictory evidence prevents automation, and learned
+  Normal cannot suppress complex/sensitive current work.
+
+### M12.3-04 — Conservative matching and authority
+
+- **Level:** I
+- **Action:** exercise structural similarity, keyword-only overlap, explicit vs
+  learned opposite actions, same-tier conflicts, duplicate equivalent rules,
+  and bounded learned growth.
+- **Pass:** keyword overlap is insufficient; materially escalated matches are
+  bypassed; explicit rules outrank learned rules; same-tier conflicts require
+  user choice; explicit rules are not pruned; duplicate rules merge; learned
+  growth is bounded; strong hits avoid unnecessary AI Triage.
+
+### M12.3-05 — Learned Behaviors and settings
+
+- **Level:** U/P fixture
+- **Action:** open Routing & Fallback and Learned Behaviors; toggle Routing
+  Memory and Auto-Learn; inspect, disable, enable, delete, forget learned, and
+  reset all with confirmation.
+- **Pass:** controls remain inside the existing twelve-section Control Center,
+  abstract metadata only is shown, disabling retains state, per-rule and
+  learned/full reset semantics are durable and distinct, and safety/M12.1/M7
+  terminology remains unchanged.
+
+### M12.3-06 — Backup, restore, telemetry, and regression boundary
+
+- **Level:** I/P fixture
+- **Action:** create/restore valid and invalid Routing Memory backups and append
+  memory telemetry containing decoy prompt/credential fields; run existing
+  M12.1/M12.2/TrustStore/worker safety tests.
+- **Pass:** backup/restore validates before activation and is confirmation-gated;
+  telemetry remains bounded and prompt-free; M12.2 Primary/Fallback semantics,
+  M12.1 input, Direct Worker/M7 distinction, TrustStore, and safety guards pass.
+
+### M12.3-07 — Real isolated Pi dogfood and release gate
+
+- **Level:** P / authorized isolated Pi `0.84.1`
+- **Action:** run explicit Always, cross-language AUTO_MISSION, Learned
+  Behaviors disable, risky escalation, restart, and clean-tree/full RC checks.
+- **Pass:** the disposable Pi/TUI flow passes; focused independent review has no
+  unresolved blocker/high; full validation, package/release integrity, clean
+  repository, and truthful state documents pass. No live Pi configuration,
+  provider account, credential, public tag, push, npm publication, or GitHub
+  release is implied.
+
+### M12.3 acceptance mapping
+
+The 53 mission criteria map to the tests above as follows: 1–7 → M12.3-01;
+8–11, 22, 42–43, 46 → M12.3-02; 12–18 → M12.3-03; 19–24, 37–38 →
+M12.3-04; 25–36 → M12.3-05; 39–41, 45, 47–48 → M12.3-06; 49–53 →
+M12.3-07. The M12.3 local focused evidence is Routing Memory `14/14`, Smart
+Router `28/28`, provider host `25/25`, and isolated Pi dogfood `1/1`; the final
+full validation/release evidence is recorded only after its clean exact-Git
+verifier completes.

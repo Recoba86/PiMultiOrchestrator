@@ -20,6 +20,22 @@ test("analytics store is privacy-minimal and idempotent across reopen", () => {
 	second.close();
 });
 
+test("analytics runtime sanitizes provenance fields", () => {
+	const root = mkdtempSync(join(tmpdir(), "pmo-analytics-"));
+	const store = new SQLiteAnalyticsStore({ root, enabled: true });
+	const unsafe = event("unsafe", {
+		tokenUsage: { totalTokens: 2, provenance: "private prompt text" as never },
+		cost: { amountMicros: 5, currency: "USD", provenance: "credential payload" as never },
+	});
+	assert.equal(store.append(unsafe), true);
+	const saved = store.list()[0];
+	assert.equal(saved?.tokenUsage?.provenance, undefined);
+	assert.equal(saved?.cost, undefined);
+	assert.equal(JSON.stringify(saved).includes("private prompt text"), false);
+	assert.equal(JSON.stringify(saved).includes("credential payload"), false);
+	store.close();
+});
+
 test("disabled analytics does not persist and unknown cost is not zero", () => {
 	const root = mkdtempSync(join(tmpdir(), "pmo-analytics-"));
 	const first = new SQLiteAnalyticsStore({ root, enabled: true }); first.append(event("old")); first.close();

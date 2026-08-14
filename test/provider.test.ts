@@ -37,6 +37,7 @@ import type { QualityPersistence, TaskQualityStatus, VerificationRunRecord } fro
 import { summarize, type AnalyticsEventV1, type AnalyticsRecommendation, type AnalyticsStoreAdapter } from "../src/core/analytics/index.js";
 import { TrustStore } from "../src/core/security/index.js";
 import { SmartRoutingSettingsStore } from "../src/core/smart-routing/index.js";
+import { RoutingMemoryStore } from "../src/core/routing-memory/index.js";
 
 function projection(models: readonly ProviderModelConfig[] = [model("remote-a")]): ProviderProjection {
 	return {
@@ -409,7 +410,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /M12\.2 .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /M12\.(?:2|3) .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);
@@ -650,6 +651,85 @@ describe("Pi 9Router host adapter", () => {
 			assert.ok(store.listMissions().some((mission) => mission.goal === "explicit busy goal"));
 		} finally {
 			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][fixture-pi-0.84.1] learns Always, auto-missions strong matches, and suppresses repeated normal noise", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-memory-host-"));
+		const missionRoot = join(root, "missions");
+		try {
+			const store = createMissionStore({ root: missionRoot, id: (() => { let id = 0; return () => `memory-mission-${++id}`; })() });
+			const smartRoutingStore = new SmartRoutingSettingsStore({ root: join(root, "settings") });
+			const routingMemoryStore = new RoutingMemoryStore({ root: join(root, "memory"), id: (() => { let id = 0; return () => `memory-rule-${++id}`; })(), now: () => "2026-08-14T00:00:00.000Z" });
+			const pi = piFixture();
+			createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store, smartRoutingStore, routingMemoryStore });
+			const selections: string[] = ["Always orchestrate similar tasks"];
+			const notifications: string[] = [];
+			const ctx = {
+				cwd: "/private/tmp/pi-m12-routing-memory",
+				mode: "tui",
+				hasUI: true,
+				isIdle: () => true,
+				ui: {
+					select: async () => selections.shift(),
+					setEditorText: () => {},
+					notify: (message: string) => notifications.push(message),
+				},
+			} as unknown as ExtensionContext;
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+			const first = "Investigate the auth bug, fix the root cause, add tests, then verify independently";
+			const similar = "Please diagnose the login problem, repair its cause, add regression tests, then verify independently";
+			assert.deepEqual(await handleInput({ type: "input", text: first, source: "interactive" }, ctx), { action: "handled" });
+			assert.equal(store.listMissions().length, 1);
+			assert.equal((await routingMemoryStore.listViews()).filter((rule) => rule.source === "explicit").length, 1);
+				assert.deepEqual(await handleInput({ type: "input", text: similar, source: "interactive" }, ctx), { action: "handled" });
+				assert.equal(store.listMissions().length, 2);
+				assert.equal(selections.length, 0, "strong explicit match must not ask for confirmation");
+				assert.ok(notifications.some((message) => message.includes("saved rule")));
+			assert.equal(JSON.stringify(await routingMemoryStore.listViews()).includes(first), false);
+
+			const learnedRoot = join(root, "learned-mission");
+			const learnedMissions = createMissionStore({ root: join(learnedRoot, "missions"), id: (() => { let id = 0; return () => `learned-mission-${++id}`; })() });
+			const learnedSettings = new SmartRoutingSettingsStore({ root: join(learnedRoot, "settings") });
+			const learnedMemory = new RoutingMemoryStore({ root: join(learnedRoot, "memory"), id: (() => { let id = 0; return () => `learned-rule-${++id}`; })(), now: () => "2026-08-14T00:00:00.000Z" });
+			const learnedPi = piFixture();
+			createPiHost(learnedPi.pi, { manager: managerFixture(projection()), missionStore: learnedMissions, smartRoutingStore: learnedSettings, routingMemoryStore: learnedMemory });
+			const learnedSelections: string[] = ["Run as Mission", "Run as Mission", "Run as Mission"];
+			const learnedCtx = { ...ctx, ui: { ...ctx.ui, select: async () => learnedSelections.shift() } } as unknown as ExtensionContext;
+			const learnedHandler = learnedPi.inputHandlers[0];
+			assert.ok(learnedHandler);
+			for (let index = 0; index < 3; index += 1) assert.deepEqual(await learnedHandler({ type: "input", text: first, source: "interactive" }, learnedCtx), { action: "handled" });
+			assert.equal((await learnedMemory.listViews()).find((rule) => rule.action === "mission" && rule.source === "learned")?.observations, 3);
+				assert.deepEqual(await learnedHandler({ type: "input", text: similar, source: "interactive" }, learnedCtx), { action: "handled" });
+				assert.equal(learnedMissions.listMissions().length, 4);
+				assert.equal(learnedSelections.length, 0, "strong learned MISSION must auto-create one Mission");
+				assert.ok(notifications.some((message) => message.includes("learned preference")));
+			learnedMissions.close();
+
+			const normalRoot = join(root, "normal");
+			const normalMissions = createMissionStore({ root: join(normalRoot, "missions"), id: (() => { let id = 0; return () => `normal-mission-${++id}`; })() });
+			const normalSettings = new SmartRoutingSettingsStore({ root: join(normalRoot, "settings") });
+			const normalMemory = new RoutingMemoryStore({ root: join(normalRoot, "memory"), id: (() => { let id = 0; return () => `normal-rule-${++id}`; })(), now: () => "2026-08-14T00:00:00.000Z" });
+			const normalPi = piFixture();
+			createPiHost(normalPi.pi, { manager: managerFixture(projection()), missionStore: normalMissions, smartRoutingStore: normalSettings, routingMemoryStore: normalMemory });
+			const normalSelections: string[] = ["Run Normally", "Run Normally", "Run Normally"];
+			const normalCtx = { ...ctx, ui: { ...ctx.ui, select: async () => normalSelections.shift() } } as unknown as ExtensionContext;
+			const normalHandler = normalPi.inputHandlers[0];
+			assert.ok(normalHandler);
+			const borderline = "Take a look at this feature; something feels wrong sometimes. Clean it up if needed.";
+			for (let index = 0; index < 3; index += 1) assert.deepEqual(await normalHandler({ type: "input", text: borderline, source: "interactive" }, normalCtx), { action: "continue" });
+			assert.equal((await normalMemory.listViews()).filter((rule) => rule.source === "learned" && rule.action === "normal").length, 1);
+			assert.deepEqual(await normalHandler({ type: "input", text: borderline, source: "interactive" }, normalCtx), { action: "continue" });
+			assert.equal(normalSelections.length, 0, "strong learned NORMAL must bypass the banner");
+			const risky = "Investigate the production payment bug, fix it, add rollback tests, and verify independently";
+			normalSelections.push("Run Normally");
+			assert.deepEqual(await normalHandler({ type: "input", text: risky, source: "interactive" }, normalCtx), { action: "continue" });
+			assert.equal(normalSelections.length, 0, "complexity escalation must not use a simple learned NORMAL rule");
+			normalMissions.close();
+			store.close();
+		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
 	});

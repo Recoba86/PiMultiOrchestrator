@@ -373,3 +373,45 @@ Product behavior is accepted only through measurable cases in [ACCEPTANCE_TESTS.
 - Routing telemetry MUST contain bounded decision metadata only; raw prompts,
   transcripts, tool output, provider responses, and credentials MUST NOT be
   persisted. Explicit `@orchestrator <goal>` remains the M12.1 bypass.
+
+## 21. M12.3 Adaptive Routing Memory
+
+- Routing Memory MUST be a separate versioned durable capability. Its records
+  MUST contain abstract routing signatures, action, source/provenance,
+  confidence, observation count, timestamps, and enabled state; they MUST NOT
+  contain raw prompts, prompt history, embeddings, source text, transcripts,
+  tool results, provider responses, or credentials.
+- Signatures MUST support English, Persian, mixed-language, and useful
+  cross-language matching through bounded concepts from Smart Routing: task
+  family, project scope, investigation/mutation/implementation/testing/
+  verification/audit/research/release structure, steps/dependencies,
+  deliverables, roles, sensitivity, destructiveness, and risk. Keyword overlap
+  alone MUST NOT produce a strong match.
+- The Mission recommendation MUST include `Always orchestrate similar tasks`.
+  Selecting it MUST create exactly one canonical Mission and one durable
+  explicit Mission rule. Explicit `@orchestrator` remains higher priority than
+  every memory rule and uses the existing canonical Mission creation path.
+- Repeated `Run as Mission` choices MAY create a learned Mission preference;
+  repeated `Run Normally` choices MAY create a learned Normal preference. A
+  single choice MUST NOT automate behavior, and learned activation MUST require
+  repeated consistent evidence with bounded confidence. Strong explicit or
+  learned Mission matches MAY use `AUTO_MISSION`; strong learned Normal matches
+  MAY continue as `NORMAL` without recommendation noise.
+- Matching MUST be conservative. Explicit rules MUST outrank learned rules;
+  same-tier contradictory rules MUST require user choice; a learned Normal rule
+  MUST NOT suppress materially more complex, sensitive, destructive, or high-risk
+  current work. Strong memory hits MUST bypass unnecessary AI Triage.
+- Routing Memory and Auto-Learn MUST be independently disableable. Disabling
+  MUST retain existing state. Rules MUST persist across restart, support
+  per-rule enable/disable and deletion, learned-only forget, full reset, bounded
+  learned growth, controlled duplicate merging, and no silent pruning of
+  explicit rules.
+- Routing & Fallback MUST expose Learned Behaviors with abstract inspectable
+  metadata, source/provenance, confidence, observations, enable/disable,
+  delete, forget-learned, and confirmation-gated full reset controls. Backup /
+  restore MUST validate the versioned abstract-only sidecar and reject invalid
+  or corrupt input without replacing valid state.
+- Routing telemetry MUST remain an allowlisted bounded metadata projection with
+  no raw prompt or credential fields. Existing M12.1 Mission entry, Direct
+  Worker/M7 distinction, M12.2 Primary/Fallback capability-only semantics,
+  TrustStore, and safety policies MUST remain unchanged.

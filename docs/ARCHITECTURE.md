@@ -745,8 +745,45 @@ keeps the legacy ConfigV1 route envelope and existing route-selection policy
 unchanged while retaining stale IDs for user repair. The existing twelve
 Control Center sections remain fixed; settings are nested in Routing &
 Fallback. Routing telemetry is a typed metadata event with allowlisted reason
-codes/actions and no prompt or provider-response field. Routing Memory is not
-read or written in M12.2; the context parameter is reserved for M12.3 only.
+codes/actions and no prompt or provider-response field. M12.2 does not read or
+write Routing Memory; its Smart Router context leaves the M12.3 memory boundary
+explicit.
+
+## 23.3 M12.3 Adaptive Routing Memory
+
+The host keeps Routing Memory in a separate versioned `routing-memory.json`
+sidecar under the configured application root. Its envelope has a storage
+version, generation, timestamp, bounded rule list, atomic writes, cross-process
+storage locking, and bounded generation history. A rule contains only an ID,
+action, source (`explicit` or `learned`), confidence, observation count,
+timestamps, enabled state, and a versioned `RoutingSignature`.
+
+`RoutingSignature` is an abstract projection of the M12.2 local analyzer:
+language (`en`, `fa`, or `mixed`), task family, project scope, investigation /
+mutation / implementation / testing / verification / audit / research /
+release flags, step/dependency/deliverable/role structure, sensitivity,
+destructiveness, and bounded risk. There is intentionally no prompt, token,
+embedding, source text, transcript, tool result, provider response, or
+credential field. Similarity compares these concepts and rejects
+explanation-vs-action, materially escalated, and keyword-only matches.
+
+The ordinary Pi input flow preserves the priority `@orchestrator` → explicit
+Mission rule → strong learned rule → M12.2 local/triage routing → normal
+continuation. Explicit Mission rules can produce `AUTO_MISSION`; learned
+Mission rules require repeated evidence and strong matching, and learned
+Normal rules can suppress repetitive recommendations only when the current
+signature is not materially more complex or sensitive. Same-tier Mission /
+Normal conflicts never auto-route. Any AUTO_MISSION calls the existing
+`createCanonicalMission` operation exactly once.
+
+Routing Memory settings remain inside Routing & Fallback: global memory enable,
+Auto-Learn enable, Learned Behaviors management, and confirmation-gated
+abstract-only backup/restore. Rule deletion/disablement and learned-only/full
+reset are durable operations. Corrupt rows are isolated, schema-version 0
+records migrate per row, unsupported envelopes fail closed to ordinary routing,
+and disabled memory retains state. Routing telemetry is an allowlisted bounded
+metadata projection of hits, provenance, confidence, actions, conflicts, and
+reset/management events.
 
 ## 23. M11 package and rescue boundary
 

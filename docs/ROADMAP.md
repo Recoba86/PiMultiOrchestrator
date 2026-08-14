@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: IN PROGRESS. M12.1 and M12.2 are implemented local-pass work; M12.3 and the M12 Final Gate are not started. M10 remains the latest accepted milestone.
+Status: IN PROGRESS. M12.1, M12.2, and M12.3 are implemented local-pass work; the M12 Final Gate is not started. M10 remains the latest accepted milestone.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -239,7 +239,28 @@ still local-only pending independent review and Planner/manual acceptance.
 
 ### M12.3 — Adaptive Routing Memory
 
-Status: NOT STARTED.
+Status: COMPLETE / LOCAL PASS; not accepted, public, or production-ready.
+
+M12.3 adds a bounded, versioned `routing-memory.json` sidecar containing
+abstract bilingual routing signatures rather than prompt history. Explicit
+`Always orchestrate similar tasks` rules create one canonical Mission and
+learned Mission/Normal preferences require repeated consistent choices before
+they can affect routing. Matching is conservative and language-neutral, with
+explicit-rule precedence, provenance/confidence, conflict fallback, and a
+complexity gate that prevents a learned Normal preference from suppressing a
+materially escalated task.
+
+The existing Routing & Fallback section exposes Routing Memory, Auto-Learn,
+Learned Behaviors, and validated abstract-only backup/restore controls. Learned
+rules can be inspected, enabled/disabled, deleted, forgotten separately, or
+reset with explicit confirmation. Routing telemetry is allowlisted metadata;
+raw prompts, transcripts, tool output, provider responses, and credentials are
+excluded.
+
+Local evidence: Routing Memory `15/15`, Smart Router `27/27`, provider host
+`25/25`, and isolated Pi `0.84.1` M12.3 RPC/TUI dogfood `1/1` pass. The final
+RC.12 full validation/release verifier, focused independent review verdict,
+and M12 Final Routing Gate remain separate pending gates.
 
 ### M12 Final Gate — Routing Dogfood
 

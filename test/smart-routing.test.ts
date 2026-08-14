@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -15,7 +15,7 @@ import {
 	type TriageClient,
 } from "../src/core/smart-routing/index.js";
 import type { StableId } from "../src/core/config/types.js";
-import { SQLiteAnalyticsStore, summarize } from "../src/core/analytics/index.js";
+import { SQLiteAnalyticsStore, summarize, type AnalyticsEventV1 } from "../src/core/analytics/index.js";
 
 const route = (value: string): StableId => value as StableId;
 
@@ -95,6 +95,29 @@ test("M12.2 smart policy skips AI on clear paths and uses one primary result", a
 	assert.equal(ambiguous.triage?.fallbackUsed, false);
 });
 
+test("M12.3 strong memory hits short-circuit AI triage", async () => {
+	let calls = 0;
+	const router = new SmartRouter({
+		settings: { ...createDefaultSmartRoutingSettings(), aiTriageEnabled: true, primaryRouteId: route("triage-primary") },
+		triageClient: { classify: async () => { calls += 1; return { recommendedMode: "normal", confidence: 1, reasons: [] }; } },
+	});
+	const decision = await router.decide("Take a look at this feature; something feels wrong sometimes. Clean it up if needed.", undefined, {
+		memoryRecommendation: { mode: "AUTO_MISSION", source: "learned", action: "mission", confidence: 0.84, similarity: 0.91, reasonCodes: ["routing_memory_hit"] },
+	});
+	assert.equal(decision.mode, "AUTO_MISSION");
+	assert.equal(decision.memory?.source, "learned");
+	assert.equal(calls, 0);
+});
+
+test("M12.3 memory conflicts return to the user-choice path", async () => {
+	const router = new SmartRouter({ settings: createDefaultSmartRoutingSettings(), triageClient: { classify: async () => { throw new Error("must not call AI for a simple conflict"); } } });
+	const decision = await router.decide("What is a closure?", undefined, {
+		memoryRecommendation: { conflict: true, reasonCodes: ["routing_memory_conflict"] },
+	});
+	assert.equal(decision.mode, "SUGGEST_MISSION");
+	assert.ok(decision.reasonCodes.includes("routing_memory_conflict"));
+});
+
 test("M12.2 triage fallback is capability-only and never quality-shops disagreement", async () => {
 	const calls: string[] = [];
 	const router = new SmartRouter({
@@ -162,6 +185,26 @@ test("M12.2 triage result is strict and settings retain stale route IDs", async 
 	}
 });
 
+test("M12.3 settings migrate old Smart Routing records with memory enabled by default", async () => {
+	const root = await mkdtemp(join(tmpdir(), "pi-m12-smart-routing-migrate-"));
+	try {
+		await writeFile(join(root, "smart-routing.json"), JSON.stringify({
+			storageVersion: 1,
+			generation: 7,
+			savedAt: "2026-08-14T00:00:00.000Z",
+			settings: { schemaVersion: 1, enabled: true, aiTriageEnabled: false, primaryRouteId: "stale-route" },
+		}));
+		const loaded = await new SmartRoutingSettingsStore({ root }).load();
+		assert.equal(loaded.status, "valid");
+		assert.equal(loaded.generation, 7);
+		assert.equal(loaded.settings.schemaVersion, 2);
+		assert.equal(loaded.settings.routingMemoryEnabled, true);
+		assert.equal(loaded.settings.learnFromRoutingChoices, true);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
 test("M12.2 routing telemetry stores bounded metadata only", async () => {
 	const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-analytics-"));
 	try {
@@ -180,6 +223,37 @@ test("M12.2 routing telemetry stores bounded metadata only", async () => {
 		assert.equal(store.summary().routing?.fallbackCalls, 1);
 		assert.equal(JSON.stringify(events).includes("prompt contents"), false);
 		assert.equal(summarize(events).routing?.decisions, 1);
+		store.close();
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("M12.3 routing memory telemetry is allowlisted and summarized without prompts", async () => {
+	const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-memory-analytics-"));
+	try {
+		const store = new SQLiteAnalyticsStore({ root, enabled: true });
+		const events: AnalyticsEventV1[] = [
+			{
+				eventId: "memory-explicit",
+				occurredAt: "2026-08-14T00:00:00.000Z",
+				eventType: "routing",
+				dimensions: { prompt: "PRIVATE_PROMPT_MUST_NOT_PERSIST" },
+				routing: { decision: "suggest_mission", localPath: "complex", triageCalls: 0, fallbackUsed: false, reasonCodes: ["routing_memory_hit"], action: "auto_mission_explicit", memory: { hit: true, source: "explicit", action: "mission", confidence: 1, similarity: 0.97 } },
+			},
+			{
+				eventId: "memory-learned",
+				occurredAt: "2026-08-14T00:00:01.000Z",
+				eventType: "routing",
+				routing: { decision: "normal", localPath: "ambiguous", triageCalls: 0, fallbackUsed: false, reasonCodes: ["routing_memory_conflict"], action: "memory_conflict", memory: { hit: false, conflict: true } },
+			},
+		];
+		for (const event of events) assert.equal(store.append(event), true);
+		const summary = store.summary();
+		assert.equal(summary.routing?.memoryHits, 1);
+		assert.equal(summary.routing?.memoryConflicts, 1);
+		assert.equal(summary.routing?.autoMissionExplicit, 1);
+		assert.equal(JSON.stringify(store.list()).includes("PRIVATE_PROMPT_MUST_NOT_PERSIST"), false);
 		store.close();
 	} finally {
 		await rm(root, { recursive: true, force: true });

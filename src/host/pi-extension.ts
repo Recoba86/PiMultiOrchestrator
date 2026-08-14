@@ -90,14 +90,32 @@ import {
 	formatRoutingReasons,
 	parseTriageResult,
 	containsPersian,
+	analyzeLocalSignals,
 	type SmartRoutingDecision,
+	type SmartRoutingContext,
 	type SmartRoutingSettings,
 	type TriageClient,
 } from "../core/smart-routing/index.js";
+import { buildRoutingSignature, RoutingMemoryStore } from "../core/routing-memory/index.js";
 
 export const NINEROUTER_PROVIDER_ID = DOMAIN_NINEROUTER_PROVIDER_ID;
 
 type MaybePromise<T> = T | Promise<T>;
+
+interface RoutingMemoryHostAdapter {
+	match(signature: unknown): MaybePromise<unknown>;
+	addExplicitMissionRule(signature: unknown): MaybePromise<unknown>;
+	observeChoice(signature: unknown, action: "mission" | "normal"): MaybePromise<unknown>;
+	listViews(): MaybePromise<readonly unknown[]>;
+	setEnabled(ruleId: string, enabled: boolean): MaybePromise<unknown>;
+	deleteRule(ruleId: string): MaybePromise<unknown>;
+	forgetLearned(): MaybePromise<unknown>;
+	reset(): MaybePromise<unknown>;
+	backup?(destinationPath?: string): Promise<string>;
+	restore?(backupPath: string): MaybePromise<unknown>;
+}
+
+const routingMemoryRecord = (value: unknown): Record<string, unknown> | undefined => typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 
 interface PoolEntryView extends CorePoolEntryView {
 	readonly projectedPiAvailable?: boolean;
@@ -202,6 +220,7 @@ export interface PiHostOptions {
 	readonly analyticsStore?: AnalyticsStoreAdapter;
 	readonly recommendationAnalyst?: RecommendationAnalystContract;
 	readonly smartRoutingStore?: SmartRoutingSettingsStore;
+	readonly routingMemoryStore?: RoutingMemoryStore;
 	readonly triageClient?: TriageClient;
 	/** Local-only project trust state; never part of portable ConfigStore data. */
 	readonly trustStore?: TrustStore;
@@ -225,6 +244,7 @@ export interface PiHost {
 	readonly analyticsStore?: AnalyticsStoreAdapter;
 	readonly recommendationAnalyst?: RecommendationAnalystContract;
 	readonly smartRoutingStore?: SmartRoutingSettingsStore;
+	readonly routingMemoryStore?: RoutingMemoryStore;
 	readonly trustStore?: TrustStore;
 	readonly qualityExecutor?: SubagentExecutor;
 	reconcile(): Promise<ReconcileResult>;
@@ -668,6 +688,36 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			return;
 		}
 		await smartRoutingStore.update(mutator);
+	};
+	const routingMemory = options.routingMemoryStore as unknown as RoutingMemoryHostAdapter | undefined;
+	const routingMemoryMatch = async (prompt: string, settings: SmartRoutingSettings): Promise<{ readonly signature: unknown; readonly match?: Record<string, unknown> }> => {
+		const signature = buildRoutingSignature(prompt, analyzeLocalSignals(prompt));
+		if (!routingMemory || !settings.enabled || !settings.routingMemoryEnabled) return { signature };
+		try {
+			const result = await Promise.resolve(routingMemory.match(signature));
+			const match = routingMemoryRecord(result);
+			return match === undefined ? { signature } : { signature, match };
+		} catch {
+			return { signature };
+		}
+	};
+	const routingMemoryContext = (match: Record<string, unknown> | undefined): SmartRoutingContext["memoryRecommendation"] | undefined => {
+		if (!match) return undefined;
+		const recommendation = routingMemoryRecord(match.recommendation) ?? match;
+		const kind = recommendation.kind ?? recommendation.status;
+		if (kind === "none" && typeof recommendation.reason === "string" && recommendation.reason.includes("complexity")) return { reasonCodes: ["routing_memory_bypassed_complexity"] };
+		const source = recommendation.source === "explicit" || recommendation.source === "learned" ? recommendation.source : undefined;
+		const action = recommendation.action === "mission" || recommendation.action === "normal" ? recommendation.action : undefined;
+		const confidence = typeof recommendation.confidence === "number" && Number.isFinite(recommendation.confidence) ? recommendation.confidence : undefined;
+		const similarity = typeof recommendation.similarity === "number" && Number.isFinite(recommendation.similarity) ? recommendation.similarity : undefined;
+		const ruleId = typeof recommendation.ruleId === "string" ? recommendation.ruleId : undefined;
+		if (kind === "conflict" || recommendation.conflict === true) return { reasonCodes: ["routing_memory_conflict"], conflict: true, ...(source === undefined ? {} : { source }), ...(action === undefined ? {} : { action }), ...(confidence === undefined ? {} : { confidence }), ...(similarity === undefined ? {} : { similarity }), ...(ruleId === undefined ? {} : { ruleId }) };
+		if (kind !== "strong" && kind !== "match" && recommendation.strong !== true) return undefined;
+		if (!source || !action) return undefined;
+		if (source === "learned" && (confidence === undefined || confidence < 0.84 || similarity === undefined || similarity < 0.8)) return undefined;
+		// M12.3 explicitly authorizes strong learned Mission preferences to
+		// AUTO_MISSION; the source/evidence checks above keep this adapter fail-closed.
+		return { mode: action === "mission" ? "AUTO_MISSION" : "NORMAL", reasonCodes: ["routing_memory_hit"], ...(source === undefined ? {} : { source }), action, ...(confidence === undefined ? {} : { confidence }), ...(similarity === undefined ? {} : { similarity }), ...(ruleId === undefined ? {} : { ruleId }) };
 	};
 	const smartRouter = new SmartRouter({ settings: loadSmartRoutingSettings, triageClient: options.triageClient ?? createHostTriageClient(manager) });
 	const analytics = analyticsStore ? new AnalyticsQueryService(analyticsStore) : undefined;
@@ -1304,27 +1354,31 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const showBackupRestore = async (ctx: ExtensionCommandContext): Promise<void> => {
-		if (!configStore) {
-			ctx.ui.notify("Backup / Restore\nConfigStore unavailable\nMissionStore and AnalyticsStore backup: Not implemented yet", "warning");
+		if (!configStore && !routingMemory) {
+			ctx.ui.notify("Backup / Restore\nConfigStore and Routing Memory unavailable", "warning");
 			return;
 		}
 		try {
-			const [loaded, history] = await Promise.all([configStore.load(), configStore.listHistory()]);
-			const generation = loaded.snapshot?.generation ?? "UNKNOWN";
+			const loaded = configStore ? await configStore.load() : undefined;
+			const history = configStore ? await configStore.listHistory() : { entries: [] };
+			const generation = loaded?.snapshot?.generation ?? "UNKNOWN";
 			const missionBackup = options.missionStore && typeof options.missionStore.backup === "function";
 			const analyticsBackup = analyticsStore && typeof analyticsStore.backup === "function";
+			const memoryBackup = routingMemory && typeof routingMemory.backup === "function";
 			const details = [
 				"Backup / Restore",
 				`active ConfigStore generation: ${generation}`,
 				`history entries: ${history.entries.length}`,
 				`Mission DB backup: ${missionBackup ? "AVAILABLE" : "UNAVAILABLE"}`,
 				`Analytics DB backup: ${analyticsBackup ? "AVAILABLE" : "UNAVAILABLE"}`,
+				`Routing Memory backup: ${memoryBackup ? "AVAILABLE (abstract rules only)" : "UNAVAILABLE"}`,
 				"restore requires preview, validation, and explicit confirmation; backups use SQLite-native consistent snapshots",
 			].join("\n");
 			ctx.ui.notify(details, "info");
 			if (ctx.mode !== "tui" && !ctx.hasUI) return;
-			const action = await ctx.ui.select("Backup / Restore", ["Export config", "Backup Mission DB", "Backup Analytics DB", "Restore history generation", "Back"]);
+			const action = await ctx.ui.select("Backup / Restore", ["Export config", "Backup Mission DB", "Backup Analytics DB", "Backup Routing Memory", "Restore history generation", "Restore Routing Memory", "Back"]);
 			if (action === "Export config") {
+				if (!configStore) { ctx.ui.notify("Config export is unavailable", "warning"); return; }
 				const exported = await configStore.export();
 				if (typeof ctx.ui.editor === "function") await ctx.ui.editor("Config export (safe references only)", exported);
 				else ctx.ui.notify(`Config export ready (${exported.length} bytes; secrets are environment references only)`, "info");
@@ -1340,7 +1394,26 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				} catch (error) { notifyError(ctx, `${action} failed`, error); }
 				return;
 			}
+			if (action === "Backup Routing Memory") {
+				if (!memoryBackup || !(await ctx.ui.confirm("Backup Routing Memory?", "Only abstract routing rules will be exported"))) return;
+				try {
+					const path = await routingMemory.backup!();
+					ctx.ui.notify(`Routing Memory backup created: ${path}`, "info");
+				} catch (error) { notifyError(ctx, "Routing Memory backup failed", error); }
+				return;
+			}
+			if (action === "Restore Routing Memory") {
+				if (!routingMemory?.restore) { ctx.ui.notify("Routing Memory restore is unavailable", "warning"); return; }
+				const backupPath = await ctx.ui.input("Routing Memory backup path", "");
+				if (!backupPath?.trim() || !(await ctx.ui.confirm("Restore Routing Memory?", "The backup is validated before activation"))) return;
+				try {
+					await Promise.resolve(routingMemory.restore(backupPath.trim()));
+					ctx.ui.notify("Routing Memory restored.", "info");
+				} catch (error) { notifyError(ctx, "Routing Memory restore failed", error); }
+				return;
+			}
 			if (action !== "Restore history generation") return;
+			if (!configStore) return;
 			if (history.entries.length === 0) {
 				ctx.ui.notify("No ConfigStore history entries to restore", "warning");
 				return;
@@ -1352,7 +1425,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				return;
 			}
 			if (!(await ctx.ui.confirm("Restore ConfigStore generation?", String(target)))) return;
-			const current = loaded.snapshot?.generation;
+			const current = loaded?.snapshot?.generation;
 			const result = await configStore.restore(target, current === undefined ? {} : { expectedGeneration: current });
 			ctx.ui.notify(`ConfigStore restored generation ${target} (active generation ${result.generation})`, "info");
 		} catch (error) {
@@ -1675,6 +1748,71 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		await runSubagent(ctx, { role: role.trim(), pool: poolId, task: task.trim(), standalone: true }, ctx.signal);
 	};
 
+	const showLearnedBehaviors = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (!routingMemory) {
+			ctx.ui.notify("Learned Behaviors are unavailable until Routing Memory is configured", "warning");
+			return;
+		}
+		try {
+			const rawViews = await Promise.resolve(routingMemory.listViews());
+			const views = rawViews.map((value) => routingMemoryRecord(value)).filter((value): value is Record<string, unknown> => value !== undefined);
+			const label = (view: Record<string, unknown>): string => {
+				const id = typeof view.id === "string" ? view.id : "rule";
+				const signature = routingMemoryRecord(view.signature);
+				const family = typeof view.taskFamily === "string" ? view.taskFamily : typeof signature?.taskFamily === "string" ? signature.taskFamily : "general";
+				const action = view.action === "mission" ? "MISSION" : "NORMAL";
+				const source = view.source === "explicit" ? "explicit" : "learned";
+				const confidence = typeof view.confidence === "number" ? view.confidence.toFixed(2) : "?";
+				const observations = typeof view.observations === "number" ? String(view.observations) : "?";
+				return `${id} — ${family} — ${action} (${source}, confidence ${confidence}, observations ${observations})${view.enabled === false ? " [DISABLED]" : ""}`;
+			};
+			const details = (view: Record<string, unknown>): string => {
+				const signature = routingMemoryRecord(view.signature);
+				const flags = signature ? Object.entries(signature).filter(([key, value]) => ["taskFamily", "language", "risk", "scope"].includes(key) === false && value === true).map(([key]) => key).slice(0, 12) : [];
+				return ["Learned Behavior", `task family: ${typeof view.taskFamily === "string" ? view.taskFamily : String(signature?.taskFamily ?? "general")}`, `language: ${String(signature?.language ?? "mixed")}`, `preferred action: ${view.action === "mission" ? "MISSION" : "NORMAL"}`, `source: ${view.source === "explicit" ? "explicit" : "learned"}`, `confidence: ${typeof view.confidence === "number" ? view.confidence.toFixed(2) : "unknown"}`, `observations: ${String(view.observations ?? "unknown")}`, `enabled: ${view.enabled !== false}`, `abstract signals: ${flags.join(", ") || "none"}`].join("\n");
+			};
+			ctx.ui.notify(["Learned Behaviors", ...(views.length === 0 ? ["No routing preferences recorded"] : views.map(label)), "Rules contain abstract signatures only; prompts and reasoning are never shown."].join("\n"), "info");
+			if (ctx.mode !== "tui" && !ctx.hasUI) return;
+			while (true) {
+				const choices = [...views.map(label), "Forget learned behaviors", "Reset all routing memory", "Back"];
+				const choice = await ctx.ui.select("Learned Behaviors", choices);
+				if (!choice || choice === "Back") return;
+				if (choice === "Forget learned behaviors") {
+					if (!(await ctx.ui.confirm("Forget learned behaviors?", "Explicit Always rules will be retained"))) continue;
+					await Promise.resolve(routingMemory.forgetLearned());
+					recordMemoryAction("learned_reset");
+					ctx.ui.notify("Learned routing behaviors forgotten; explicit rules retained.", "info");
+					return;
+				}
+				if (choice === "Reset all routing memory") {
+					if (!(await ctx.ui.confirm("Reset all routing memory?", "This removes explicit and learned rules"))) continue;
+					await Promise.resolve(routingMemory.reset());
+					recordMemoryAction("full_reset");
+					ctx.ui.notify("All routing memory reset.", "info");
+					return;
+				}
+				const index = views.map(label).indexOf(choice);
+				const selected = index >= 0 ? views[index] : undefined;
+				if (!selected || typeof selected.id !== "string") return;
+				ctx.ui.notify(details(selected), "info");
+				const action = await ctx.ui.select("Routing rule", ["Inspect", selected.enabled === false ? "Enable" : "Disable", "Forget rule", "Back"]);
+				if (action === "Inspect") ctx.ui.notify(details(selected), "info");
+				else if (action === "Enable" || action === "Disable") {
+					await Promise.resolve(routingMemory.setEnabled(selected.id, action === "Enable"));
+					if (action === "Disable") recordMemoryAction("rule_disabled");
+					ctx.ui.notify(`Routing rule ${action === "Enable" ? "enabled" : "disabled"}.`, "info");
+				} else if (action === "Forget rule" && await ctx.ui.confirm("Forget this routing rule?", selected.id)) {
+					await Promise.resolve(routingMemory.deleteRule(selected.id));
+					recordMemoryAction("rule_deleted");
+					ctx.ui.notify("Routing rule forgotten.", "info");
+				}
+				return;
+			}
+		} catch (error) {
+			notifyError(ctx, "Learned Behaviors failed", error);
+		}
+	};
+
 	const openRoutingSettings = async (ctx: ExtensionCommandContext): Promise<void> => {
 		if (!configStore && !smartRoutingStore) {
 			ctx.ui.notify("Routing settings are unavailable until the configuration store is configured", "error");
@@ -1702,6 +1840,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const triageLabel = primaryEntry?.state !== "available" ? "UNAVAILABLE" : smart.aiTriageEnabled ? "ON" : "OFF";
 			const choice = await ctx.ui.select("Routing & Fallback", [
 				`Smart Routing (${smart.enabled ? "ON" : "OFF"})`,
+				`Routing Memory (${smart.routingMemoryEnabled ? "ON" : "OFF"})`,
+				`Learn from routing choices (${smart.learnFromRoutingChoices ? "ON" : "OFF"})`,
+				"Learned Behaviors",
 				`AI Triage (${triageLabel})`,
 				`Triage Primary (${smart.primaryRouteId ?? "None"})`,
 				`Triage Fallback (${smart.fallbackRouteId ?? "None"})`,
@@ -1717,6 +1858,13 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			if (!choice || choice === "Back") return;
 			if (choice.startsWith("Smart Routing")) {
 				await updateSmartRoutingSettings((draft) => ({ ...draft, enabled: !smart.enabled }));
+			} else if (choice.startsWith("Routing Memory")) {
+				await updateSmartRoutingSettings((draft) => ({ ...draft, routingMemoryEnabled: !smart.routingMemoryEnabled }));
+			} else if (choice.startsWith("Learn from routing choices")) {
+				await updateSmartRoutingSettings((draft) => ({ ...draft, learnFromRoutingChoices: !smart.learnFromRoutingChoices }));
+			} else if (choice === "Learned Behaviors") {
+				await showLearnedBehaviors(ctx);
+				return;
 			} else if (choice.startsWith("AI Triage")) {
 				if (!smart.aiTriageEnabled && (!primaryEntry || primaryEntry.state !== "available")) {
 					ctx.ui.notify("Configure an available Triage Primary route before enabling AI Triage.", "warning");
@@ -2320,7 +2468,28 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
-	const recordRoutingDecision = (decision: SmartRoutingDecision, action: AnalyticsRoutingTelemetryV1["action"]): void => {
+	const createInputMission = (ctx: ExtensionContext, goal: string): MissionRecord | undefined => {
+		if (!options.missionStore) {
+			missionStoreUnavailable(ctx);
+			return undefined;
+		}
+		try {
+			const mission = createCanonicalMission(options.missionStore, goal, { repositoryCwd: ctx.cwd });
+			appendMissionPointer(mission);
+			ctx.ui.notify(missionCreatedMessage(mission), "info");
+			return mission;
+		} catch (error) {
+			notifyError(ctx, "Mission creation failed", error);
+			return undefined;
+		}
+	};
+
+	const memoryRuleWasCreated = (value: unknown): boolean => {
+		const result = routingMemoryRecord(value);
+		return result?.created === true || result?.ruleCreated === true;
+	};
+
+	const recordRoutingDecision = (decision: SmartRoutingDecision, action: AnalyticsRoutingTelemetryV1["action"], memory?: SmartRoutingDecision["memory"]): void => {
 		if (!analyticsStore) return;
 		const routing: AnalyticsRoutingTelemetryV1 = {
 			decision: decision.mode === "NORMAL" ? "normal" : "suggest_mission",
@@ -2330,6 +2499,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			reasonCodes: [...decision.reasonCodes],
 			...(action === undefined ? {} : { action }),
 			...(decision.triage?.failureClass === undefined ? {} : { failureClass: decision.triage.failureClass }),
+			...(memory === undefined ? {} : { memory: { hit: true, ...(memory.source === undefined ? {} : { source: memory.source }), ...(memory.action === undefined ? {} : { action: memory.action }), ...(memory.confidence === undefined ? {} : { confidence: memory.confidence }), ...(memory.similarity === undefined ? {} : { similarity: memory.similarity }), ...(memory.conflict === undefined ? {} : { conflict: memory.conflict }) } }),
 		};
 		routingEventSequence += 1;
 		recordAnalytics({
@@ -2341,22 +2511,46 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			routing,
 		});
 	};
+	const recordMemoryAction = (action: AnalyticsRoutingTelemetryV1["action"]): void => {
+		if (!analyticsStore) return;
+		routingEventSequence += 1;
+		recordAnalytics({
+			eventId: `routing-memory-${Date.now()}-${routingEventSequence}`,
+			occurredAt: new Date().toISOString(),
+			eventType: "routing",
+			routing: { decision: "normal", localPath: "simple", triageCalls: 0, fallbackUsed: false, reasonCodes: ["routing_memory_hit"], ...(action === undefined ? {} : { action }) },
+		});
+	};
 
 	const handleInput = async (event: InputEvent, ctx: ExtensionContext): Promise<InputEventResult> => {
 		if (event.source === "extension") return { action: "continue" };
 		const invocation = parseOrchestratorInvocation(event.text);
 		if (!invocation) {
 			if (event.streamingBehavior !== undefined) return { action: "continue" };
+			const smartSettings = await loadSmartRoutingSettings();
+			const memoryProbe = await routingMemoryMatch(event.text, smartSettings);
+			const memoryContext = routingMemoryContext(memoryProbe.match);
 			let decision: SmartRoutingDecision;
-			try { decision = await smartRouter.decide(event.text, ctx.signal); }
+			try { decision = await smartRouter.decide(event.text, ctx.signal, memoryContext === undefined ? undefined : { memoryRecommendation: memoryContext }); }
 			catch {
 				ctx.ui.notify("Smart Routing unavailable; continuing with the original prompt.", "warning");
 				return { action: "continue" };
 			}
+			if (decision.mode === "AUTO_MISSION") {
+				const mission = createInputMission(ctx, event.text);
+				if (!mission) {
+					recordRoutingDecision(decision, "failed", decision.memory);
+					return { action: "continue" };
+				}
+				ctx.ui.notify(decision.memory?.source === "explicit" ? "Routed to Mission using your saved rule." : "Routed to Mission using a learned preference.", "info");
+				recordRoutingDecision(decision, decision.memory?.source === "explicit" ? "auto_mission_explicit" : "auto_mission_learned", decision.memory);
+				return { action: "handled" };
+			}
 			if (decision.mode === "NORMAL") {
-				recordRoutingDecision(decision, "continued");
+				recordRoutingDecision(decision, decision.memory?.action === "normal" ? "learned_normal" : decision.memory?.conflict === true ? "memory_conflict" : "continued", decision.memory);
 				return { action: "continue" };
 			}
+			if (decision.reasonCodes.includes("routing_memory_bypassed_complexity")) recordRoutingDecision(decision, "memory_bypassed_complexity");
 			if (ctx.mode !== "tui" && !ctx.hasUI) {
 				recordRoutingDecision(decision, "headless_normal");
 				return { action: "continue" };
@@ -2365,34 +2559,57 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const reason = formatRoutingReasons(decision.reasonCodes, locale);
 			ctx.ui.notify(`${locale === "fa" ? "پیشنهاد ارکستریتور" : "Orchestrator recommended"}\n${locale === "fa" ? "دلیل" : "Reason"}: ${reason || (locale === "fa" ? "کار چندمرحله‌ای" : "multi-step work")}`, "info");
 			let action: string | undefined;
-			try { action = await ctx.ui.select("Orchestrator recommended", ["Run as Mission", "Run Normally"]); }
+			try { action = await ctx.ui.select("Orchestrator recommended", ["Run as Mission", "Run Normally", "Always orchestrate similar tasks"]); }
 			catch {
 				recordRoutingDecision(decision, "failed");
 				return { action: "continue" };
 			}
 			if (action === "Run as Mission") {
-				if (!options.missionStore) {
-					missionStoreUnavailable(ctx);
-					recordRoutingDecision(decision, "failed");
+				const mission = createInputMission(ctx, event.text);
+				if (!mission) {
+					recordRoutingDecision(decision, "failed", decision.memory);
 					return { action: "continue" };
 				}
-				try {
-					const mission = createCanonicalMission(options.missionStore, event.text, { repositoryCwd: ctx.cwd });
-					appendMissionPointer(mission);
-					ctx.ui.notify(missionCreatedMessage(mission), "info");
-					recordRoutingDecision(decision, "run_as_mission");
-					return { action: "handled" };
-				} catch (error) {
-					notifyError(ctx, "Mission creation failed", error);
-					recordRoutingDecision(decision, "failed");
-					return { action: "continue" };
+				if (routingMemory && smartSettings.learnFromRoutingChoices) {
+					try {
+						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "mission"));
+						if (memoryRuleWasCreated(learned)) recordRoutingDecision(decision, "rule_created_learned", decision.memory);
+					} catch { /* learning is non-critical */ }
 				}
+				recordRoutingDecision(decision, "run_as_mission", decision.memory);
+				return { action: "handled" };
 			}
 			if (action === "Run Normally") {
 				// Pi's input runner continues this exact event once; it does not re-emit
 				// the input handler, so no string sentinel or recursive dispatch is needed.
-				recordRoutingDecision(decision, "run_normally");
+				if (routingMemory && smartSettings.learnFromRoutingChoices) {
+					try {
+						const learned = await Promise.resolve(routingMemory.observeChoice(memoryProbe.signature, "normal"));
+						if (memoryRuleWasCreated(learned)) recordRoutingDecision(decision, "rule_created_learned", decision.memory);
+					} catch { /* learning is non-critical */ }
+				}
+				recordRoutingDecision(decision, "run_normally", decision.memory);
 				return { action: "continue" };
+			}
+			if (action === "Always orchestrate similar tasks") {
+				if (!routingMemory) {
+					ctx.ui.notify("Routing Memory is unavailable; the original prompt will continue normally.", "warning");
+					recordRoutingDecision(decision, "failed", decision.memory);
+					return { action: "continue" };
+				}
+				const mission = createInputMission(ctx, event.text);
+				if (!mission) {
+					recordRoutingDecision(decision, "failed", decision.memory);
+					return { action: "continue" };
+				}
+				try {
+					await Promise.resolve(routingMemory.addExplicitMissionRule(memoryProbe.signature));
+					recordRoutingDecision(decision, "rule_created_explicit", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
+				} catch {
+					ctx.ui.notify("The Mission was created, but the explicit routing preference could not be saved.", "warning");
+				}
+				recordRoutingDecision(decision, "run_as_mission", { source: "explicit", action: "mission", confidence: 1, similarity: 1 });
+				return { action: "handled" };
 			}
 			recordRoutingDecision(decision, "cancelled");
 			try { ctx.ui.setEditorText(event.text); } catch { return { action: "continue" }; }
@@ -2841,7 +3058,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	}).on;
 	if (piOn) piOn.call(pi, "input", handleInput);
 
-		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, registerCommands, dispose };
+		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.routingMemoryStore ? { routingMemoryStore: options.routingMemoryStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
@@ -2849,6 +3066,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	const root = process.env.PI_MULTI_ORCH_CONFIG_ROOT ?? join(runtime.getAgentDir(), "pi-multi-orchestrator");
 	const configStore = new ConfigStore({ root });
 	const smartRoutingStore = new SmartRoutingSettingsStore({ root });
+	const routingMemoryStore = new RoutingMemoryStore({ root });
 	const trustStore = new TrustStore({ root: join(root, "trust") });
 	let analyticsStore: AnalyticsStoreAdapter | undefined;
 	try {
@@ -2921,7 +3139,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 			},
 		});
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, healthStore, trustStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, routingMemoryStore, healthStore, trustStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

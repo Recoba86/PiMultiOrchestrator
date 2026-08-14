@@ -253,3 +253,31 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   mid-run promotion, benchmark model selection, background scheduling, or
   automatic Mission creation. Live triage remains a separately evidenced gate
   requiring a secure authorized route.
+
+## ADR-036 — M12.3 stores conservative abstract Routing Memory
+
+- **Decision:** Persist Routing Memory in a separate versioned,
+  atomic/rollback-capable `routing-memory.json` sidecar. Store only bounded
+  bilingual routing signatures plus action, source, confidence, observations,
+  timestamps, and enabled state. Keep explicit `Always orchestrate similar
+  tasks` rules authoritative over learned rules; require repeated consistent
+  choices before learned Mission/Normal activation; and expose all rule
+  management through Routing & Fallback → Learned Behaviors.
+- **Rationale:** Personalization needs durable state, but prompt history and
+  semantic embeddings would create an unnecessary privacy and overgeneralization
+  surface. Abstract structural signals support deterministic English/Persian/
+  mixed-language matching, restart persistence, migration, bounded growth, and
+  inspectable user control without remembering content.
+- **Safety policy:** Explicit `@orchestrator` remains the first input bypass.
+  Same-tier conflicts never auto-route; explicit rules outrank learned rules;
+  keyword-only and materially escalated matches are rejected; learned Normal
+  cannot suppress a materially more complex or sensitive current task; and
+  strong memory hits short-circuit unnecessary AI Triage. AUTO_MISSION always
+  calls the existing canonical Mission creation operation once.
+- **Privacy/recovery:** No prompt, transcript, source text, tool result,
+  provider response, credential, or secret is persisted in memory or routing
+  telemetry. Corrupt rows are isolated, schema-version 0 rules migrate per
+  row, unsupported envelopes fail closed to ordinary routing, and backup/
+  restore is validation- and confirmation-gated. M12.3 does not add mid-run
+  promotion, procedural skill generation, benchmark model selection, Boss
+  optimization, or background scheduling.

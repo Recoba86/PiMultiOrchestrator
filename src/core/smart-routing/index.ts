@@ -6,10 +6,10 @@ import { ensureStorageDirectories, writeAtomicFile, withStorageLock, STORAGE_DIR
 import { ConfigConflictError, ConfigRecoveryError, ConfigValidationError } from "../config/errors.js";
 import type { StableId } from "../config/types.js";
 
-export const SMART_ROUTING_SCHEMA_VERSION = 1 as const;
+export const SMART_ROUTING_SCHEMA_VERSION = 2 as const;
 export const SMART_ROUTING_STORAGE_VERSION = 1 as const;
 
-export type SmartRoutingMode = "NORMAL" | "SUGGEST_MISSION";
+export type SmartRoutingMode = "NORMAL" | "SUGGEST_MISSION" | "AUTO_MISSION";
 export type LocalSignalPath = "simple" | "complex" | "ambiguous";
 
 export const LOCAL_SIGNAL_CODES = [
@@ -35,7 +35,7 @@ export const LOCAL_SIGNAL_CODES = [
 ] as const;
 
 export type LocalSignalCode = (typeof LOCAL_SIGNAL_CODES)[number];
-export type RoutingReasonCode = LocalSignalCode | "smart_routing_disabled" | "triage_unavailable" | "triage_fallback" | "triage_low_confidence";
+export type RoutingReasonCode = LocalSignalCode | "smart_routing_disabled" | "triage_unavailable" | "triage_fallback" | "triage_low_confidence" | "routing_memory_hit" | "routing_memory_conflict" | "routing_memory_bypassed_complexity";
 
 const ROUTING_REASON_SET = new Set<string>([
 	...LOCAL_SIGNAL_CODES,
@@ -43,6 +43,9 @@ const ROUTING_REASON_SET = new Set<string>([
 	"triage_unavailable",
 	"triage_fallback",
 	"triage_low_confidence",
+	"routing_memory_hit",
+	"routing_memory_conflict",
+	"routing_memory_bypassed_complexity",
 ]);
 
 export interface LocalSignalAnalysis {
@@ -56,6 +59,8 @@ export interface SmartRoutingSettings {
 	readonly schemaVersion: typeof SMART_ROUTING_SCHEMA_VERSION;
 	readonly enabled: boolean;
 	readonly aiTriageEnabled: boolean;
+	readonly routingMemoryEnabled: boolean;
+	readonly learnFromRoutingChoices: boolean;
 	readonly primaryRouteId?: StableId;
 	readonly fallbackRouteId?: StableId;
 }
@@ -89,6 +94,8 @@ export const createDefaultSmartRoutingSettings = (): SmartRoutingSettings => ({
 	schemaVersion: SMART_ROUTING_SCHEMA_VERSION,
 	enabled: true,
 	aiTriageEnabled: false,
+	routingMemoryEnabled: true,
+	learnFromRoutingChoices: true,
 });
 
 const routeIdPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
@@ -107,13 +114,15 @@ export const validateSmartRoutingSettings = (value: unknown): SmartRoutingSettin
 	const issues: Array<{ code: string; path: string; message: string }> = [];
 	if (!isRecord(value)) throw new ConfigValidationError([{ code: "type", path: "$", message: "Expected Smart Routing settings" }]);
 	for (const key of Object.keys(value)) {
-		if (!["schemaVersion", "enabled", "aiTriageEnabled", "primaryRouteId", "fallbackRouteId"].includes(key)) {
+		if (!["schemaVersion", "enabled", "aiTriageEnabled", "routingMemoryEnabled", "learnFromRoutingChoices", "primaryRouteId", "fallbackRouteId"].includes(key)) {
 			issues.push({ code: "unknown-field", path: `$.${key}`, message: "Unknown field" });
 		}
 	}
-	if (value.schemaVersion !== SMART_ROUTING_SCHEMA_VERSION) issues.push({ code: "version", path: "$.schemaVersion", message: "Smart Routing schema version is unsupported" });
+	if (value.schemaVersion !== 1 && value.schemaVersion !== SMART_ROUTING_SCHEMA_VERSION) issues.push({ code: "version", path: "$.schemaVersion", message: "Smart Routing schema version is unsupported" });
 	if (typeof value.enabled !== "boolean") issues.push({ code: "type", path: "$.enabled", message: "Expected a boolean" });
 	if (typeof value.aiTriageEnabled !== "boolean") issues.push({ code: "type", path: "$.aiTriageEnabled", message: "Expected a boolean" });
+	if (value.routingMemoryEnabled !== undefined && typeof value.routingMemoryEnabled !== "boolean") issues.push({ code: "type", path: "$.routingMemoryEnabled", message: "Expected a boolean" });
+	if (value.learnFromRoutingChoices !== undefined && typeof value.learnFromRoutingChoices !== "boolean") issues.push({ code: "type", path: "$.learnFromRoutingChoices", message: "Expected a boolean" });
 	const primaryRouteId = validateRouteId(value.primaryRouteId, "$.primaryRouteId", issues);
 	const fallbackRouteId = validateRouteId(value.fallbackRouteId, "$.fallbackRouteId", issues);
 	if (primaryRouteId !== undefined && fallbackRouteId === primaryRouteId) issues.push({ code: "duplicate-route", path: "$.fallbackRouteId", message: "Primary and fallback routes must differ" });
@@ -122,6 +131,8 @@ export const validateSmartRoutingSettings = (value: unknown): SmartRoutingSettin
 		schemaVersion: SMART_ROUTING_SCHEMA_VERSION,
 		enabled: value.enabled as boolean,
 		aiTriageEnabled: value.aiTriageEnabled as boolean,
+		routingMemoryEnabled: value.routingMemoryEnabled === undefined ? true : value.routingMemoryEnabled as boolean,
+		learnFromRoutingChoices: value.learnFromRoutingChoices === undefined ? true : value.learnFromRoutingChoices as boolean,
 		...(primaryRouteId === undefined ? {} : { primaryRouteId }),
 		...(fallbackRouteId === undefined ? {} : { fallbackRouteId }),
 	};
@@ -397,6 +408,9 @@ export const ROUTING_REASON_LABELS: Readonly<Record<RoutingReasonCode, { readonl
 	triage_unavailable: { en: "AI Triage unavailable; local signals used", fa: "تریاژ هوش مصنوعی در دسترس نیست؛ سیگنال‌های محلی استفاده شد" },
 	triage_fallback: { en: "AI Triage fallback route used", fa: "مسیر جایگزین تریاژ استفاده شد" },
 	triage_low_confidence: { en: "Triage confidence was low", fa: "اطمینان تریاژ پایین بود" },
+	routing_memory_hit: { en: "Learned routing preference matched", fa: "ترجیح مسیریابی ذخیره‌شده مطابقت داشت" },
+	routing_memory_conflict: { en: "Routing preferences conflict; confirmation is required", fa: "ترجیحات مسیریابی متناقض‌اند؛ تأیید لازم است" },
+	routing_memory_bypassed_complexity: { en: "A simple preference was bypassed for a more complex task", fa: "ترجیح ساده برای کار پیچیده‌تر نادیده گرفته شد" },
 };
 
 export function formatRoutingReasons(codes: readonly RoutingReasonCode[], locale: "en" | "fa" = "en", max = 3): string {
@@ -467,13 +481,26 @@ export interface SmartRoutingDecision {
 		readonly failureClass?: TriageFailureClass;
 		readonly latencyMs: number;
 	};
+	readonly memory?: {
+		readonly source?: "explicit" | "learned";
+		readonly action?: "mission" | "normal";
+		readonly confidence?: number;
+		readonly similarity?: number;
+		readonly conflict?: boolean;
+		readonly ruleId?: string;
+	};
 }
 
-/** Reserved input for M12.3; M12.2 deliberately ignores routing memory. */
 export interface SmartRoutingContext {
 	readonly memoryRecommendation?: {
 		readonly mode?: SmartRoutingMode;
 		readonly reasonCodes?: readonly string[];
+		readonly source?: "explicit" | "learned";
+		readonly action?: "mission" | "normal";
+		readonly confidence?: number;
+		readonly similarity?: number;
+		readonly conflict?: boolean;
+		readonly ruleId?: string;
 	};
 }
 
@@ -516,36 +543,48 @@ export class SmartRouter {
 		this.timeoutMs = Math.max(250, options.triageTimeoutMs ?? 8_000);
 	}
 
-	async decide(prompt: string, signal?: AbortSignal, _context?: SmartRoutingContext): Promise<SmartRoutingDecision> {
+	async decide(prompt: string, signal?: AbortSignal, context?: SmartRoutingContext): Promise<SmartRoutingDecision> {
 		const settings = validateSmartRoutingSettings(await (typeof this.options.settings === "function" ? this.options.settings() : this.options.settings));
 		const local = analyzeLocalSignals(prompt);
 		if (!settings.enabled) return { mode: "NORMAL", local, confidence: local.confidence, reasonCodes: ["smart_routing_disabled"] };
-		if (local.path === "simple") return { mode: "NORMAL", local, confidence: local.confidence, reasonCodes: local.signals };
-		if (local.path === "complex") return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: local.signals };
+		const memory = context?.memoryRecommendation;
+		const memoryReasons = memory?.reasonCodes?.filter((code): code is RoutingReasonCode => ROUTING_REASON_SET.has(code)) ?? [];
+		const memoryDecision = memory && (memory.source !== undefined || memory.action !== undefined || memory.confidence !== undefined || memory.similarity !== undefined || memory.conflict !== undefined || memory.ruleId !== undefined)
+			? { memory: { ...(memory.source === undefined ? {} : { source: memory.source }), ...(memory.action === undefined ? {} : { action: memory.action }), ...(memory.confidence === undefined ? {} : { confidence: memory.confidence }), ...(memory.similarity === undefined ? {} : { similarity: memory.similarity }), ...(memory.conflict === undefined ? {} : { conflict: memory.conflict }), ...(memory.ruleId === undefined ? {} : { ruleId: memory.ruleId }) } }
+			: {};
+		if (memory?.mode === "AUTO_MISSION") return { mode: "AUTO_MISSION", local, confidence: memory.confidence ?? 1, reasonCodes: unique([...local.signals, ...memoryReasons, "routing_memory_hit"]), ...memoryDecision };
+		if (memory?.mode === "NORMAL") return { mode: "NORMAL", local, confidence: memory.confidence ?? 1, reasonCodes: unique([...local.signals, ...memoryReasons, "routing_memory_hit"]), ...memoryDecision };
+		if (memory?.conflict) return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: unique([...local.signals, ...memoryReasons, "routing_memory_conflict"]), ...memoryDecision };
+		if (local.path === "simple") return { mode: "NORMAL", local, confidence: local.confidence, reasonCodes: unique([...local.signals, ...memoryReasons]), ...memoryDecision };
+		if (local.path === "complex") return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: unique([...local.signals, ...memoryReasons]), ...memoryDecision };
 
 		const primary = settings.aiTriageEnabled ? settings.primaryRouteId : undefined;
-		if (!primary || !this.options.triageClient) return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: unique([...local.signals, "triage_unavailable"]) };
+		if (!primary || !this.options.triageClient) return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: unique([...local.signals, ...memoryReasons, "triage_unavailable"]), ...memoryDecision };
 		const request: TriageRequest = { prompt, local: { missionScore: local.missionScore, confidence: local.confidence, signals: local.signals } };
 		const primaryAttempt = await callWithTimeout(this.options.triageClient, request, primary, this.timeoutMs, signal);
-		if (primaryAttempt.result) return this.fromTriage(local, primary, primaryAttempt.result, primaryAttempt.latencyMs, false, 1);
+		if (primaryAttempt.result) return this.fromTriage(local, primary, primaryAttempt.result, primaryAttempt.latencyMs, false, 1, primary, context?.memoryRecommendation);
 		const failure = primaryAttempt.failure ?? "transport";
 		const fallback = settings.fallbackRouteId;
 		if (fallback && fallback !== primary && fallbackEligible(failure)) {
 			const fallbackAttempt = await callWithTimeout(this.options.triageClient, request, fallback, this.timeoutMs, signal);
-			if (fallbackAttempt.result) return this.fromTriage(local, primary, fallbackAttempt.result, primaryAttempt.latencyMs + fallbackAttempt.latencyMs, true, 2, fallback);
-			return this.degraded(local, primary, primaryAttempt.latencyMs + fallbackAttempt.latencyMs, 2, fallbackAttempt.failure ?? failure);
+			if (fallbackAttempt.result) return this.fromTriage(local, primary, fallbackAttempt.result, primaryAttempt.latencyMs + fallbackAttempt.latencyMs, true, 2, fallback, context?.memoryRecommendation);
+			return this.degraded(local, primary, primaryAttempt.latencyMs + fallbackAttempt.latencyMs, 2, fallbackAttempt.failure ?? failure, context?.memoryRecommendation);
 		}
-		return this.degraded(local, primary, primaryAttempt.latencyMs, 1, failure);
+		return this.degraded(local, primary, primaryAttempt.latencyMs, 1, failure, context?.memoryRecommendation);
 	}
 
-	private fromTriage(local: LocalSignalAnalysis, primary: StableId, triage: TriageResult, latencyMs: number, fallbackUsed: boolean, calls: number, routeId = primary): SmartRoutingDecision {
+	private fromTriage(local: LocalSignalAnalysis, primary: StableId, triage: TriageResult, latencyMs: number, fallbackUsed: boolean, calls: number, routeId = primary, memory?: SmartRoutingContext["memoryRecommendation"]): SmartRoutingDecision {
 		const reasons = unique([...local.signals, ...triage.reasons, ...(fallbackUsed ? ["triage_fallback" as const] : [])]);
-		if (triage.confidence < 0.6) return { mode: "SUGGEST_MISSION", local, confidence: triage.confidence, reasonCodes: unique([...reasons, "triage_low_confidence"]), triage: { calls, fallbackUsed, primaryRouteId: primary, routeId, latencyMs } };
-		return { mode: triage.recommendedMode === "mission" ? "SUGGEST_MISSION" : "NORMAL", local, confidence: triage.confidence, reasonCodes: reasons, triage: { calls, fallbackUsed, primaryRouteId: primary, routeId, latencyMs } };
+		const memoryReasons = memory?.reasonCodes?.filter((code): code is RoutingReasonCode => ROUTING_REASON_SET.has(code)) ?? [];
+		const memoryView = memory && (memory.source !== undefined || memory.action !== undefined || memory.confidence !== undefined || memory.similarity !== undefined || memory.conflict !== undefined || memory.ruleId !== undefined) ? { memory: { ...(memory.source === undefined ? {} : { source: memory.source }), ...(memory.action === undefined ? {} : { action: memory.action }), ...(memory.confidence === undefined ? {} : { confidence: memory.confidence }), ...(memory.similarity === undefined ? {} : { similarity: memory.similarity }), ...(memory.conflict === undefined ? {} : { conflict: memory.conflict }), ...(memory.ruleId === undefined ? {} : { ruleId: memory.ruleId }) } } : {};
+		if (triage.confidence < 0.6) return { mode: "SUGGEST_MISSION", local, confidence: triage.confidence, reasonCodes: unique([...reasons, ...memoryReasons, "triage_low_confidence"]), triage: { calls, fallbackUsed, primaryRouteId: primary, routeId, latencyMs }, ...memoryView };
+		return { mode: triage.recommendedMode === "mission" ? "SUGGEST_MISSION" : "NORMAL", local, confidence: triage.confidence, reasonCodes: unique([...reasons, ...memoryReasons]), triage: { calls, fallbackUsed, primaryRouteId: primary, routeId, latencyMs }, ...memoryView };
 	}
 
-	private degraded(local: LocalSignalAnalysis, primaryRouteId: StableId, latencyMs: number, calls: number, failureClass: TriageFailureClass): SmartRoutingDecision {
-		return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: unique([...local.signals, "triage_unavailable"]), triage: { calls, fallbackUsed: calls > 1, primaryRouteId, failureClass, latencyMs } };
+	private degraded(local: LocalSignalAnalysis, primaryRouteId: StableId, latencyMs: number, calls: number, failureClass: TriageFailureClass, memory?: SmartRoutingContext["memoryRecommendation"]): SmartRoutingDecision {
+		const memoryReasons = memory?.reasonCodes?.filter((code): code is RoutingReasonCode => ROUTING_REASON_SET.has(code)) ?? [];
+		const memoryView = memory && (memory.source !== undefined || memory.action !== undefined || memory.confidence !== undefined || memory.similarity !== undefined || memory.conflict !== undefined || memory.ruleId !== undefined) ? { memory: { ...(memory.source === undefined ? {} : { source: memory.source }), ...(memory.action === undefined ? {} : { action: memory.action }), ...(memory.confidence === undefined ? {} : { confidence: memory.confidence }), ...(memory.similarity === undefined ? {} : { similarity: memory.similarity }), ...(memory.conflict === undefined ? {} : { conflict: memory.conflict }), ...(memory.ruleId === undefined ? {} : { ruleId: memory.ruleId }) } } : {};
+		return { mode: "SUGGEST_MISSION", local, confidence: local.confidence, reasonCodes: unique([...local.signals, ...memoryReasons, "triage_unavailable"]), triage: { calls, fallbackUsed: calls > 1, primaryRouteId, failureClass, latencyMs }, ...memoryView };
 	}
 }
 

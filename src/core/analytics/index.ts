@@ -67,8 +67,24 @@ export interface AnalyticsRoutingTelemetryV1 {
 	readonly triageCalls: number;
 	readonly fallbackUsed: boolean;
 	readonly reasonCodes: readonly string[];
-	readonly action?: "continued" | "run_as_mission" | "run_normally" | "cancelled" | "headless_normal" | "failed";
+	readonly action?: AnalyticsRoutingAction;
 	readonly failureClass?: string;
+	readonly memory?: AnalyticsRoutingMemoryV1;
+}
+
+export type AnalyticsRoutingAction =
+	| "continued" | "run_as_mission" | "run_normally" | "cancelled" | "headless_normal" | "failed"
+	| "auto_mission_explicit" | "auto_mission_learned" | "learned_normal" | "memory_conflict"
+	| "rule_created_explicit" | "rule_created_learned" | "rule_disabled" | "rule_deleted"
+	| "learned_reset" | "full_reset" | "memory_bypassed_complexity";
+
+export interface AnalyticsRoutingMemoryV1 {
+	readonly hit?: boolean;
+	readonly source?: "explicit" | "learned";
+	readonly action?: "mission" | "normal";
+	readonly confidence?: number;
+	readonly similarity?: number;
+	readonly conflict?: boolean;
 }
 
 export interface ReferencePricingV1 {
@@ -147,6 +163,17 @@ export interface AnalyticsSummary {
 		readonly fallbackCalls: number;
 		readonly failures: number;
 		readonly byReason: Readonly<Record<string, number>>;
+		readonly memoryHits: number;
+		readonly memoryConflicts: number;
+		readonly autoMissionExplicit: number;
+		readonly autoMissionLearned: number;
+		readonly learnedNormal: number;
+		readonly rulesCreatedExplicit: number;
+		readonly rulesCreatedLearned: number;
+		readonly rulesDisabled: number;
+		readonly rulesDeleted: number;
+		readonly learnedResets: number;
+		readonly fullResets: number;
 	};
   readonly byPool: Readonly<Record<string, { readonly runs: number; readonly successes: number; readonly failures: number; readonly fallbacks: number; readonly tokens: number; readonly durationMs: number }>>;
   readonly byRoute: Readonly<Record<string, { readonly runs: number; readonly successes: number; readonly failures: number; readonly fallbacks: number; readonly tokens: number; readonly durationMs: number }>>;
@@ -228,8 +255,10 @@ const secretLike = (value: string): boolean => /(?:bearer\s+[a-z0-9._-]{8,}|(?:a
 const safeText = (value: unknown, max = 512): string | undefined => { const text = bounded(value, max); return text && !secretLike(text) ? text : undefined; };
 const numberValue = (value: unknown): number | undefined => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER ? value : undefined;
 const boolValue = (value: unknown): boolean | undefined => typeof value === "boolean" ? value : undefined;
+const ANALYTICS_CLASSIFICATIONS: readonly AnalyticsClassification[] = ["observed", "provider_reported", "pi_runtime_reported", "configured", "estimated", "unavailable", "unknown"];
+const safeClassification = (value: unknown): AnalyticsClassification | undefined => ANALYTICS_CLASSIFICATIONS.includes(value as AnalyticsClassification) ? value as AnalyticsClassification : undefined;
 const safeRoutingCode = (value: unknown): string | undefined => typeof value === "string" && /^[a-z][a-z0-9_:-]{0,63}$/u.test(value) ? value : undefined;
-const safeRoutingAction = (value: unknown): AnalyticsRoutingTelemetryV1["action"] => ["continued", "run_as_mission", "run_normally", "cancelled", "headless_normal", "failed"].includes(value as string) ? value as AnalyticsRoutingTelemetryV1["action"] : undefined;
+const safeRoutingAction = (value: unknown): AnalyticsRoutingTelemetryV1["action"] => ["continued", "run_as_mission", "run_normally", "cancelled", "headless_normal", "failed", "auto_mission_explicit", "auto_mission_learned", "learned_normal", "memory_conflict", "rule_created_explicit", "rule_created_learned", "rule_disabled", "rule_deleted", "learned_reset", "full_reset", "memory_bypassed_complexity"].includes(value as string) ? value as AnalyticsRoutingTelemetryV1["action"] : undefined;
 type StoredAnalystAnalysis = import("./analyst.js").AnalystAnalysisRecord;
 const safeAnalystText = (value: unknown, max = 512): string | undefined => {
 	const text = safeText(value, max);
@@ -260,6 +289,37 @@ const safeAnalystAnalysis = (value: unknown): StoredAnalystAnalysis | undefined 
 	};
 };
 
+const safeTokenUsage = (usage: AnalyticsTokenUsage | undefined): AnalyticsTokenUsage | undefined => {
+	if (usage === undefined) return undefined;
+	const inputTokens = numberValue(usage.inputTokens);
+	const outputTokens = numberValue(usage.outputTokens);
+	const cacheReadTokens = numberValue(usage.cacheReadTokens);
+	const cacheWriteTokens = numberValue(usage.cacheWriteTokens);
+	const reasoningTokens = numberValue(usage.reasoningTokens);
+	const totalTokens = numberValue(usage.totalTokens);
+	const provenance = safeClassification(usage.provenance);
+	return {
+		...(inputTokens === undefined ? {} : { inputTokens }), ...(outputTokens === undefined ? {} : { outputTokens }),
+		...(cacheReadTokens === undefined ? {} : { cacheReadTokens }), ...(cacheWriteTokens === undefined ? {} : { cacheWriteTokens }),
+		...(reasoningTokens === undefined ? {} : { reasoningTokens }), ...(totalTokens === undefined ? {} : { totalTokens }),
+		...(provenance === undefined ? {} : { provenance }),
+	};
+};
+const safeCost = (cost: AnalyticsCost | undefined): AnalyticsCost | undefined => {
+	if (cost === undefined) return undefined;
+	const provenance = safeClassification(cost.provenance);
+	if (provenance === undefined) return undefined;
+	const amountMicros = numberValue(cost.amountMicros);
+	const currency = safeText(cost.currency, 12);
+	const formulaVersion = safeText(cost.formulaVersion, 64);
+	return {
+		...(amountMicros === undefined ? {} : { amountMicros }), ...(currency === undefined ? {} : { currency }), provenance,
+		...(formulaVersion === undefined ? {} : { formulaVersion }),
+		...(cost.kind === "actual" || cost.kind === "equivalent" || cost.kind === "avoided" ? { kind: cost.kind } : {}),
+		...(cost.billingMode === "metered_api" || cost.billingMode === "subscription" || cost.billingMode === "free" || cost.billingMode === "unknown" ? { billingMode: cost.billingMode } : {}),
+	};
+};
+
 export function estimateReferenceCost(usage: AnalyticsTokenUsage, pricing: ReferencePricingV1, billingMode: "metered_api" | "subscription" | "free" | "unknown" = "metered_api"): ReferenceCostEstimate {
   if (usage.provenance !== "observed" && usage.provenance !== "provider_reported" && usage.provenance !== "pi_runtime_reported") return {};
   const currency = pricing.currency.trim().toUpperCase();
@@ -282,9 +342,9 @@ const safeJson = (event: AnalyticsEventV1): string => JSON.stringify({
   eventId: safeText(event.eventId, 160), occurredAt: safeText(event.occurredAt, 64), eventType: event.eventType,
   missionId: safeText(event.missionId), taskId: safeText(event.taskId), runId: safeText(event.runId), attemptId: safeText(event.attemptId), verificationId: safeText(event.verificationId),
   qualityRound: numberValue(event.qualityRound), roleId: safeText(event.roleId), poolId: safeText(event.poolId), routeId: safeText(event.routeId), remoteModelId: safeText(event.remoteModelId), gatewayId: safeText(event.gatewayId), sourceLabel: safeText(event.sourceLabel), resourceClass: safeText(event.resourceClass), resourceId: safeText(event.resourceId), durationMs: numberValue(event.durationMs), outcome: safeText(event.outcome), failureClass: safeText(event.failureClass), fallbackFromRouteId: safeText(event.fallbackFromRouteId), fallbackToRouteId: safeText(event.fallbackToRouteId), qualityOutcome: safeText(event.qualityOutcome), firstPass: boolValue(event.firstPass), repairRound: numberValue(event.repairRound),
-  tokenUsage: event.tokenUsage ? { inputTokens: numberValue(event.tokenUsage.inputTokens), outputTokens: numberValue(event.tokenUsage.outputTokens), cacheReadTokens: numberValue(event.tokenUsage.cacheReadTokens), cacheWriteTokens: numberValue(event.tokenUsage.cacheWriteTokens), reasoningTokens: numberValue(event.tokenUsage.reasoningTokens), totalTokens: numberValue(event.tokenUsage.totalTokens), provenance: event.tokenUsage.provenance } : undefined,
-  cost: event.cost ? { amountMicros: numberValue(event.cost.amountMicros), currency: safeText(event.cost.currency, 12), provenance: event.cost.provenance, formulaVersion: safeText(event.cost.formulaVersion, 64), kind: event.cost.kind, billingMode: event.cost.billingMode } : undefined,
-  routing: event.routing ? {
+  tokenUsage: safeTokenUsage(event.tokenUsage),
+  cost: safeCost(event.cost),
+	routing: event.routing ? {
 	decision: event.routing.decision === "normal" ? "normal" : "suggest_mission",
 	localPath: event.routing.localPath === "simple" || event.routing.localPath === "complex" ? event.routing.localPath : "ambiguous",
 	triageCalls: numberValue(event.routing.triageCalls),
@@ -292,7 +352,15 @@ const safeJson = (event: AnalyticsEventV1): string => JSON.stringify({
 	reasonCodes: event.routing.reasonCodes.slice(0, 8).map(safeRoutingCode).filter((code): code is string => code !== undefined),
 	action: safeRoutingAction(event.routing.action),
 	failureClass: safeRoutingCode(event.routing.failureClass),
-  } : undefined,
+	memory: event.routing.memory ? {
+		hit: boolValue(event.routing.memory.hit),
+		source: event.routing.memory.source === "explicit" || event.routing.memory.source === "learned" ? event.routing.memory.source : undefined,
+		action: event.routing.memory.action === "mission" || event.routing.memory.action === "normal" ? event.routing.memory.action : undefined,
+		confidence: numberValue(event.routing.memory.confidence),
+		similarity: numberValue(event.routing.memory.similarity),
+		conflict: boolValue(event.routing.memory.conflict),
+	} : undefined,
+	} : undefined,
   dimensions: event.dimensions ? Object.fromEntries(Object.entries(event.dimensions).slice(0, 32).filter(([key]) => !/(?:prompt|transcript|source|secret|auth|header|content|output|argument|result|private|key)/iu.test(key)).map(([key, value]) => [safeText(key, 64), typeof value === "string" ? safeText(value, 128) : numberValue(value) ?? boolValue(value)])) : undefined,
 });
 
@@ -445,7 +513,7 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
   const qualityByPool: Record<string, { observations: number; passes: number; rejects: number; blocked: number; firstPass: number; repairRounds: number }> = {};
   const qualityByRoute: Record<string, { observations: number; passes: number; rejects: number; blocked: number; firstPass: number; repairRounds: number }> = {};
   const costByCurrency: Record<string, { actualMicros?: number; estimatedMicros?: number; avoidedMicros?: number }> = {};
-  const routing = { decisions: 0, normal: 0, suggestions: 0, triageCalls: 0, fallbackCalls: 0, failures: 0, byReason: {} as Record<string, number> };
+  const routing = { decisions: 0, normal: 0, suggestions: 0, triageCalls: 0, fallbackCalls: 0, failures: 0, byReason: {} as Record<string, number>, memoryHits: 0, memoryConflicts: 0, autoMissionExplicit: 0, autoMissionLearned: 0, learnedNormal: 0, rulesCreatedExplicit: 0, rulesCreatedLearned: 0, rulesDisabled: 0, rulesDeleted: 0, learnedResets: 0, fullResets: 0 };
   let actualCostMicros = 0, estimatedCostMicros = 0, avoidedCostMicros = 0; let hasActual = false, hasEstimate = false, hasAvoided = false;
   const attemptRuns = new Set(events.filter((event) => event.eventType === "attempt" && event.runId).map((event) => event.runId));
   const isCanonicalSample = (event: AnalyticsEventV1): boolean => event.eventType === "attempt" || (event.eventType === "run" && (!event.runId || !attemptRuns.has(event.runId)));
@@ -470,6 +538,17 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
       routing.triageCalls += event.routing.triageCalls;
       if (event.routing.fallbackUsed) routing.fallbackCalls++;
       if (event.routing.action === "failed" || event.routing.failureClass !== undefined) routing.failures++;
+      if (event.routing.memory?.hit === true) routing.memoryHits++;
+      if (event.routing.memory?.conflict === true || event.routing.action === "memory_conflict") routing.memoryConflicts++;
+      if (event.routing.action === "auto_mission_explicit") routing.autoMissionExplicit++;
+      if (event.routing.action === "auto_mission_learned") routing.autoMissionLearned++;
+      if (event.routing.action === "learned_normal") routing.learnedNormal++;
+      if (event.routing.action === "rule_created_explicit") routing.rulesCreatedExplicit++;
+      if (event.routing.action === "rule_created_learned") routing.rulesCreatedLearned++;
+      if (event.routing.action === "rule_disabled") routing.rulesDisabled++;
+      if (event.routing.action === "rule_deleted") routing.rulesDeleted++;
+      if (event.routing.action === "learned_reset") routing.learnedResets++;
+      if (event.routing.action === "full_reset") routing.fullResets++;
       for (const code of event.routing.reasonCodes) routing.byReason[code] = (routing.byReason[code] ?? 0) + 1;
     }
     if (event.eventType === "run" && successful(event)) successes++; if (event.eventType === "run" && failed(event)) failures++;
