@@ -150,7 +150,9 @@ export const trustedTypeScript = async (projectRoot = REPO_ROOT) => {
 	const cli = await fileInfo(join(packageRoot, "lib", "tsc.js"), "TypeScript CLI");
 	const launcher = await fileInfo(join(projectRoot, "node_modules", ".bin", "tsc"), "TypeScript launcher", true);
 	if (launcher.realpath !== await realpath(join(packageRoot, "bin", "tsc"))) fail("TypeScript launcher does not resolve to the validated package");
-	return { package: "typescript", version: manifest.version, packageJsonSha256: packageJson.sha256, cliSha256: cli.sha256, launcherSha256: launcher.sha256, cliPath: cli.realpath };
+	const evidence = { package: "typescript", version: manifest.version, packageJsonSha256: packageJson.sha256, cliSha256: cli.sha256, launcherSha256: launcher.sha256 };
+	Object.defineProperty(evidence, "cliPath", { value: cli.realpath, enumerable: false });
+	return evidence;
 };
 
 export const trustedPi = async () => {
