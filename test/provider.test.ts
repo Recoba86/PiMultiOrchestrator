@@ -521,6 +521,8 @@ describe("Pi 9Router host adapter", () => {
 		host.registerCommands();
 		await pi.commands.get("verify-task")!.handler("mission-1 task-1 run-1", { mode: "tui", hasUI: true, isIdle: () => true, ui: { confirm: async () => true, notify: () => {} } } as unknown as ExtensionCommandContext);
 		assert.deepEqual(requests[0]?.diversity, { mode: "prefer", avoidRouteIds: ["route-implementation"] });
+		assert.match(requests[0]?.task ?? "", /at most bounded ls\/read calls; do not use grep or find/u);
+		assert.match(requests[0]?.task ?? "", /inspection tool errors, stop inspecting and submit a blocked result/u);
 	});
 
 	it("[U][fixture-pi-0.84.1] registers parent-only delegate tool and returns bounded child result", async () => {
