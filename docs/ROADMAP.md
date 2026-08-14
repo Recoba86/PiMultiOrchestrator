@@ -232,10 +232,10 @@ M12.2 adds the bounded hybrid Smart Router for ordinary Pi input:
   transcripts, credentials, or provider responses.
 
 Local evidence: typecheck/build, the full test suite, focused Smart Router and
-Pi host regression suites, and isolated Pi `0.84.1` TUI dogfood pass. Live
-Primary/Fallback triage inference remains open because this checkout has no
-securely available 9Router credential/route; no credential or live Pi state was
-manufactured or modified.
+Pi host regression suites, isolated Pi `0.84.1` TUI dogfood, and bounded live
+English/Persian Primary/Fallback/degradation dogfood pass in disposable roots.
+No credential value or live Pi state was manufactured or modified. M12.2 is
+still local-only pending independent review and Planner/manual acceptance.
 
 ### M12.3 — Adaptive Routing Memory
 

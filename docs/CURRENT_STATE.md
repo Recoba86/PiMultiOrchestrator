@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 accepted; M12.2 local RC.11 verification PASS / M11 acceptance, independent review, Planner, live-route, and publication gates pending |
+| Development phase | M10 accepted; M12.2 local RC.11 verification and bounded live-route dogfood PASS / M11 acceptance, independent review, Planner, and publication gates pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -23,7 +23,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M10 implementation commit | `3a6990d` — `feat(safety): harden trust permissions and recovery` |
 | M10 evidence | `159/159 PASS`; typecheck/build/check/package/diff/secret validation PASS |
 | Accepted M10 evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
-| M12.2 candidate | `0.1.0-rc.11` — local, not public; implementation commit `63929b8a63f475c04c9e61923e4e3b00d48e2f6e`; RC.10 superseded |
+| M12.2 candidate | `0.1.0-rc.11` — local, not public; implementation commit `8219c083577bc21a31046ade4ee1f982fe28abc6`; RC.10 superseded |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
 | M11 candidate | `0.1.0-rc.8` — historical local candidate; not public |
 | M11-R2 historical candidate | `0.1.0-rc.1`, SHA-256 `48bd2762e3396eb1b274e8b2bff756ef6d107fa2ca6b89e3980c9c0e35679005`; rejected by Independent Review #2 for provenance, privacy, rescue, and integrated-worker safety gaps |
@@ -79,19 +79,21 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   Control Center remains unchanged; Smart Routing appears inside Routing &
   Fallback. Stale route IDs remain visible and do not silently remap.
 - Routing telemetry is bounded metadata only: decision, local path, reason
-  codes, triage call/fallback counts, action, and failure class. No raw prompt,
-  transcript, tool output, provider response, or credential is persisted.
+  codes, triage call/fallback counts, selected stable route ID, action, and
+  failure class. No raw prompt, transcript, tool output, provider response, or
+  credential is persisted.
 - Local evidence: focused Smart Router `9/9`, provider host `24/24`, analyst
   `4/4`, Control Center `6/6`, isolated Pi `0.84.1` TUI normal/no-banner and
   complex/banner/Mission flows, full `npm run check` `190/190`, detached release
   verification `190/190`, release-integrity attacks `20/20`, and Pi release
-  install/rollback evidence PASS. RC.11 artifact SHA-256 is
-  `628df62c7aec701a2cced8f33fa8627414cf9032e7fe02a5a697ad741ada3443`; review
+  install/rollback evidence PASS. The bounded live audit also passed English
+  and Persian ambiguous triage, fallback success, and both-route-unavailable
+  degradation in disposable roots. RC.11 artifact SHA-256 is
+  `17e9feb871708ff08312bc27ab56cf0b35ce2cf47669b69db31fda7c6a396b74`; review
   bundle root SHA-256 is
-  `2383c420df259843eadab5902f9fb650151af7e80378ab1e51b87c588d56f516`.
-  No live Pi configuration or provider account was modified. Live-route triage
-  remains an explicit open gate because no secure 9Router credential/route was
-  available in this checkout.
+  `2e514696b113a4728d2f3b47a392b84255c9cdb7e29f50260640ea6f759ec3f7`.
+  No live Pi configuration or provider account was modified; M12.2 remains
+  local-only and unpublished.
 
 ## M12.1 current implementation
 

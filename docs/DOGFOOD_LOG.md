@@ -39,3 +39,15 @@ rollback or automatic rerun is implied.
 - **Boundary checks:** an ordinary prompt continued to Pi and reached the expected no-API-key error in the offline/no-model environment; empty `@orchestrator` showed `Add a goal after @orchestrator.`; Control Center → Context & Mission Settings showed `Direct Workers`, and Back navigation returned to the parent menus. Deterministic tests covered the canonical M7/direct-worker boundary.
 - **Offline evidence:** final typecheck/build/check and full `177/177` tests passed; release verification passed with `20/20` integrity attacks and independent bundle verification reported `EXTERNAL_REVIEW_PENDING`.
 - **Final state:** M12.1 is COMPLETE / LOCAL PASS only. M10 remains the latest accepted milestone; independent review, Planner/manual acceptance, and publication remain open, and M12.2/M12.3/final routing gate are not started.
+
+## Correction — M12.2 live Smart Router dogfood
+
+- **Date:** 2026-08-14.
+- The M12.1 entry above is historical and is not rewritten. M12.2 was
+  subsequently implemented and locally passed; its current evidence is in
+  [`M12.2_DOGFOOD.md`](M12.2_DOGFOOD.md).
+- The bounded follow-up used disposable roots and the secure Pi auth bridge to
+  exercise English and Persian ambiguous triage, capability-only fallback,
+  selected-route telemetry, and both-route-unavailable degradation. No live Pi
+  configuration, credential value, provider account, or public release state
+  was modified.
