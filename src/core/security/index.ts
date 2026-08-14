@@ -198,6 +198,16 @@ export class PathSafetyPolicy {
 	}
 
 	authorizeRead(path: string): SafetyResult { return this.check(path, "read"); }
+	authorizeRecursiveRead(path: string): SafetyResult {
+		const result = this.authorizeRead(path);
+		if (result.decision !== "ALLOW") return result;
+		const target = result.path;
+		if (!target) return result;
+		if (this.protectedPaths.some((protectedPath) => protectedPath !== target && inside(target, protectedPath))) {
+			return { decision: "BLOCK", reason: "recursive read would traverse a protected path", code: "PROTECTED_PATH_DESCENDANT", path: target };
+		}
+		return result;
+	}
 	authorizeWrite(path: string): SafetyResult { return this.check(path, "write"); }
 	authorizeExecute(path: string): SafetyResult { return this.check(path, "execute"); }
 
@@ -230,7 +240,7 @@ export interface CommandSafetyResult extends SafetyResult {
 function commandResult(command: string, decision: SafetyDecision, reason: string, code: string): CommandSafetyResult { return { command, decision, reason, code }; }
 
 const SAFE_COMMANDS = new Set([
-	"cat", "cmp", "cut", "diff", "echo", "find", "git", "grep", "head", "ls", "mkdir", "mv", "npm", "node", "printf", "pwd", "rm", "rg", "sed", "sort", "tail", "tar", "test", "touch", "uniq", "wc",
+	"cat", "cmp", "cut", "diff", "echo", "git", "grep", "head", "ls", "mkdir", "mv", "node", "printf", "pwd", "rm", "sed", "sort", "tail", "test", "touch", "uniq", "wc",
 ]);
 const NETWORK_COMMANDS = /\b(?:curl|wget|fetch|nc|netcat|telnet|ftp|ssh|scp|sftp|rsync|openssl\s+s_client)\b|\b(?:git\s+(?:push|fetch|pull|clone|remote|ls-remote)|npm\s+(?:publish|install|ci|update|login|logout|adduser|token|access|view|search|exec)|pnpm\s+(?:publish|install|add)|yarn\s+(?:publish|install)|docker\s+push|gh\s+(?:auth|repo|release|api))\b|https?:\/\//iu;
 
@@ -241,7 +251,6 @@ function allowlistedCommand(source: string): boolean {
 	const args = match[2] ?? "";
 	if (!SAFE_COMMANDS.has(executable)) return false;
 	if (executable === "git" && /\b(?:push|fetch|pull|clone|remote|ls-remote|submodule)\b/iu.test(args)) return false;
-	if (executable === "npm" && !/^(?:test(?:\s|$)|run\s+(?:check|build|typecheck|lint|test)(?:\s|$)|version\s+--show(?:\s|$))/u.test(args)) return false;
 	if (executable === "node" && !/^--version(?:\s|$)/u.test(args)) return false;
 	return true;
 }
@@ -256,8 +265,9 @@ export class CommandSafetyPolicy {
 		if (/\b(?:chmod|chown|chgrp)\b/iu.test(source) || /(?:ssh-keygen|security\s+(?:add-generic-password|delete-generic-password)|passwd)\b/iu.test(source)) return commandResult(command, "BLOCK", "credential or permission manipulation is not allowed", "CREDENTIAL_OR_PERMISSION");
 		if (/\brm\s+(?:-[^-\s]*r[^\s]*\s+|--recursive\b)|\bfind\b[^\n]*\s-delete\b/iu.test(source)) return commandResult(command, "BLOCK", "recursive destructive deletion is not allowed", "DESTRUCTIVE_DELETE");
 		if (/\bgit\s+(?:reset\s+--hard|clean\s+-[^\n]*f|restore\b|checkout\s+--\b)/iu.test(source)) return commandResult(command, "BLOCK", "destructive Git operation requires explicit recovery tooling", "DESTRUCTIVE_GIT");
-		if (/(?:^|\s)(?:>|>>|<)|\$\(|`|\$[A-Za-z_][A-Za-z0-9_]*|\*\*|\b(?:eval|exec)\b/iu.test(source)) return commandResult(command, "REVIEW_REQUIRED", "shell target cannot be established safely", "AMBIGUOUS_SHELL");
+		if (/["'$`\\;&|<>(){}\[\]*?~!]/u.test(source) || /\b(?:eval|exec)\b/iu.test(source)) return commandResult(command, "REVIEW_REQUIRED", "shell expansion or syntax cannot be established safely", "AMBIGUOUS_SHELL");
 		if (/[;&|]/u.test(source)) return commandResult(command, "REVIEW_REQUIRED", "compound shell commands require a bounded single command", "COMPOUND_SHELL");
+		if (/\b(?:grep|diff|ls)\b[^\n]*(?:^|\s)(?:-[^\s]*[rR]|--recursive)\b/iu.test(source)) return commandResult(command, "REVIEW_REQUIRED", "recursive shell reads require an explicitly bounded path", "RECURSIVE_SHELL_READ");
 		if (options.pathPolicy) {
 			const tokens = source.split(/\s+/u).filter((token) => !token.startsWith("-")).map((token) => token.replace(/^['"]|['"]$/gu, "")).filter(Boolean);
 			for (const token of tokens) {

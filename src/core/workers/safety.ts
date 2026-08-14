@@ -87,6 +87,7 @@ export class WorkerSafetyGuard {
 	private authorizePath(toolName: string, args: unknown): SafetyResult {
 		const rawPath = recordString(args, "path") ?? recordString(args, "file_path") ?? (toolName === "grep" || toolName === "find" || toolName === "ls" ? "." : undefined);
 		if (rawPath === undefined) return blocked("tool path is invalid", "INVALID_PATH");
+		if (toolName === "grep" || toolName === "find") return this.pathPolicy.authorizeRecursiveRead(rawPath);
 		return MUTATING_TOOLS.has(toolName) ? this.pathPolicy.authorizeWrite(rawPath) : this.pathPolicy.authorizeRead(rawPath);
 	}
 }

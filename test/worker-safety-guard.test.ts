@@ -49,10 +49,12 @@ test("worker profiles cannot expand into mutation or unsafe shell execution", as
 		assert.equal(unknownProtocol.authorize("submit_evil", {}).code, "TOOL_NOT_ACTIVE");
 		const implementation = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["bash"] });
 		assert.equal(implementation.authorize("bash", { command: "git reset --hard HEAD" }).code, "DESTRUCTIVE_GIT");
-		assert.equal(implementation.authorize("bash", { command: "npm test" }).decision, "ALLOW");
-		for (const command of ["npm publish", "git push origin main", "ssh host", "curl https://example.test", "node scripts/exfiltrate.mjs"]) {
+		for (const command of ["npm test", "npm run build", "npm publish", "git push origin main", "ssh host", "curl https://example.test", "node scripts/exfiltrate.mjs", "cat *", "cat .??*", "grep -R . .", "rm *", "mv * safe"]) {
 			assert.notEqual(implementation.authorize("bash", { command }).decision, "ALLOW", command);
 		}
+		const bounded = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["grep", "find"] });
+		assert.equal(bounded.authorize("grep", { path: ".", pattern: "secret" }).code, "PROTECTED_PATH_DESCENDANT");
+		assert.equal(bounded.authorize("find", { path: ".", pattern: "*.ts" }).code, "PROTECTED_PATH_DESCENDANT");
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
