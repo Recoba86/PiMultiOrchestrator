@@ -86,6 +86,7 @@ test("release script emits a verified artifact outside the checkout", () => {
 	assert.equal(releaseManifest.directorySource, "directory-source");
 	assert.equal(releaseManifest.buildSource, "detached-git-commit");
 	assert.equal(releaseManifest.untrackedIncluded, false);
+	assert.equal(releaseManifest.untrackedCount, 0);
 	assert.match(releaseManifest.sourceDigest, /^[0-9a-f]{64}$/u);
 	assert.equal(releaseManifest.testDefinition.command, "npm run check");
 	assert.match(releaseManifest.testDefinition.digest, /^[0-9a-f]{64}$/u);

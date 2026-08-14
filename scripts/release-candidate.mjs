@@ -421,6 +421,7 @@ export const captureSourceIdentity = async (repoRoot = REPO_ROOT) => {
 	const status = await commandOutput(git.realpath, ["status", "--porcelain=v1", "--untracked-files=all"], { cwd: repoRoot, env });
 	const trackedChanges = status.split(/\r?\n/u).filter((line) => line && !line.startsWith("?? "));
 	if (trackedChanges.length > 0) fail(`source checkout has tracked changes; commit the release inputs first (${trackedChanges.length} change${trackedChanges.length === 1 ? "" : "s"})`);
+	const untrackedCount = status.split(/\r?\n/u).filter((line) => line.startsWith("?? ") && !["node_modules", "node_modules/"].includes(line.slice(3).trim())).length;
 	const tracked = await run(git.realpath, ["ls-tree", "-r", "-z", "--full-tree", commit], { cwd: repoRoot, env });
 	const entries = tracked.stdout.split("\0").filter(Boolean);
 	for (const entry of entries) {
@@ -435,7 +436,7 @@ export const captureSourceIdentity = async (repoRoot = REPO_ROOT) => {
 		sourceDigest: hashBytes(Buffer.from(tracked.stdout, "utf8")),
 		sourceDigestAlgorithm: "sha256(git ls-tree -r -z --full-tree <commit>)",
 		trackedFileCount: entries.length,
-		untrackedCount: status.split(/\r?\n/u).filter((line) => line.startsWith("?? ")).length,
+		untrackedCount,
 		untrackedIncluded: false,
 	};
 };
