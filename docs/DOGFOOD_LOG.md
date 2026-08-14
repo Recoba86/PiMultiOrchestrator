@@ -14,8 +14,7 @@ output, credentials, or provider response bodies.
 - **Live Triage:** one disposable-root ambiguous case produced a structured
   fallback recommendation after two bounded calls; raw prompt/provider data
   was not persisted.
-- **Canonical Mission:** disposable root
-  `/private/tmp/pi-rc16-final-live-smoke-canonical.A8f3e1`; one pinned
+- **Canonical Mission:** disposable canonical-smoke root; one pinned
   Implementation/Verification route. The Mission/Task Implementation run
   succeeded and created exactly `rc16-smoke.json` with
   `{"status":"ok","candidate":"rc16"}`; the disposable project contained

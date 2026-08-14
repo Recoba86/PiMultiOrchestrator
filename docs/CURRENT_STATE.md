@@ -89,9 +89,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   artifact SHA-256 `72073e109df5a0d6b6e0f4be9f825932a768791d0752976c99aabc83eb4bcd7a`,
   and independently verified bundle-root SHA-256
   `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675`.
-- **Evidence paths:** release directory
-  `/private/tmp/pi-m12-rc16-verify-release.PvsZlL`; review bundle
-  `/private/tmp/pi-m12-rc16-bundle-release.fGJW2z`.
+- **Evidence paths:** release directory and review bundle were disposable
+  temporary outputs; their exact paths are intentionally omitted from tracked
+  documentation.
 - **Boundary:** no live Pi configuration, provider account, credential,
   public tag, push, npm publication, or GitHub release was modified.
 
@@ -109,13 +109,11 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   independently verified bundle root
   `6414f090c54caf4004fe62a6d51fe4e9d0df562b662a7091c9f68767901bb675` remain
   valid.
-- **Live AI Triage:** PASS in disposable root
-  `/private/tmp/pi-rc16-final-live-smoke-bounded.yozogr`: one captured
+- **Live AI Triage:** PASS in a disposable triage root: one captured
   ambiguous case produced a structured fallback recommendation after two
   bounded real-provider calls at a temporary 256-token cap; no credential was
   displayed and no prompt/provider response was persisted.
-- **Live canonical Mission:** disposable root
-  `/private/tmp/pi-rc16-final-live-smoke-canonical.A8f3e1`; Mission
+- **Live canonical Mission:** disposable canonical-smoke root; Mission
   `mission-c40f24a2-9b39-4340-9495-ca016d938eec`, Task
   `task-f6914ed1-61fc-4c48-8026-28b46379e029`. The single configured
   Implementation/Verification route was
@@ -553,7 +551,7 @@ M10 remains the last Planner-accepted milestone.
 - **Status:** Stage 4A autonomous closeout PASS; M11 remains IMPLEMENTED BUT NOT ACCEPTED.
 - **Final candidate and identity:** artifact-derived `0.1.0-rc.8`, built from clean tracked Git commit `aa622eef7256b447b456699dd80e10697fe94dc5`, tree `8104b7e1d5e40e4e2011c017acbf1bfa35203fd9`, source digest `d4f8b76c88e3e606b528d57571cf08e0553a0d43686c23489cba84a14f8fc234`, artifact SHA-256 `8fd4b233f7ee3d22ac0ac5703078ab165b55ba11a3978ae94a1f21039b746f28`.
 - **Offline evidence:** RC.8 release evidence records `175/175 PASS`, `20/20` integrity attacks, typecheck/build/check, Pi `0.84.1` compatibility/install/rollback/rescue, worker safety, privacy, and provenance. No source or package change was required during this closeout.
-- **Canonical Computer-Use flow:** in disposable `/private/tmp/pi-m11-stage4-dogfood`, Mission `mission-049cbd67-01d6-40bf-a103-3c31267d71ec` created Task `task-e44240e9-a662-45fc-9a48-2e7c9dab31e1`; the real Implementation run `attempt-8c6df7fb-68c9-471b-9246-33e038af3a34` completed on route `r9-ninerouter-ag-claude-opus-4-6-think-fe2f756e1d848cbb05ca` / model `ag/claude-opus-4-6-thinking` and created only the requested `m7-dogfood.json` fixture change.
+- **Canonical Computer-Use flow:** in a disposable Stage 4A root, Mission `mission-049cbd67-01d6-40bf-a103-3c31267d71ec` created Task `task-e44240e9-a662-45fc-9a48-2e7c9dab31e1`; the real Implementation run `attempt-8c6df7fb-68c9-471b-9246-33e038af3a34` completed on route `r9-ninerouter-ag-claude-opus-4-6-think-fe2f756e1d848cbb05ca` / model `ag/claude-opus-4-6-thinking` and created only the requested `m7-dogfood.json` fixture change.
 - **M7 evidence:** the normal task Verify action completed `verification-a4855595-3a1f-4d10-925c-d30d523d98eb` at round 0, persisted `decision-e87d80b4-8654-4368-86af-987465bbe521` with verdict `pass`, and left task quality status `passed`. The reviewer used the same explicit route/model, submitted the bounded structured verification result, and reported all six criteria satisfied with no unexpected mutation.
 - **Safety and observability:** the project root was TRUSTED only inside the disposable root; application-level protected-path and command policy remained active; Verification exposed only read-only inspection plus `submit_verification_result`; no fallback, retry, repair, analyst, hidden inference, credential persistence, main Pi configuration mutation, source-code change, or unrelated project mutation occurred during dogfood. The visible TUI showed the quality PASS and Diagnostics showed RC.8, Pi `0.84.1`, trusted project, healthy Mission/Analytics DBs, and healthy observed route.
 - **Remaining gates:** final human sanity smoke, fully independent External Review #5, Planner acceptance, and any publication remain separate. M11 is not accepted or production-ready.

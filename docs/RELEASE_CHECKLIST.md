@@ -6,13 +6,13 @@ The exact candidate identity comes from the generated release manifest.
 ```sh
 npm run check
 npm pack --dry-run --ignore-scripts --json
-npm run release:candidate -- --output /tmp/pi-m12-rc16-release --force
+npm run release:candidate -- --output <rc-release-output> --force
 node scripts/run-release-verification.mjs \
-  --output /tmp/pi-m12-rc16-release-final \
-  --bundle /tmp/pi-m12-rc16-review-bundle \
+  --output <rc-release-output-final> \
+  --bundle <rc-review-bundle> \
   --force
 node scripts/create-review-bundle.mjs --verify \
-  /tmp/pi-m12-rc16-review-bundle \
+  <rc-review-bundle> \
   --expected-root-sha256 <independently-supplied-root-sha256>
 ```
 
