@@ -130,7 +130,7 @@ const main = async () => {
 			runner: {
 				node: { kind: "process.execPath", file: basename(node.realpath), sha256: node.sha256, version: process.version },
 				npm: { kind: "node-cli", file: "npm-cli.js", sha256: npm.cli.sha256 },
-				typeScript,
+				typeScript: { package: typeScript.package, version: typeScript.version, packageJsonSha256: typeScript.packageJsonSha256, cliSha256: typeScript.cliSha256, launcherSha256: typeScript.launcherSha256 },
 			},
 			commands: {
 				check: "npm run check",

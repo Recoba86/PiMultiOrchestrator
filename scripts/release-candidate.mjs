@@ -11,7 +11,7 @@ const DEFAULT_OUTPUT = resolve(REPO_ROOT, "..", "pi-multi-orchestrator-release")
 const EXPECTED_FILES = ["dist/**/*.js", "dist/**/*.d.ts", "README.md"];
 const OPTIONAL_FILES = ["docs/OPERATOR_GUIDE.md"];
 const ENTRYPOINT = "dist/host/pi-extension.js";
-const EXPECTED_RELEASE_VERSION = "0.1.0-rc.15";
+const EXPECTED_RELEASE_VERSION = "0.1.0-rc.16";
 const PI_PACKAGE = "@earendil-works/pi-coding-agent";
 const PI_PACKAGE_ROOT = join(REPO_ROOT, "node_modules", "@earendil-works", "pi-coding-agent");
 const PI_CLI = join(PI_PACKAGE_ROOT, "dist", "cli.js");
@@ -148,7 +148,9 @@ export const trustedTypeScript = async (projectRoot = REPO_ROOT) => {
 	if (manifest.name !== "typescript" || manifest.version !== "5.9.3") fail("validated TypeScript dependency must be typescript@5.9.3");
 	const packageJson = await fileInfo(manifestPath, "TypeScript package manifest");
 	const cli = await fileInfo(join(packageRoot, "lib", "tsc.js"), "TypeScript CLI");
-	return { package: "typescript", version: manifest.version, packageJsonSha256: packageJson.sha256, cliSha256: cli.sha256 };
+	const launcher = await fileInfo(join(projectRoot, "node_modules", ".bin", "tsc"), "TypeScript launcher", true);
+	if (launcher.realpath !== await realpath(join(packageRoot, "bin", "tsc"))) fail("TypeScript launcher does not resolve to the validated package");
+	return { package: "typescript", version: manifest.version, packageJsonSha256: packageJson.sha256, cliSha256: cli.sha256, launcherSha256: launcher.sha256, cliPath: cli.realpath };
 };
 
 export const trustedPi = async () => {
@@ -715,6 +717,7 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 
 	const sourceStage = await createGitSourceStage();
 	const { sourceIdentity, sourceRoot } = sourceStage;
+	const typeScript = await trustedTypeScript(sourceRoot);
 	let staging;
 	try {
 		const sourceManifest = JSON.parse(await readFile(join(sourceRoot, "package.json"), "utf8"));
@@ -723,7 +726,7 @@ export async function buildReleaseCandidate({ output, force = false } = {}) {
 		staging = await mkdtemp(join(tmpdir(), "pi-multi-orchestrator-release-"));
 		const npmCache = join(staging, "npm-cache");
 		const env = safeEnvironment(npm.node.realpath, npmCache, sourceRoot);
-		await run(npm.node.realpath, [npm.cli.realpath, "run", "build"], {
+		await run(npm.node.realpath, [typeScript.cliPath, "-p", "tsconfig.build.json"], {
 			cwd: sourceRoot,
 			env,
 		});

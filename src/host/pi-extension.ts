@@ -93,6 +93,7 @@ import {
 	parseTriageResult,
 	containsPersian,
 	analyzeLocalSignals,
+	MAX_ROUTING_INPUT_LENGTH,
 	type SmartRoutingDecision,
 	type SmartRoutingContext,
 	type SmartRoutingSettings,
@@ -359,6 +360,7 @@ const directWorkerLabels: Record<PoolId, string> = {
 };
 
 export const parseOrchestratorInvocation = (text: string): { readonly goal: string } | undefined => {
+	if (typeof text !== "string" || text.length > MAX_ROUTING_INPUT_LENGTH) return undefined;
 	const match = /^\s*@orchestrator(?:\s+([\s\S]*))?\s*$/iu.exec(text);
 	return match ? { goal: (match[1] ?? "").trim() } : undefined;
 };
@@ -2466,7 +2468,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 							: undefined;
 		if (!target) return;
 		try {
-			const updated = await Promise.resolve(store.transitionMission(mission.missionId, target, { actor: "user", expectedRevision: mission.revision }));
+			const updated = await Promise.resolve(store.transitionMission(mission.missionId, target, { actor: "boss", expectedRevision: mission.revision }));
 			appendMissionPointer(updated);
 			ctx.ui.notify(`Mission ${updated.missionId} is now ${updated.status}`, "info");
 		} catch (error) {
@@ -2623,6 +2625,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const handleInput = async (event: InputEvent, ctx: ExtensionContext): Promise<InputEventResult> => {
 		if (event.source === "extension") return { action: "continue" };
+		if (event.text.length > MAX_ROUTING_INPUT_LENGTH) {
+			if (/^\s*@orchestrator(?:\s|$)/iu.test(event.text.slice(0, 256))) {
+				try { ctx.ui.setEditorText(event.text); } catch { return { action: "continue" }; }
+				ctx.ui.notify("The prompt is too large for local routing; shorten it before using @orchestrator.", "warning");
+				return { action: "handled" };
+			}
+			return { action: "continue" };
+		}
 		const invocation = parseOrchestratorInvocation(event.text);
 		if (!invocation) {
 			if (event.streamingBehavior !== undefined) return { action: "continue" };
@@ -2770,16 +2780,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 		if (ctx.signal?.aborted === true) return { action: "continue" };
 		const requeueOriginal = (): InputEventResult => {
-			const sendUserMessage = (pi as unknown as {
-				sendUserMessage?: (content: string, options?: { readonly deliverAs?: "steer" | "followUp" }) => void;
-			}).sendUserMessage;
-			if (typeof sendUserMessage !== "function") return { action: "continue" };
-			try {
-				sendUserMessage.call(pi, event.text, event.streamingBehavior === undefined ? { deliverAs: "followUp" } : { deliverAs: event.streamingBehavior });
-				return { action: "handled" };
-			} catch {
-				return { action: "continue" };
-			}
+			try { ctx.ui.setEditorText(event.text); }
+			catch { return { action: "continue" }; }
+			ctx.ui.notify("Mission entry failed; the original prompt was preserved in the editor.", "warning");
+			return { action: "handled" };
 		};
 		const store = options.missionStore;
 		if (!store) {

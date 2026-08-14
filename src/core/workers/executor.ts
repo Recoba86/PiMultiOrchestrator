@@ -471,7 +471,7 @@ async function validateExecutionRequest(request: SubagentExecutionRequest, defau
 	const cwd = normalize(await realpath(request.cwd).catch(() => { throw new WorkerError("invalid-cwd", "Execution cwd could not be resolved"); }));
 	if (!(await stat(cwd).catch(() => undefined))?.isDirectory()) throw new WorkerError("invalid-cwd", "Execution cwd is not a directory");
 	const timeoutMs = request.timeoutMs ?? defaultTimeoutMs;
-	if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 86_400_000) throw new WorkerError("invalid-request", "Execution timeout is outside bounds");
+	if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 86_400_000 || timeoutMs > defaultTimeoutMs) throw new WorkerError("invalid-request", "Execution timeout exceeds the configured safety ceiling");
 	return { ...request, roleId: request.roleId.trim(), task: request.task.trim(), cwd, timeoutMs };
 }
 

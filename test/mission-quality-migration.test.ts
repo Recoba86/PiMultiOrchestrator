@@ -37,6 +37,7 @@ describe("MissionStore M7 schema migration", () => {
 
 			const verification = store.createVerificationRun({ missionId: "m1", taskId: "t1", targetRunId: "a1", targetPacketId: "packet-3", implementationRouteId: "route-a" });
 			const decision = store.recordQualityDecision({ missionId: "m1", taskId: "t1", verificationId: verification.verificationId, targetRunId: "a1", targetPacketId: "packet-3", round: 0, reviewerSummary: "rejected", reviewerRouteId: "route-b", gate: { verdict: "reject", reasons: ["criterion failed"], criterionResults: [{ criterion: "tests", status: "failed", evidenceSummary: "failed" }], mechanicalChecks: [] } });
+			store.updateVerificationRun(verification.verificationId, { status: "completed", qualityDecisionId: decision.decisionId });
 			const escalation = store.createQualityEscalation({ missionId: "m1", taskId: "t1", rejectedRunId: "a1", verificationId: verification.verificationId, qualityRound: 0, failedCriteria: ["tests"], requiredFixes: ["fix tests"], reviewerFindings: ["failure"], priorImplementationRouteIds: ["route-a"], reviewerRouteId: "route-b" });
 			store.setTaskQualityStatus({ taskId: "t1" as never, missionId: "m1" as never, status: "rejected", qualityRound: 0, latestVerificationId: verification.verificationId, latestDecisionId: decision.decisionId, updatedAt: decision.createdAt });
 			assert.equal(store.listVerificationRuns("m1", "t1").length, 1);

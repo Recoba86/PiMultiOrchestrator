@@ -255,6 +255,22 @@ test("M12.3 settings migrate old Smart Routing records with memory enabled by de
 	}
 });
 
+test("corrupt Smart Routing settings can be repaired or restored", async () => {
+	const root = await mkdtemp(join(tmpdir(), "pi-smart-routing-recovery-"));
+	try {
+		const store = new SmartRoutingSettingsStore({ root });
+		await store.initialize();
+		await store.update((settings) => ({ ...settings, enabled: false }));
+		await writeFile(join(root, "smart-routing.json"), "{broken\n");
+		assert.equal((await store.load()).status, "corrupt");
+		await store.update((settings) => ({ ...settings, enabled: true }));
+		assert.equal((await store.load()).status, "valid");
+		await writeFile(join(root, "smart-routing.json"), "{broken\n");
+		await store.restore(1);
+		assert.equal((await store.load()).status, "valid");
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("M12.2 routing telemetry stores bounded metadata only", async () => {
 	const root = await mkdtemp(join(tmpdir(), "pi-m12-routing-analytics-"));
 	try {

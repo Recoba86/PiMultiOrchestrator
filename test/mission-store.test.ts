@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -9,6 +9,7 @@ import {
 	createCanonicalMission,
 	createMissionStore,
 	executeMissionTask,
+	SQLiteMissionStore,
 	MissionClosedError,
 	MissionConflictError,
 	MissionCorruptError,
@@ -54,6 +55,8 @@ describe("SQLite mission store", () => {
 		assert.throws(() => store.updateMission("m1", { goal: "stale" }, { expectedRevision: 99 }), MissionConflictError);
 		const review = store.transitionMission("m1", "planned", { expectedRevision: mission.revision });
 		assert.throws(() => store.transitionMission("m1", "completed", { actor: "worker", expectedRevision: review.revision }), MissionUnauthorizedError);
+		assert.throws(() => store.transitionMission("m1", "completed", { actor: "user", expectedRevision: review.revision }), MissionUnauthorizedError);
+		assert.throws(() => store.transitionMission("m1", "completed", { actor: "boss", expectedRevision: review.revision }), MissionValidationError);
 		const stale = store.admitEvidence({ missionId: "m1", sourceRevision: mission.revision, kind: "finding", content: { old: true } });
 		assert.throws(() => store.promoteEvidence(stale.evidenceId), MissionConflictError);
 		assert.equal(store.listEvidence("m1", "stale").length, 1);
@@ -72,10 +75,13 @@ describe("SQLite mission store", () => {
 		const other = store.createAttempt({ taskId: task2.taskId, attemptId: "attempt-other" });
 		store.finishAttempt(other.attemptId, "succeeded");
 		assert.throws(() => store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: other.attemptId }), MissionValidationError);
+		assert.throws(() => store.admitEvidence({ missionId: "m1", taskId: task1.taskId, attemptId: other.attemptId, kind: "finding", content: { crossMission: true } }), MissionValidationError);
 		const verification = store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: running.attemptId });
+		assert.throws(() => store.createVerificationRun({ missionId: "m1", taskId: task1.taskId, targetRunId: running.attemptId }), MissionValidationError);
 		assert.equal(verification.targetRunId, running.attemptId);
 		assert.throws(() => store.updateVerificationRun(verification.verificationId, { targetRunId: other.attemptId }), MissionValidationError);
 		assert.throws(() => store.recordQualityDecision({ missionId: "m1", taskId: task1.taskId, verificationId: verification.verificationId, targetRunId: other.attemptId, round: 0, reviewerSummary: "mismatch", gate: { verdict: "blocked", reasons: [], criterionResults: [], mechanicalChecks: [] } }), MissionValidationError);
+		assert.throws(() => store.setTaskQualityStatus({ taskId: task1.taskId, missionId: "m1" as never, status: "passed", qualityRound: 0, updatedAt: "2026-01-01T00:00:00.000Z" }), MissionValidationError);
 		store.close();
 	}));
 
@@ -101,6 +107,19 @@ describe("SQLite mission store", () => {
 		raw.prepare("UPDATE missions SET constraints_json=? WHERE mission_id=?").run("{", "m1");
 		raw.close();
 		assert.throws(() => createMissionStore({ root }), MissionCorruptError);
+	}));
+
+	it("rejects a v2 SQLite backup that omits quality state", async () => withStore(async (root) => {
+		const store = createMissionStore({ root });
+		store.createMission({ missionId: "m1", goal: "ship" });
+		const backup = await store.backup!(join(root, "backup.sqlite"));
+		const corrupt = join(root, "corrupt.sqlite");
+		await copyFile(backup, corrupt);
+		store.close();
+		const raw = new DatabaseSync(corrupt);
+		raw.exec("DROP TABLE quality_decisions");
+		raw.close();
+		await assert.rejects(() => SQLiteMissionStore.restore({ root: join(root, "restored") }, corrupt), /missing/u);
 	}));
 
 	it("rolls back a faulted transaction and enforces closed state", async () => withStore((root) => {

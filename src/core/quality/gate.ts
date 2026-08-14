@@ -53,6 +53,7 @@ export function evaluateQualityGate(input: { readonly acceptanceCriteria: readon
 		else if (result.status === "failed") reasons.push(`criterion failed: ${criterion}`);
 	}
 	const mechanicalChecks = [...input.mechanicalChecks];
+	if (input.reviewerResult.verdict === "pass" && criteria.length === 0 && mechanicalChecks.length === 0) reasons.push("verification evidence is missing");
 	if (policy.requireMechanicalChecks && mechanicalChecks.length === 0) reasons.push("required mechanical checks are missing");
 	if (mechanicalChecks.some((check) => check.outcome === "failed")) reasons.push("mechanical check failed");
 	if (mechanicalChecks.some((check) => check.outcome === "timed_out")) reasons.push("mechanical check timed out");
@@ -60,7 +61,7 @@ export function evaluateQualityGate(input: { readonly acceptanceCriteria: readon
 	const missingCriterion = reasons.some((reason) => reason.startsWith("criterion not verified"));
 	let verdict: QualityVerdict = input.reviewerResult.verdict;
 	if (failedCriterion || mechanicalChecks.some((check) => check.outcome === "failed")) verdict = "reject";
-	else if (missingCriterion || mechanicalChecks.some((check) => check.outcome === "timed_out") || (policy.requireMechanicalChecks && mechanicalChecks.length === 0)) verdict = policy.missingCriterion === "reject" && missingCriterion ? "reject" : "blocked";
+	else if (missingCriterion || reasons.includes("verification evidence is missing") || mechanicalChecks.some((check) => check.outcome === "timed_out") || (policy.requireMechanicalChecks && mechanicalChecks.length === 0)) verdict = policy.missingCriterion === "reject" && missingCriterion ? "reject" : "blocked";
 	else if (verdict === "pass" && criteria.some((criterion) => criterion.mandatory === true && criterion.status !== "satisfied")) verdict = "blocked";
 	return {
 		verdict,

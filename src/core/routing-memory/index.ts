@@ -213,7 +213,7 @@ const expectRecord = (value: unknown, path: string): Record<string, unknown> => 
 
 const normalize = (value: string): string => value
 	.normalize("NFKC")
-	.replace(/[\u200c\u200d]/gu, " ")
+	.replace(/[\u200b\u200c\u200d\ufeff\u2060]/gu, " ")
 	.toLocaleLowerCase()
 	.trim();
 const containsPersian = (value: string): boolean => /[\u0600-\u06ff]/u.test(value);
@@ -497,7 +497,7 @@ const signalsFromInput = (localSignals?: RoutingLocalSignals): ReadonlySet<strin
 
 export function buildRoutingSignature(prompt: string, localSignals?: RoutingLocalSignals): RoutingSignature {
 	if (typeof prompt !== "string") throw new TypeError("prompt-required");
-	const text = normalize(prompt);
+	const text = normalize(prompt.slice(0, 32_000));
 	const signals = signalsFromInput(localSignals);
 	const explanation = localSignal(signals, "explanation_only") || explanationPattern.test(text);
 	const question = localSignal(signals, "question_only") || /(?:\?|؟)\s*$/u.test(text) || (!explanation && questionPattern.test(text) && !actionPattern.test(text));
@@ -758,9 +758,12 @@ export class RoutingMemoryStore {
 
 	reset(options: RoutingMemoryCallOptions = {}): Promise<RoutingMemoryMutationResult> {
 		return this.enqueue(async () => {
+			const activeBefore = await this.readActive();
 			const current = await this.readCurrentForMutation();
 			if (options.expectedGeneration !== undefined && options.expectedGeneration !== (current?.generation ?? 0)) throw new ConfigConflictError(options.expectedGeneration, current?.generation ?? 0);
-			const mutation = current && current.rules.length > 0 ? await this.commit([], current, options.expectedGeneration) : { changed: false, generation: current?.generation ?? 0 };
+			const mutation = current && current.rules.length > 0
+				? await this.commit([], current, options.expectedGeneration)
+				: activeBefore.kind === "invalid" ? await this.commit([], undefined, options.expectedGeneration) : { changed: false, generation: current?.generation ?? 0 };
 			await this.clearHistory();
 			return mutation;
 		});
@@ -769,7 +772,7 @@ export class RoutingMemoryStore {
 	listViews(): Promise<readonly RoutingMemoryRuleView[]> {
 		return this.enqueue(async () => {
 			const loaded = await this.loadUnlocked();
-			if (loaded.status === "corrupt") throw new ConfigRecoveryError("active-config-invalid");
+			if (loaded.status === "corrupt") return [];
 			return this.rules.map(toPublicRule);
 		});
 	}
@@ -892,7 +895,10 @@ export class RoutingMemoryStore {
 			this.loaded = true; this.generation = 0; this.savedAt = undefined; this.rules = [];
 			return undefined;
 		}
-		if (active.kind === "invalid" || !active.parsed) throw new ConfigRecoveryError("active-config-invalid");
+		if (active.kind === "invalid" || !active.parsed) {
+			this.loaded = true; this.generation = 0; this.savedAt = undefined; this.rules = [];
+			return undefined;
+		}
 		const current = active.parsed.stored;
 		this.loaded = true; this.generation = current.generation; this.savedAt = current.savedAt; this.rules = cloneRules(current.rules);
 		return current;
@@ -928,12 +934,9 @@ export class RoutingMemoryStore {
 		for (const name of names.filter((item) => /^routing-memory-\d{20}\.json$/u.test(item))) {
 			try {
 				const parsed = parseStored(JSON.parse(await readFile(join(this.root, this.historyDir, name), "utf8")) as unknown);
-				if (parsed.diagnostics.length > 0) throw new ConfigRecoveryError("history-entry-invalid");
+				if (parsed.diagnostics.length > 0) continue;
 				entries.push(parsed.stored);
-			} catch (error) {
-				if (error instanceof ConfigRecoveryError) throw error;
-				throw new ConfigRecoveryError("history-entry-invalid");
-			}
+			} catch { /* retain valid history only */ }
 		}
 		return entries.sort((left, right) => right.generation - left.generation);
 	}

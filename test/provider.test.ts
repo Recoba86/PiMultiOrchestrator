@@ -25,6 +25,7 @@ import {
 	NINEROUTER_PROVIDER_ID,
 } from "../src/host/pi-extension.js";
 import { ConfigStore, createDefaultConfig } from "../src/core/config/index.js";
+import { MAX_ROUTING_INPUT_LENGTH } from "../src/core/smart-routing/index.js";
 import { HealthStore } from "../src/core/health/index.js";
 import { classifyFailure } from "../src/core/routing/index.js";
 import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/ninerouter/index.js";
@@ -549,6 +550,7 @@ describe("Pi 9Router host adapter", () => {
 		assert.equal(parseOrchestratorInvocation("What does @orchestrator mean?"), undefined);
 		assert.equal(parseOrchestratorInvocation("\"@orchestrator goal\""), undefined);
 		assert.equal(parseOrchestratorInvocation("```@orchestrator goal```"), undefined);
+		assert.equal(parseOrchestratorInvocation(`@orchestrator ${"x".repeat(MAX_ROUTING_INPUT_LENGTH)}`), undefined);
 		const root = await mkdtemp(join(tmpdir(), "pi-m12-entry-"));
 		let entryId = 0;
 		const store = createMissionStore({ root, id: () => `entry-${++entryId}` });
@@ -875,18 +877,22 @@ describe("Pi 9Router host adapter", () => {
 		const missingHost = createPiHost(missingPi.pi, { manager: managerFixture(projection()) });
 		const missingHandler = missingPi.inputHandlers[0];
 		assert.ok(missingHandler);
-		const missingCtx = { cwd: "/private/tmp/pi-m12-missing-store", mode: "tui", hasUI: true, isIdle: () => true, ui: { notify } } as unknown as ExtensionContext;
+		const missingEditor: string[] = [];
+		const missingCtx = { cwd: "/private/tmp/pi-m12-missing-store", mode: "tui", hasUI: true, isIdle: () => true, ui: { notify, setEditorText: (value: string) => missingEditor.push(value) } } as unknown as ExtensionContext;
 		assert.deepEqual(await missingHandler({ type: "input", text: "@orchestrator recover this", source: "interactive" }, missingCtx), { action: "handled" });
-		assert.deepEqual(missingPi.sentUserMessages, [{ content: "@orchestrator recover this", options: { deliverAs: "followUp" } }]);
+		assert.deepEqual(missingEditor, ["@orchestrator recover this"]);
+		assert.deepEqual(missingPi.sentUserMessages, []);
 
 		const failingPi = piFixture();
 		const failingStore = { createMission: () => { throw new Error("fixture store failure"); } } as unknown as MissionStoreAdapter;
 		createPiHost(failingPi.pi, { manager: managerFixture(projection()), missionStore: failingStore });
 		const failingHandler = failingPi.inputHandlers[0];
 		assert.ok(failingHandler);
-		const failingCtx = { cwd: "/private/tmp/pi-m12-failing-store", mode: "tui", hasUI: true, isIdle: () => true, ui: { notify } } as unknown as ExtensionContext;
+		const failingEditor: string[] = [];
+		const failingCtx = { cwd: "/private/tmp/pi-m12-failing-store", mode: "tui", hasUI: true, isIdle: () => true, ui: { notify, setEditorText: (value: string) => failingEditor.push(value) } } as unknown as ExtensionContext;
 		assert.deepEqual(await failingHandler({ type: "input", text: "@orchestrator retry after store error", source: "interactive" }, failingCtx), { action: "handled" });
-		assert.deepEqual(failingPi.sentUserMessages, [{ content: "@orchestrator retry after store error", options: { deliverAs: "followUp" } }]);
+		assert.deepEqual(failingEditor, ["@orchestrator retry after store error"]);
+		assert.deepEqual(failingPi.sentUserMessages, []);
 	});
 
 	it("[U][fixture-pi-0.84.1] exposes Smart Routing settings inside the existing Routing & Fallback section", async () => {

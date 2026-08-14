@@ -247,6 +247,26 @@ test("learned Normal does not match a materially escalated current task", async 
 		const sensitiveMatch = await sensitive.match("Review the production authentication issue");
 		assert.equal(sensitiveMatch.kind, "none");
 		assert.match(sensitiveMatch.reason, /complexity/iu);
+		const zeroWidthSensitiveMatch = await sensitive.match("Review the pro\u200bduction authentication issue");
+		assert.equal(zeroWidthSensitiveMatch.kind, "none");
+		assert.match(zeroWidthSensitiveMatch.reason, /complexity/iu);
+	});
+});
+
+test("corrupt Routing Memory fails closed but reset and restore repair it", async () => {
+	await withRoot(async (root) => {
+		const store = makeStore(root);
+		await store.addExplicitMissionRule(complexPrompt, { id: "repairable" });
+		const backup = await store.backup(join(root, "routing-backup.json"));
+		await writeFile(join(root, "routing-memory.json"), "{broken\n");
+		assert.equal((await store.load()).status, "corrupt");
+		assert.deepEqual(await store.listViews(), []);
+		await store.restore(backup);
+		assert.equal((await store.load()).status, "valid");
+		await writeFile(join(root, "routing-memory.json"), "{broken\n");
+		await store.reset();
+		assert.equal((await store.load()).status, "valid");
+		assert.deepEqual(await store.listViews(), []);
 	});
 });
 

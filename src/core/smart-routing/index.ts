@@ -205,8 +205,7 @@ export class SmartRoutingSettingsStore {
 	restore(generation: number, options: { readonly expectedGeneration?: number } = {}): Promise<SmartRoutingSettingsMutationResult> {
 		return this.enqueue(async () => {
 			const current = await this.readActive();
-			if (!current) throw new ConfigRecoveryError("no-valid-config-to-restore");
-			this.assertExpected(options.expectedGeneration, current.generation);
+			this.assertExpected(options.expectedGeneration, current?.generation ?? 0);
 			const history = await this.readHistory();
 			const target = history.find((entry) => entry.generation === generation);
 			if (!target) throw new ConfigRecoveryError("history-generation-not-found");
@@ -237,10 +236,7 @@ export class SmartRoutingSettingsStore {
 
 	private async readActive(): Promise<StoredSmartRoutingSettings | undefined> {
 		const result = await this.loadUnlocked();
-		if (result.status !== "valid") {
-			if (result.status === "corrupt") throw new ConfigRecoveryError("active-config-invalid");
-			return undefined;
-		}
+		if (result.status !== "valid") return undefined;
 		return { storageVersion: SMART_ROUTING_STORAGE_VERSION, generation: result.generation, savedAt: result.savedAt ?? new Date(0).toISOString(), settings: result.settings };
 	}
 
@@ -280,7 +276,8 @@ export class SmartRoutingSettingsStore {
 	private assertExpected(expected: number | undefined, actual: number): void { if (expected !== undefined && expected !== actual) throw new ConfigConflictError(expected, actual); }
 }
 
-const normalize = (value: string): string => value.normalize("NFKC").replaceAll(/[\u200c\u200d]/gu, " ").trim();
+export const MAX_ROUTING_INPUT_LENGTH = 32_000;
+const normalize = (value: string): string => value.slice(0, MAX_ROUTING_INPUT_LENGTH).normalize("NFKC").replaceAll(/[\u200b\u200c\u200d\ufeff\u2060]/gu, " ").trim();
 export const containsPersian = (value: string): boolean => /[\u0600-\u06ff]/u.test(value);
 const word = (value: string, pattern: RegExp): boolean => pattern.test(value);
 const clauseCount = (value: string): number => value.split(/(?:\r?\n|[.!?؟؛;]|\b(?:then|after|before|next|first|finally|سپس|بعد|قبل|اول|درنهایت)\b)/iu).map((part) => part.trim()).filter(Boolean).length;
@@ -311,6 +308,7 @@ const clamp = (value: number): number => Math.max(0, Math.min(1, value));
 const unique = <T>(values: readonly T[]): T[] => [...new Set(values)];
 
 export function analyzeLocalSignals(prompt: string): LocalSignalAnalysis {
+	if (typeof prompt !== "string") throw new TypeError("prompt-required");
 	const text = normalize(prompt);
 	const signals: LocalSignalCode[] = [];
 	const detected = new Set<LocalSignalCode>();
