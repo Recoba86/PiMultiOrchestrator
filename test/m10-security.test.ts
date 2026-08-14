@@ -44,7 +44,10 @@ test("M10 PathSafetyPolicy blocks untrusted, escapes, symlinks, protected paths,
 	assert.equal(trusted.authorizeRead(join(root, ".env")).code, "CREDENTIAL_PATH");
 	assert.equal(trusted.authorizeWrite(state).code, "PROTECTED_PATH");
 	assert.equal(trusted.authorizeRecursiveRead(".").code, "PROTECTED_PATH_DESCENDANT");
+	mkdirSync(join(root, "src"), { recursive: true });
 	assert.equal(trusted.authorizeRecursiveRead("src").decision, "ALLOW");
+	writeFileSync(join(root, "src", ".env.local"), "secret", "utf8");
+	assert.equal(trusted.authorizeRecursiveRead("src").code, "CREDENTIAL_PATH_DESCENDANT");
 	try {
 		symlinkSync(outside, join(root, "link"), "dir");
 		assert.equal(trusted.authorizeWrite(join(root, "link", "file.txt")).code, "OUTSIDE_WORKSPACE");

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 
@@ -23,6 +23,7 @@ export class ProjectTrustRequiredError extends Error {
 
 const TRUST_FILE = ".project-trust.json";
 const MAX_LABEL = 128;
+const MAX_RECURSIVE_SCAN_ENTRIES = 20_000;
 
 function canonicalExisting(path: string): string {
 	try { return realpathSync(path); } catch { return resolve(path); }
@@ -205,6 +206,23 @@ export class PathSafetyPolicy {
 		if (!target) return result;
 		if (this.protectedPaths.some((protectedPath) => protectedPath !== target && inside(target, protectedPath))) {
 			return { decision: "BLOCK", reason: "recursive read would traverse a protected path", code: "PROTECTED_PATH_DESCENDANT", path: target };
+		}
+		let details;
+		try { details = lstatSync(target); } catch { return { decision: "BLOCK", reason: "recursive read target could not be verified", code: "RECURSIVE_PATH_UNVERIFIED", path: target }; }
+		if (!details.isDirectory()) return result;
+		const pending = [target];
+		let scanned = 0;
+		while (pending.length > 0) {
+			const current = pending.pop()!;
+			let entries;
+			try { entries = readdirSync(current, { withFileTypes: true }); } catch { return { decision: "BLOCK", reason: "recursive read descendants could not be verified", code: "RECURSIVE_PATH_UNVERIFIED", path: target }; }
+			for (const entry of entries) {
+				if (++scanned > MAX_RECURSIVE_SCAN_ENTRIES) return { decision: "BLOCK", reason: "recursive read exceeds the safety scan bound", code: "RECURSIVE_PATH_UNVERIFIED", path: target };
+				const child = join(current, entry.name);
+				if (pathLooksCredential(child)) return { decision: "BLOCK", reason: "recursive read would traverse a credential-like path", code: "CREDENTIAL_PATH_DESCENDANT", path: target };
+				if (entry.isSymbolicLink()) return { decision: "BLOCK", reason: "recursive read would traverse a symbolic link", code: "SYMLINK_DESCENDANT", path: target };
+				if (entry.isDirectory()) pending.push(child);
+			}
 		}
 		return result;
 	}
