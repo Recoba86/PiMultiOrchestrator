@@ -4,12 +4,14 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The current release candidate is `0.1.0-rc.19`; rc.1 through rc.18 are historical
+The current public prerelease is `0.1.0-rc.19`; rc.1 through rc.18 are historical
 or superseded candidates. RC19 carries the accepted RC17/RC18 behavior plus
 Pi `0.84.1` existing-provider adoption, a neutral no-provider state, masked
 TUI `Test & Save` onboarding through Pi auth storage, and the Pi-auth provider
-bridge. RC19 is a prerelease candidate for the `next` dist-tag, not a stable or
-production release.
+bridge. RC19 is published under the `next` dist-tag, not a stable or production
+release. The release commit is `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag
+`v0.1.0-rc.19`, and artifact SHA-256
+`338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e`.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. RC13, RC15, and RC16 are historical; RC17 is the successor candidate after the final RC16 live M7 reviewer handoff blocked before structured submission. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
@@ -96,7 +98,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC19 is a prerelease candidate, not a stable or production release. See `docs/ROADMAP.md` for the release state.
+M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC19 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 

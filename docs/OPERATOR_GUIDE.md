@@ -1,8 +1,8 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC19's public
-prerelease remains a `next`-tagged candidate, not a stable or production
-release. Local validation uses isolated roots and never installs into
+This guide describes the Control Center in Pi `0.84.1`. RC19 is the public
+`next`-tagged prerelease, not a stable or production release. Local validation
+uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
 
 ## Open the Control Center

@@ -4,11 +4,26 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC19 public prerelease publication
+
+- **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE`.
+- **Identity:** package `pi-multi-orchestrator@0.1.0-rc.19`, source commit
+  `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag `v0.1.0-rc.19`, and artifact
+  SHA-256 `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e`.
+- **Publication:** npm publish completed with public access, `next` points to
+  RC19, and `latest` remains `0.1.0-rc.17`. GitHub release `v0.1.0-rc.19` is
+  explicitly marked prerelease and carries the exact artifact/checksum.
+- **Verification:** the downloaded registry tarball is byte-identical to the
+  local artifact; a clean public npm installation reports the exact package
+  identity/version; and public-package Pi `0.84.1` dogfood matched 27/27
+  existing `9router` rows with isolated PMO/session state.
+- **Boundary:** RC19 is for real-world dogfooding, not stable production use.
+  No live Pi credential or configuration was changed.
+
 ## RC19 — Pi 9Router onboarding and adoption
 
-- **Date/status:** 2026-08-15; implementation complete as a local `0.1.0-rc.19`
-  candidate. Public publication, tag, push, and GitHub prerelease remain release
-  gates for this entry.
+- **Date/status:** 2026-08-15; implementation complete as the
+  `0.1.0-rc.19` public prerelease. Publication evidence is recorded above.
 - **Existing Pi provider:** the host now consumes Pi `0.84.1`'s credential-blind
   `Provider.getModels()` catalog, exposes all bounded external 9Router models in
   Models & 9Router, and preserves external provider ownership across reconcile,
@@ -23,8 +38,8 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   their existing `$ENV_NAME` behavior. External refresh uses the bound Pi model
   registry rather than incorrectly requiring a PMO gateway.
 - **Validation:** RC19 focused U/I/TUI/RPC tests, Pi auth-storage API probe,
-  typecheck, and build passed locally. Full release verification and public
-  publication are recorded only after the clean exact-Git release gate.
+  typecheck, build, full release gate, isolated Pi dogfood, and public-package
+  verification passed.
 
 ## RC17 public prerelease publication
 

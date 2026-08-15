@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC19 Pi onboarding/adoption candidate is local pending release gates |
+| Development phase | M10 remains the latest accepted development milestone; RC19 Pi onboarding/adoption is a public prerelease under npm `next` |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -28,7 +28,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 final candidate | `0.1.0-rc.17` — public prerelease; exact artifact and bundle identity are bound by the detached verifier |
 | RC17 final Planner attempt | 2026-08-15 — PASS after the bounded reviewer-handoff repair; source-bound artifact is public as a prerelease |
 | RC18 compatibility repair | Local source repair at `0af7b8e`; package manifest remains `0.1.0-rc.17`; no package rebuild/release or publication is claimed |
-| RC19 candidate | `0.1.0-rc.19` — Pi-owned 9Router adoption, secure TUI setup, Pi-auth bridge, and external-provider regression coverage; publication pending release gates |
+| RC19 release | `0.1.0-rc.19` — public prerelease; commit `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag `v0.1.0-rc.19`, artifact SHA-256 `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e` |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
@@ -114,8 +114,8 @@ empirically observed capabilities. RC18 does not implement this requirement.
 
 ## RC19 — Pi 9Router onboarding and adoption
 
-- **Status:** IMPLEMENTED / LOCAL CANDIDATE; package version `0.1.0-rc.19` is
-  not yet promoted to a public release in this snapshot.
+- **Status:** PUBLISHED / PRERELEASE; package version `0.1.0-rc.19` is public on
+  npm under `next` and is not stable or production-ready.
 - **Existing-provider path:** after `session_start`, PMO reads Pi's public
   `9router` provider catalog through `getModels()`, adopts the bounded visible
   model metadata, and never registers, replaces, or unregisters an external
@@ -130,10 +130,19 @@ empirically observed capabilities. RC18 does not implement this requirement.
   references so Pi resolves the stored credential rather than treating a
   placeholder as a literal key. External refresh uses Pi's registry refresh;
   PMO refresh remains the path for PMO-owned/env-backed configuration.
-- **Evidence:** focused provider/model-manager suites, TUI/RPC setup tests,
-  Pi `0.84.1` auth-storage API probe, typecheck, and build are required before
-  the RC19 release artifact is accepted. No live Pi credential or configuration
-  was changed during local validation.
+- **Evidence:** the full clean gate passed `237/237` tests across 13 suites with
+  zero failed/cancelled/skipped/todo; typecheck and build passed; isolated
+  project-Pi `0.84.1` dogfood matched 27/27 existing `9router` rows; and the
+  public npm-installed extension matched the same 27/27 rows. No live Pi
+  credential or configuration was changed.
+- **Release identity:** commit `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`,
+  tag `v0.1.0-rc.19`, package `pi-multi-orchestrator@0.1.0-rc.19`, and artifact
+  SHA-256 `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e`.
+  The GitHub release is explicitly a prerelease. The downloaded registry
+  tarball is byte-identical to the accepted local artifact.
+- **Registry boundary:** npm `next` points to `0.1.0-rc.19`; npm `latest`
+  remains `0.1.0-rc.17`. A clean public npm installation reports the exact
+  package name and version.
 
 ## RC17 public prerelease publication
 

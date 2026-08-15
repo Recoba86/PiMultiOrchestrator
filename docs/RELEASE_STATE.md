@@ -12,22 +12,39 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.17` — GitHub prerelease and npm `next` |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.19` — GitHub prerelease and npm `next` |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.19` — RC19 local candidate; RC17 remains the currently public prerelease until RC19 publication |
+| Development manifest version | `0.1.0-rc.19` — RC19 public prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
-| RC19 onboarding/adoption candidate | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, and U/I/TUI/RPC coverage; release gates pending |
+| RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | PUBLISHED PRERELEASE — detached verification, live canonical M7, and technical TUI gates pass; not stable/production-ready |
-| Release tag | `v0.1.0-rc.17` → `5def791b31a7ad940ed87f6e720aabb0228500e7` |
-| Release commit | `5def791b31a7ad940ed87f6e720aabb0228500e7` |
-| GitHub release | [v0.1.0-rc.17](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.17) — prerelease |
-| Installable production release | NONE; RC17 is a prerelease |
+| Local technical release readiness | PUBLISHED PRERELEASE — RC19 full gate, artifact, registry, GitHub, and public Pi dogfood pass; not stable/production-ready |
+| Release tag | `v0.1.0-rc.19` → `717a20413fc22f7ca7fde8df8a841ebde05b0f1a` |
+| Release commit | `717a20413fc22f7ca7fde8df8a841ebde05b0f1a` |
+| GitHub release | [v0.1.0-rc.19](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.19) — prerelease |
+| Installable production release | NONE; RC19 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC19 public prerelease publication
+
+- **Package:** `pi-multi-orchestrator@0.1.0-rc.19`, published with npm access
+  `public` and dist-tag `next` using `--ignore-scripts`.
+- **Source binding:** tag `v0.1.0-rc.19` peels to commit
+  `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`.
+- **Artifact:** `pi-multi-orchestrator-0.1.0-rc.19.tgz`, SHA-256
+  `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e`.
+- **Registry verification:** npm reports the exact name/version, `next` points
+  to RC19, `latest` remains `0.1.0-rc.17`, and the directly downloaded registry
+  tarball matches the local artifact byte-for-byte.
+- **Public install verification:** a clean isolated npm prefix installed
+  `pi-multi-orchestrator@0.1.0-rc.19`; project Pi `0.84.1` loaded that public
+  extension and matched the existing 27-model `9router` catalog exactly.
+- **Boundary:** this is a public prerelease for dogfooding, not a stable or
+  production release. No live Pi configuration or credential was modified.
 
 ## RC17 public prerelease publication
 

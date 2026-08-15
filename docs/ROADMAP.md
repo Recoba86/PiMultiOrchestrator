@@ -389,8 +389,8 @@ capabilities. This is explicitly outside RC18.
 
 ## RC19 — Pi 9Router onboarding and adoption
 
-Status: IMPLEMENTED / LOCAL CANDIDATE; manifest `0.1.0-rc.19`; public release
-gates are pending.
+Status: PUBLISHED / PRERELEASE; manifest `0.1.0-rc.19`; public npm and GitHub
+release gates passed. RC19 is not stable or production-ready.
 
 RC19 closes the first-run and existing-provider compatibility gap identified by
 RC18 dogfood:
@@ -413,3 +413,12 @@ RC18 dogfood:
 No automatic pool assignment, PMO provider replacement, credential copy, or
 plaintext secret persistence is part of RC19. Dynamic Route Catalog &
 Capability Sync remains a future requirement.
+
+Exit evidence: clean `npm run check` passed `237/237` across 13 suites with zero
+failed/cancelled/skipped/todo; typecheck and build passed; project Pi `0.84.1`
+dogfood matched 27/27 existing `9router` rows; the public npm-installed
+extension matched the same 27/27 rows; artifact SHA-256 is
+`338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e`; tag
+`v0.1.0-rc.19` and the GitHub prerelease resolve to the release commit; npm
+`next` points to RC19 while `latest` remains RC17. No live Pi configuration or
+credential was modified.
