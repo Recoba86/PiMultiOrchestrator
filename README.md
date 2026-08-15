@@ -4,13 +4,14 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The current source/release line is RC21 (`0.1.0-rc.21`), built on the RC20
-provider-adoption boundary. RC21 repairs nested thinking metadata propagation,
-refreshes static external Pi 9Router catalogs from upstream with Pi auth, and
-keeps route IDs out of normal picker rows while retaining diagnostics. RC21 is
-published as a public prerelease on npm with `next`; `latest` remains
-`0.1.0-rc.17`. The immutable artifact SHA-256 is
-`67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266`.
+The public release line is RC21 (`0.1.0-rc.21`), while the current source also
+contains the RC22 (`0.1.0-rc.22`) local candidate. RC22 unifies model/route
+selector presentation across the Model Router, all three Pool editors and Add
+Route flows, Route Health, Smart Routing, and Recommendation Analyst: normal
+rows show one remote model ID, hide internal route IDs and status/thinking
+clutter, and preserve exact route identity internally. RC21 remains published
+as a public prerelease on npm with `next`; `latest` remains `0.1.0-rc.17`.
+RC22 is local-only and is not a stable or production release.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. RC13, RC15, and RC16 are historical; RC17 is the successor candidate after the final RC16 live M7 reviewer handoff blocked before structured submission. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 

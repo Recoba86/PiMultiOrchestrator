@@ -14,7 +14,8 @@ This file records releasable product state. It does not promote development prog
 | Public stable release | NONE |
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.21` — npm `next`; `latest` remains `0.1.0-rc.17` |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.21` — RC21 release candidate |
+| Development manifest version | `0.1.0-rc.22` — RC22 local candidate; exact detached verification PASS |
+| RC22 local candidate | Canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`; artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; not published |
 | RC20 release | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; published prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
@@ -29,6 +30,28 @@ This file records releasable product state. It does not promote development prog
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC22 local candidate — Canonical model selector presentation
+
+RC22 is an implemented local candidate. RC21 remains the public prerelease;
+RC22 is not stable or production-ready.
+
+- **Source binding:** code commit
+  `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, tree
+  `6bf89664015cee47c5ee2e98692666c94e030384`, source digest
+  `fc06fa0e39d4ba7cf139a37ccd97d2d5a558dafc48fc844b077c2a85eade52e7`.
+- **Artifact:** `pi-multi-orchestrator-0.1.0-rc.22.tgz`, SHA-256
+  `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`;
+  independent bundle-root SHA-256
+  `a81f34cf41709de5ebef4fe8e1733e883be8e5849dd7f371dc34070bff6170c3`.
+- **Verification:** detached release verification passed `250/250` tests
+  across 13 suites, typecheck/build, `20/20` integrity attacks, and
+  worker-safety checks. Isolated Pi `0.84.1` installation evidence reports
+  RC22 installed and verified, with zero live calls and zero paid inference.
+- **Boundary:** no npm publication, tag, GitHub release, live Pi
+  configuration, provider account, credential store, or model request was
+  performed. The artifact remains bound to the source commit above; this
+  state-record update is separate and does not rebuild or repack it.
 
 ## RC21 Model Router dogfood repair publication
 
@@ -157,6 +180,7 @@ handling. It remains prerelease-only; `latest` must not move.
 | M12 RC16 final-review candidate | Historical detached verifier PASS; superseded by RC17 after the live M7 handoff block |
 | M12 RC17 final-review candidate | Exact detached verifier PASS on commit `5def791b31a7ad940ed87f6e720aabb0228500e7`, tree `c23424f26600e988e6d96cbd794a0d22cc121ecd`; source digest `04935d63c419c56c4c9b92214abf06d4151bfe13ebc7a255b08475895c7d7f2c`; artifact SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`; bundle root `f5f58cdf255580b4cdd772b0b5885fde531232fc4130b7e352972fe7be9b9bcf`; clean `npm run check` `231/231 PASS`, Pi `0.84.1`, privacy, worker-safety, and `20/20` integrity PASS |
 | RC18 compatibility repair evidence | Commit `0af7b8e`; `npm run check` `234/234 PASS`; production build and Pi `0.84.1` baseline/local 27-model exact-match dogfood PASS; local-only, not a release artifact |
+| RC22 local candidate | Source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`; detached `250/250 PASS`; `20/20` integrity attacks; Pi `0.84.1` isolated install evidence PASS; artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; bundle root `a81f34cf41709de5ebef4fe8e1733e883be8e5849dd7f371dc34070bff6170c3`; local-only |
 | RC17 final Planner/manual attempt | PASS: disposable Mission → Task → Implementation → Verification Pool → `submit_verification_result` → M7 decision; technical TUI PASS; no live configuration mutation |
 | Typecheck | PASS |
 | Aggregate check | PASS — `231/231`; exact detached release verification PASS |

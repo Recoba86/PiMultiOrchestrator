@@ -4,6 +4,34 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC22 — Canonical model selector presentation local candidate
+
+- **Date/status:** 2026-08-15; `IMPLEMENTED / LOCAL CANDIDATE`, not accepted or
+  public. RC21 remains the public prerelease.
+- **Implementation:** introduced one shared canonical model-option presentation
+  helper and routed all 11 PMO model/route selector prompts through it: Model
+  Router, the three Pool editors, three Add Route flows, Route Health, Smart
+  Routing Primary/Fallback, and Recommendation Analyst. Normal rows show one
+  remote model ID, deterministic duplicate suffixes, and no internal route ID,
+  `ACTIVE`, or Thinking metadata; exact route IDs remain available to Inspect
+  and diagnostics.
+- **Identity:** source commit
+  `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, tree
+  `6bf89664015cee47c5ee2e98692666c94e030384`, source digest
+  `fc06fa0e39d4ba7cf139a37ccd97d2d5a558dafc48fc844b077c2a85eade52e7`,
+  artifact SHA-256
+  `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`, and
+  bundle-root SHA-256
+  `a81f34cf41709de5ebef4fe8e1733e883be8e5849dd7f371dc34070bff6170c3`.
+- **Evidence:** detached release verification passed `250/250` tests across
+  13 suites, typecheck/build, `20/20` integrity attacks, and worker-safety
+  checks. Isolated Pi `0.84.1` install evidence passed with RC22 installed and
+  verified; live calls and paid inference were zero.
+- **Boundary:** pushed to `origin/main`; no npm publication, tag, GitHub
+  release, live Pi configuration, provider account, credential store, or model
+  request was performed. The artifact was not rebuilt after the source-bound
+  release verification.
+
 ## RC21 — Model Router dogfood repair publication
 
 - **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE` on npm and GitHub.

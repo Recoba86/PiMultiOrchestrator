@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC21 is the current public prerelease and is not stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC22 is an implemented local candidate and RC21 remains the current public prerelease; neither is stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -31,6 +31,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC19 release | `0.1.0-rc.19` — public prerelease; commit `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag `v0.1.0-rc.19`, artifact SHA-256 `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e` |
 | RC20 release | `0.1.0-rc.20` — prior public prerelease; source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag `v0.1.0-rc.20`, artifact SHA-256 `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc` |
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
+| RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
@@ -68,6 +69,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12.3 — Adaptive Routing Memory | COMPLETE / LOCAL PASS; not accepted or public |
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
+| RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
 
 ## RC18 real-world Pi/9Router compatibility repair
 
@@ -113,6 +115,37 @@ configurable periodic sync, catalog/capability diffing, per-route capability
 views, provenance, last-known-good snapshots, stale indicators, safe user
 overrides, and a clear distinction between provider-advertised capabilities and
 empirically observed capabilities. RC18 does not implement this requirement.
+
+## RC22 — Canonical model selector presentation
+
+- **Status:** `IMPLEMENTED / LOCAL CANDIDATE`; package
+  `pi-multi-orchestrator@0.1.0-rc.22`. RC21 remains the public npm/GitHub
+  prerelease; RC22 is not stable or production-ready.
+- **Implementation:** one shared canonical model-option presentation helper is
+  used by the Model Router, Investigation/Implementation/Verification Pool
+  editors and Add Route flows, Route Health, Smart Routing Primary/Fallback,
+  and Recommendation Analyst. Normal rows show the remote model ID once;
+  duplicate visible names receive deterministic `#1`/`#2` suffixes while
+  preserving distinct internal route values. Inspect and diagnostics retain
+  exact route IDs for identity and troubleshooting.
+- **Release identity:** code commit
+  `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, tree
+  `6bf89664015cee47c5ee2e98692666c94e030384`, source digest
+  `fc06fa0e39d4ba7cf139a37ccd97d2d5a558dafc48fc844b077c2a85eade52e7`,
+  artifact `pi-multi-orchestrator-0.1.0-rc.22.tgz`, artifact SHA-256
+  `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`, and
+  independent bundle-root SHA-256
+  `a81f34cf41709de5ebef4fe8e1733e883be8e5849dd7f371dc34070bff6170c3`.
+- **Verification:** exact detached release verification passed `250/250`
+  tests across 13 suites, typecheck/build, `20/20` integrity attacks, and
+  worker-safety checks. The isolated Pi install evidence is bound to Pi
+  `0.84.1` and reports RC22 installed and verified; live calls and paid
+  inference were both zero.
+- **Boundary:** the artifact was frozen from the code commit above and pushed
+  to `origin/main`. No npm publication, immutable tag, GitHub release, live
+  Pi configuration, provider account, credential store, or model request was
+  performed. This documentation update is a separate state-record commit and
+  does not rebuild or repack the artifact.
 
 ## RC21 — Model Router dogfood repair
 

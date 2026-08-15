@@ -389,6 +389,29 @@ provenance, last-known-good state, stale indicators, safe user overrides, and
 the distinction between provider-advertised and empirically observed
 capabilities. This is explicitly outside RC18.
 
+## RC22 — Canonical model selector presentation
+
+Status: IMPLEMENTED / LOCAL CANDIDATE; not accepted, public, stable, or
+production-ready. RC21 remains the public prerelease.
+
+RC22 adds one shared canonical model-option presentation helper and applies it
+to the Model Router, Investigation/Implementation/Verification Pool editors
+and Add Route flows, Route Health, Smart Routing Primary/Fallback, and
+Recommendation Analyst. Normal rows use the remote model ID once; duplicate
+visible names receive deterministic suffixes while distinct route values stay
+distinct. Internal route IDs, `ACTIVE`, and Thinking metadata are removed from
+normal selectors; Inspect and diagnostics retain exact route identity.
+
+Exit evidence: source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`;
+detached `250/250 PASS` across 13 suites; typecheck/build; `20/20` integrity
+attacks; worker-safety PASS; and isolated Pi `0.84.1` install evidence PASS
+for `0.1.0-rc.22`. Artifact SHA-256 is
+`7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea` and the
+bundle-root SHA-256 is
+`a81f34cf41709de5ebef4fe8e1733e883be8e5849dd7f371dc34070bff6170c3`.
+No npm publication, tag, GitHub release, live Pi configuration, provider
+account, credential store, or model request was performed.
+
 ## RC21 — Model Router dogfood repair
 
 Status: PUBLISHED / PRERELEASE; public npm and GitHub dogfood release, not
