@@ -4,6 +4,28 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC19 — Pi 9Router onboarding and adoption
+
+- **Date/status:** 2026-08-15; implementation complete as a local `0.1.0-rc.19`
+  candidate. Public publication, tag, push, and GitHub prerelease remain release
+  gates for this entry.
+- **Existing Pi provider:** the host now consumes Pi `0.84.1`'s credential-blind
+  `Provider.getModels()` catalog, exposes all bounded external 9Router models in
+  Models & 9Router, and preserves external provider ownership across reconcile,
+  reload, refresh, and disposal. Enabling an external model creates PMO route
+  state only and does not assign a pool or copy credentials.
+- **First-run setup:** the no-provider path offers TUI-only masked API-key input,
+  explicit `Test & Save`, bounded `/v1/models` validation before persistence, and
+  Pi auth API storage. PMO persists only `{store:"pi-auth",key:"9router"}`;
+  RPC setup fails closed because Pi `0.84.1` has no masked RPC field.
+- **Pi bridge:** provider registration leaves `apiKey` absent for Pi-auth-backed
+  projections so Pi resolves the stored credential; env-backed projections keep
+  their existing `$ENV_NAME` behavior. External refresh uses the bound Pi model
+  registry rather than incorrectly requiring a PMO gateway.
+- **Validation:** RC19 focused U/I/TUI/RPC tests, Pi auth-storage API probe,
+  typecheck, and build passed locally. Full release verification and public
+  publication are recorded only after the clean exact-Git release gate.
+
 ## RC17 public prerelease publication
 
 - **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE`. The immutable RC17

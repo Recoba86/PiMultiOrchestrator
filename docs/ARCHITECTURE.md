@@ -120,7 +120,7 @@ Responsibilities:
 - return secret-bearing values in memory for the shortest practical lifetime;
 - redact failures before they leave the module.
 
-Approved stores may include Pi's auth provider, environment variables, and macOS Keychain. Configuration, history, SQLite, exports, analytics, and diagnostics store the reference/type only. M2 implements environment references only. Discovery resolves the value at the request boundary; Pi provider registration receives `$ENV_NAME`, never the resolved value. Pi auth and Keychain resolution remain unavailable rather than falling back to plaintext.
+Approved stores may include Pi's auth provider, environment variables, and macOS Keychain. Configuration, history, SQLite, exports, analytics, and diagnostics store the reference/type only. M2 implements environment references, and RC19 uses Pi's public auth API for the explicit TUI setup path. Discovery resolves the value at the request boundary; env-backed Pi provider registration receives `$ENV_NAME`, never the resolved value. Pi-auth-backed registration omits `apiKey` so Pi resolves its stored credential; a placeholder is never passed as a literal key. Keychain resolution remains unavailable rather than falling back to plaintext.
 
 ### 5.4 `catalog` and `host/pi-provider-bridge`
 
@@ -152,6 +152,17 @@ standalone PMO registration and `--list-models` behavior when the namespace is
 absent without changing the public route/config schema. Pi 0.84.1 has no
 owner token, so a provider created dynamically by another extension after both
 probes remains outside what this API can prove.
+
+RC19 adds a source-aware adoption path. A bound external provider's complete
+`getModels()` catalog is merged into the Models & 9Router view without asking
+Pi's auth-filtered `getAvailable()` list to define visibility. Explicitly
+enabled external rows create PMO route/config state but do not replace the
+external provider or auto-assign a pool. External refresh delegates to the
+bound Pi registry; PMO-owned/env-backed refresh continues through the PMO
+catalog client. With no provider, the host offers a TUI-only masked key
+component, tests `/v1/models` before saving, calls Pi `ModelRuntime.login`, and
+stores only a fixed `pi-auth` reference. RPC setup fails closed because the
+installed Pi contract has no sensitive input field.
 
 ### 5.5 `pools` and `policy`
 

@@ -14,8 +14,9 @@ This file records releasable product state. It does not promote development prog
 | Public stable release | NONE |
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.17` — GitHub prerelease and npm `next` |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.17` — source-bound public prerelease; RC18 remains local |
+| Development manifest version | `0.1.0-rc.19` — RC19 local candidate; RC17 remains the currently public prerelease until RC19 publication |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
+| RC19 onboarding/adoption candidate | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, and U/I/TUI/RPC coverage; release gates pending |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
 | Local technical release readiness | PUBLISHED PRERELEASE — detached verification, live canonical M7, and technical TUI gates pass; not stable/production-ready |
 | Release tag | `v0.1.0-rc.17` → `5def791b31a7ad940ed87f6e720aabb0228500e7` |

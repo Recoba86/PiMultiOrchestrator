@@ -415,3 +415,22 @@ Product behavior is accepted only through measurable cases in [ACCEPTANCE_TESTS.
   no raw prompt or credential fields. Existing M12.1 Mission entry, Direct
   Worker/M7 distinction, M12.2 Primary/Fallback capability-only semantics,
   TrustStore, and safety policies MUST remain unchanged.
+
+## 22. RC19 Pi 9Router onboarding and adoption
+
+- An existing Pi `9router` provider MUST remain external. PMO MUST read its
+  bounded `Provider.getModels()` catalog, expose exact model IDs in Models &
+  9Router, and MUST NOT register, replace, or unregister that provider.
+- Explicit external-model enablement MAY create PMO route/config state, but MUST
+  not copy credentials, replace the Pi provider, or assign a pool automatically.
+- With no provider, Models & 9Router MUST show a neutral setup path. TUI setup
+  MUST collect the API key in a masked component, expose explicit `Test & Save`,
+  test `/v1/models` before persistence, and use Pi's secure auth API. PMO MUST
+  persist only a `pi-auth` reference and MUST never persist or display the raw
+  key.
+- Pi-auth-backed provider registration MUST omit a literal `apiKey` so Pi can
+  resolve its stored credential. RPC setup MUST fail closed until Pi supplies a
+  sensitive-input contract. External refresh MUST use the bound Pi registry;
+  PMO-owned/env-backed refresh MUST continue through the PMO catalog client.
+- RC19 MUST preserve the existing PMO provider/pool behavior and verify the
+  full package/release boundary separately from live provider calls.

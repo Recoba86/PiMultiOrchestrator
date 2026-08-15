@@ -270,4 +270,35 @@ describe("NineRouterManager", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("[RC19][I][fixture-pi-0.84.1] adopts an existing Pi catalog without importing credentials or shrinking it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-m2-manager-pi-adoption-"));
+    try {
+      const configStore = new ConfigStore({ root });
+      const manager = new NineRouterManager({
+        configStore,
+        cacheStore: new CatalogCacheStore(root),
+        client: new NineRouterClient({ fetchImpl: async () => response([]) }),
+      });
+      const models = Array.from({ length: 27 }, (_, index) => ({ id: `pi-model-${index}`, name: `Pi Model ${index}`, reasoning: index % 2 === 0, input: ["text"] as const, contextWindow: 128_000, maxTokens: 8_000 }));
+      await manager.adoptPiProviderCatalog({ providerId: "9router", available: true, baseUrl: "http://127.0.0.1:4300/v1", models });
+
+      const status = await manager.loadStatus();
+      assert.equal(status.state, "pi-provider-ready");
+      assert.equal(status.catalogEntries, 27);
+      assert.equal(status.piProviderModels, 27);
+      assert.deepEqual((await manager.list()).map((row) => row.remoteModelId), models.map((model) => model.id));
+      assert.ok((await manager.list()).every((row) => row.sourceLabel === "Pi 9Router" && row.status === "new"));
+
+      await manager.setEnabled("pi-model-0", true);
+      const persisted = (await configStore.load()).snapshot!.config;
+      assert.equal(persisted.gateways.ninerouter?.credentialRef, undefined);
+      assert.equal(Object.values(persisted.routes).find((route) => route.remoteModelId === "pi-model-0")?.enabled, true);
+      const projection = await manager.providerProjection();
+      assert.equal(projection.apiKeyReference, undefined);
+      assert.deepEqual(projection.models.map((model) => model.id), ["pi-model-0"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

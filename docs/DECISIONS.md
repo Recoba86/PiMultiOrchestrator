@@ -315,3 +315,23 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   with conservative defaults only when fields are absent. A provider created
   dynamically by another extension after both probes remains unprovable under
   Pi 0.84.1's public API. Dynamic Route Catalog & Capability Sync is deferred.
+
+## ADR-039 — RC19 adopts Pi providers and delegates secure setup to Pi auth
+
+- **Decision:** Treat an existing Pi `9router` provider as the authoritative
+  external catalog and read its credential-blind `getModels()` result without
+  registration, replacement, or unregistration. Keep PMO route enablement and
+  pool assignment explicit. When no provider exists, offer a TUI-only masked
+  API-key flow with explicit Test & Save; test `/v1/models` first, then call
+  Pi's public `ModelRuntime.login` API and persist only a fixed `pi-auth`
+  reference in PMO configuration. RPC raw-key setup fails closed.
+- **Rationale:** Pi `0.84.1` exposes the complete provider catalog through
+  `getModels()` even when auth-filtered availability is empty, and it already
+  owns restrictive auth storage. Registering a `$PMO_PI_AUTH` placeholder would
+  make Pi treat it as a literal/configured key, so Pi-auth-backed provider
+  registration must omit `apiKey` and rely on stored credentials.
+- **Consequences:** External provider ownership remains outside PMO; existing
+  models stay intact through refresh/reload/disposal. PMO config/history/cache
+  contain no raw key. A failed test cannot persist setup state. Secure setup is
+  TUI-only until Pi exposes an equivalent masked RPC input contract; Keychain
+  fallback and automatic pool assignment remain out of scope.

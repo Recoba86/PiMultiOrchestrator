@@ -40,9 +40,14 @@ import {
 	NINEROUTER_PROVIDER_ID as DOMAIN_NINEROUTER_PROVIDER_ID,
 	NineRouterError,
 	NineRouterManagerError,
+	EnvSecretResolver,
 	SecretResolutionError,
+	NINEROUTER_PI_AUTH_REFERENCE,
 	type CatalogRow,
+	type PiProviderCatalog,
+	type PiProviderCatalogModel,
 	type ProviderProjection,
+	type SecretResolver,
 } from "../core/ninerouter/index.js";
 import {
 	createSubagentExecutor,
@@ -209,12 +214,17 @@ export interface PiManagerContract {
 		options?: { readonly activeRemoteModelId?: string },
 	): MaybePromise<unknown>;
 	providerProjection(): MaybePromise<ProviderProjection | undefined>;
+	testConnection?(baseUrl: string, secret: string, signal?: AbortSignal): MaybePromise<readonly unknown[]>;
+	adoptPiProviderCatalog?(catalog: PiProviderCatalog): MaybePromise<void>;
 }
 
 export interface PiHostOptions {
 	readonly manager: PiManagerContract;
 	/** Existing Pi provider catalog, when the runtime has bound its model registry. */
 	readonly providerRegistry?: PiProviderRegistry;
+	readonly providerRegistryRef?: { current?: PiProviderRegistry };
+	/** Pi's secure auth API; the key is never placed in PMO configuration. */
+	readonly credentialSetup?: PiCredentialSetup;
 	readonly poolManager?: PoolManagerContract;
 	readonly configStore?: ConfigStore;
 	readonly healthStore?: HealthStore;
@@ -238,6 +248,12 @@ export interface PiHostOptions {
 
 export interface PiProviderRegistry {
 	getProvider(providerId: string): unknown;
+	getAvailableModels?(providerId: string): MaybePromise<readonly unknown[]>;
+	refresh?(options?: { readonly providers?: readonly string[]; readonly allowNetwork?: boolean }): MaybePromise<unknown>;
+}
+
+export interface PiCredentialSetup {
+	setApiKey(providerId: string, baseUrl: string, secret: string): Promise<void>;
 }
 
 export interface ReconcileResult {
@@ -351,7 +367,96 @@ const modelLabel = (entry: ModelManagerEntry): string => {
 	const ambiguity = entry.status === "ambiguous" ? " ! ambiguous" : "";
 	const display = entry.displayName && entry.displayName !== entry.remoteModelId ? ` — ${entry.displayName}` : "";
 	const route = entry.routeId ? ` (${entry.routeId})` : "";
-	return `${enabled} ${entry.remoteModelId}${display}${route}${state}${ambiguity}`;
+	const source = entry.sourceLabel === "Pi 9Router" ? " [Pi 9Router]" : "";
+	return `${enabled} ${entry.remoteModelId}${display}${route}${source}${state}${ambiguity}`;
+};
+
+const asPiProviderCatalogModel = (value: unknown): PiProviderCatalogModel | undefined => {
+	if (!value || typeof value !== "object") return undefined;
+	const candidate = value as Record<string, unknown>;
+	if (typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > 256 || /\p{Cc}/u.test(candidate.id)) return undefined;
+	const input = Array.isArray(candidate.input)
+		? candidate.input.filter((item): item is "text" | "image" => item === "text" || item === "image")
+		: undefined;
+	const bounded = (item: unknown): number | undefined => typeof item === "number" && Number.isSafeInteger(item) && item > 0 && item <= 10_000_000 ? item : undefined;
+	const contextWindow = bounded(candidate.contextWindow);
+	const maxTokens = bounded(candidate.maxTokens);
+	return {
+		id: candidate.id,
+		...(typeof candidate.name === "string" && candidate.name.length > 0 ? { name: candidate.name.slice(0, 160) } : {}),
+		...(typeof candidate.reasoning === "boolean" ? { reasoning: candidate.reasoning } : {}),
+		...(input && input.length > 0 ? { input: [...new Set(input)] } : {}),
+		...(contextWindow === undefined ? {} : { contextWindow }),
+		...(maxTokens === undefined ? {} : { maxTokens }),
+	};
+};
+
+const providerBaseUrl = (provider: unknown): string | undefined => {
+	if (!provider || typeof provider !== "object") return undefined;
+	const value = (provider as Record<string, unknown>).baseUrl;
+	return typeof value === "string" && value.length <= 2048 ? value : undefined;
+};
+
+const providerModels = (provider: unknown): readonly unknown[] => {
+	if (!provider || typeof provider !== "object") return [];
+	const getModels = (provider as { readonly getModels?: unknown }).getModels;
+	if (typeof getModels === "function") {
+		try {
+			const models = getModels.call(provider);
+			if (Array.isArray(models)) return models;
+		} catch { return []; }
+	}
+	const value = (provider as Record<string, unknown>).models;
+	return Array.isArray(value) ? value : [];
+};
+
+const providerVisibleModels = (registry: unknown): readonly PiProviderCatalogModel[] => {
+	if (!registry || typeof registry !== "object") return [];
+	const candidate = registry as { getProvider?: (providerId: string) => unknown; getAvailable?: () => readonly unknown[] };
+	try {
+		const raw = typeof candidate.getProvider === "function"
+			? providerModels(candidate.getProvider(NINEROUTER_PROVIDER_ID))
+			: typeof candidate.getAvailable === "function" ? candidate.getAvailable() : [];
+		return raw.map(asPiProviderCatalogModel).filter((model): model is PiProviderCatalogModel => model !== undefined);
+	} catch {
+		return [];
+	}
+};
+
+/** TUI-only masked input. The value is kept in the component closure and is never rendered. */
+const readMaskedSecret = async (ctx: ExtensionCommandContext, title: string): Promise<string | undefined> => {
+	if (ctx.mode !== "tui" || typeof ctx.ui.custom !== "function") return undefined;
+	return ctx.ui.custom((_tui, _theme, _keybindings, done) => {
+		let value = "";
+		let cancelled = false;
+		const component = {
+			focused: true,
+			render: (_width: number): string[] => [`${title}: ${"*".repeat(value.length)}  (Enter to save, Esc to cancel)`],
+			invalidate: (): void => undefined,
+			handleInput: (data: string): void => {
+				if (data === "\u001b") {
+					cancelled = true;
+					done(undefined);
+					return;
+				}
+				if (data === "\r" || data === "\n") {
+					const result = value;
+					value = "";
+					done(result);
+					return;
+				}
+				if (data === "\u007f" || data === "\b") {
+					value = value.slice(0, -1);
+					return;
+				}
+				if (!cancelled && [...data].every((character) => {
+					const code = character.charCodeAt(0);
+					return code >= 0x20 && code !== 0x7f && !(code >= 0x80 && code <= 0x9f);
+				})) value += data;
+			},
+		};
+		return component as never;
+	});
 };
 
 const poolLabels: Record<PoolId, string> = {
@@ -549,7 +654,6 @@ const asProviderConfig = (projection: ProviderProjection): ProviderConfig | unde
 		name: "9Router",
 		baseUrl: projection.baseUrl,
 		api: "openai-completions",
-		apiKey: projection.apiKeyReference,
 		authHeader: projection.authHeader,
 		models: projection.models.map((model): ProviderModelConfig => ({
 			id: model.id,
@@ -561,32 +665,54 @@ const asProviderConfig = (projection: ProviderProjection): ProviderConfig | unde
 			maxTokens: model.maxTokens,
 		})),
 	};
+	if (projection.apiKeyReference !== NINEROUTER_PI_AUTH_REFERENCE) config.apiKey = projection.apiKeyReference;
 	return config;
 };
 
 /** Resolve one current route without selecting a worker pool or copying credentials. */
-async function resolveHostRoute(manager: PiManagerContract, routeId: StableId): Promise<ResolvedWorkerRoute> {
+async function resolveHostRoute(manager: PiManagerContract, routeId: StableId, providerRegistry?: PiProviderRegistry): Promise<ResolvedWorkerRoute> {
 	const projection = await manager.providerProjection();
 	const selected = projection?.models.find((model) => model.routeId === routeId);
-	if (!projection?.baseUrl || !projection.apiKeyReference || !selected) {
+	if (!selected) {
 		throw new TriageCapabilityError("unavailable", "Selected route is not currently registered");
 	}
+	let externalProvider: unknown;
+	try { externalProvider = providerRegistry?.getProvider(NINEROUTER_PROVIDER_ID); } catch { externalProvider = undefined; }
+	const externalModel = providerModels(externalProvider).find((model) => asPiProviderCatalogModel(model)?.id === selected.id);
+	if (externalProvider && externalModel) {
+		const runtime = await RuntimeModelRuntime.create({ modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
+		try {
+			runtime.registerNativeProvider(externalProvider as never);
+			await runtime.refresh({ providers: [NINEROUTER_PROVIDER_ID], allowNetwork: false });
+		} catch {
+			throw new TriageCapabilityError("unavailable", "The existing Pi 9Router provider is unavailable");
+		}
+		const model = runtime.getModel(NINEROUTER_PROVIDER_ID, selected.id);
+		if (!model || model.id !== selected.id) throw new TriageCapabilityError("unavailable", "Selected route model is unavailable");
+		return { routeId, remoteModelId: selected.id, model: model as never, modelRuntime: runtime };
+	}
+	if (!projection?.baseUrl || !projection.apiKeyReference) {
+		throw new TriageCapabilityError("unavailable", "Selected route is not currently registered");
+	}
+	const usesPiAuth = projection.apiKeyReference === NINEROUTER_PI_AUTH_REFERENCE;
 	const runtime = await RuntimeModelRuntime.create({
 		modelsPath: null,
 		allowModelNetwork: false,
 		refreshOnCreate: false,
-		credentials: {
-			read: async () => undefined,
-			list: async () => [],
-			modify: async (_provider: string, fn: (current: undefined) => Promise<undefined>) => fn(undefined),
-			delete: async () => undefined,
-		} as never,
+		...(usesPiAuth ? {} : {
+			credentials: {
+				read: async () => undefined,
+				list: async () => [],
+				modify: async (_provider: string, fn: (current: undefined) => Promise<undefined>) => fn(undefined),
+				delete: async () => undefined,
+			} as never,
+		}),
 	});
 	runtime.registerProvider(projection.providerId, {
 		name: "9Router",
 		baseUrl: projection.baseUrl,
 		api: projection.api,
-		apiKey: projection.apiKeyReference,
+		...(usesPiAuth ? {} : { apiKey: projection.apiKeyReference }),
 		authHeader: projection.authHeader,
 		models: [{
 			id: selected.id,
@@ -604,9 +730,9 @@ async function resolveHostRoute(manager: PiManagerContract, routeId: StableId): 
 	return { routeId, remoteModelId: selected.id, model: model as never, modelRuntime: runtime };
 }
 
-const createHostTriageClient = (manager: PiManagerContract): TriageClient => ({
+const createHostTriageClient = (manager: PiManagerContract, providerRegistry?: () => PiProviderRegistry | undefined): TriageClient => ({
 	classify: async (request, routeId, signal) => {
-		const route = await resolveHostRoute(manager, routeId);
+			const route = await resolveHostRoute(manager, routeId, providerRegistry?.());
 		let response: Awaited<ReturnType<typeof route.modelRuntime.completeSimple>>;
 		try {
 			response = await route.modelRuntime.completeSimple(route.model, {
@@ -632,6 +758,7 @@ async function createHostSubagentExecutor(
 	healthStore: HealthStore | undefined,
 	resultProtocolFactory?: (request: SubagentExecutionRequest) => ResultProtocolSpec,
 	trustStore?: TrustStore,
+	providerRegistry?: () => PiProviderRegistry | undefined,
 ): Promise<SubagentExecutor> {
 	const loaded = await configStore.load();
 	const initialPolicy = loaded.snapshot?.config.routing ?? createDefaultConfig().routing;
@@ -664,7 +791,7 @@ async function createHostSubagentExecutor(
 			};
 		},
 		resolveRoute: async (routeId) => {
-			try { return await resolveHostRoute(manager, routeId); }
+			try { return await resolveHostRoute(manager, routeId, providerRegistry?.()); }
 			catch (error) { throw error instanceof WorkerError ? error : new WorkerError("route-resolution", "Selected route is not currently registered"); }
 		},
 		...(healthStore ? {
@@ -739,7 +866,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		// AUTO_MISSION; the source/evidence checks above keep this adapter fail-closed.
 		return { mode: action === "mission" ? "AUTO_MISSION" : "NORMAL", reasonCodes: ["routing_memory_hit"], ...(source === undefined ? {} : { source }), action, ...(confidence === undefined ? {} : { confidence }), ...(similarity === undefined ? {} : { similarity }), ...(ruleId === undefined ? {} : { ruleId }) };
 	};
-	const smartRouter = new SmartRouter({ settings: loadSmartRoutingSettings, triageClient: options.triageClient ?? createHostTriageClient(manager) });
+	let providerRegistry = options.providerRegistry ?? options.providerRegistryRef?.current;
+	const smartRouter = new SmartRouter({ settings: loadSmartRoutingSettings, triageClient: options.triageClient ?? createHostTriageClient(manager, () => providerRegistry) });
 	const analytics = analyticsStore ? new AnalyticsQueryService(analyticsStore) : undefined;
 	const recommendationApplication = analyticsStore ? new RecommendationApplicationService(analyticsStore, poolManager) : undefined;
 	const sanitizer = new SecretSanitizer();
@@ -747,11 +875,44 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		try { const result = analyticsStore?.append(event); if (result && typeof (result as Promise<unknown>).then === "function") void (result as Promise<unknown>).catch(() => undefined); } catch { /* analytics is non-critical */ }
 	};
 	let registeredFingerprint: string | undefined;
-	let providerRegistry = options.providerRegistry;
 	let ownership: "unknown" | "external" | "owned" = "unknown";
 	let disposed = false;
 	const lifetime = new AbortController();
 	let routingEventSequence = 0;
+
+	const syncPiProviderCatalog = async (): Promise<void> => {
+		if (!manager.adoptPiProviderCatalog || !providerRegistry) return;
+		if (ownership === "owned") {
+			await manager.adoptPiProviderCatalog({ providerId, available: false, models: [] });
+			return;
+		}
+		let provider: unknown;
+		try { provider = providerRegistry.getProvider(providerId); }
+		catch {
+			await manager.adoptPiProviderCatalog({ providerId, available: false, models: [] });
+			return;
+		}
+		if (provider === undefined) {
+			await manager.adoptPiProviderCatalog({ providerId, available: false, models: [] });
+			return;
+		}
+		let rawModels: readonly unknown[] = [];
+		try {
+			rawModels = providerRegistry.getAvailableModels
+				? await providerRegistry.getAvailableModels(providerId)
+				: providerModels(provider);
+		} catch {
+			rawModels = providerModels(provider);
+		}
+		const models = rawModels.map(asPiProviderCatalogModel).filter((model): model is PiProviderCatalogModel => model !== undefined).slice(0, 512);
+		const baseUrl = providerBaseUrl(provider);
+		await manager.adoptPiProviderCatalog({
+			providerId,
+			available: true,
+			...(baseUrl === undefined ? {} : { baseUrl }),
+			models,
+		});
+	};
 
 	const notifyError = (ctx: ExtensionContext | ExtensionCommandContext, prefix: string, error: unknown): void => {
 		ctx.ui.notify(`${prefix}: ${sanitizer.sanitizeText(errorMessage(error))}`, "error");
@@ -765,6 +926,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const reconcile = async (): Promise<ReconcileResult> => {
 		if (disposed) return { changed: false, registered: false, modelCount: 0 };
+		await syncPiProviderCatalog();
 		const projection = await manager.providerProjection();
 		const config = projection ? asProviderConfig(projection) : undefined;
 		if (ownership !== "owned" && providerRegistry) {
@@ -816,19 +978,27 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const refreshAndReconcile = async (ctx: ExtensionContext | ExtensionCommandContext): Promise<void> => {
 		if (!requireIdle(ctx)) return;
 		try {
-			await manager.refresh(AbortSignal.any(ctx.signal ? [ctx.signal, lifetime.signal] : [lifetime.signal]));
+			let externalProvider: unknown;
+			try { externalProvider = providerRegistry?.getProvider(providerId); } catch { externalProvider = undefined; }
+			if (externalProvider !== undefined) {
+				await providerRegistry?.refresh?.({ providers: [providerId], allowNetwork: true });
+				await syncPiProviderCatalog();
+			} else {
+				await manager.refresh(AbortSignal.any(ctx.signal ? [ctx.signal, lifetime.signal] : [lifetime.signal]));
+			}
 			const result = await reconcile();
 			if (result.error) {
 				notifyError(ctx, "9Router provider activation failed", result.error);
 				return;
 			}
-			ctx.ui.notify(`9Router refreshed (${result.modelCount} enabled model${result.modelCount === 1 ? "" : "s"})`, "info");
+			ctx.ui.notify(`${externalProvider !== undefined ? "Pi 9Router models refreshed" : "9Router refreshed"} (${result.modelCount} enabled model${result.modelCount === 1 ? "" : "s"})`, "info");
 		} catch (error) {
 			notifyError(ctx, "9Router refresh failed", error);
 		}
 	};
 
 	const modelEntries = async (filter?: string): Promise<readonly ModelManagerEntry[]> => {
+		await syncPiProviderCatalog();
 		const raw = await manager.list(filter);
 		return raw.map(normalizeModelEntry).filter((entry): entry is ModelManagerEntry => entry !== undefined);
 	};
@@ -884,7 +1054,13 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			return;
 		}
 		if (entries.length === 0) {
-			ctx.ui.notify(filter ? `No 9Router models match '${filter}'` : "No 9Router models discovered", "warning");
+			if (filter) {
+				ctx.ui.notify(`No 9Router models match '${filter}'`, "warning");
+				return;
+			}
+			const action = await ctx.ui.select("Models & 9Router", ["Set Up 9Router", "Use Advanced env reference", "Back"]);
+			if (action === "Set Up 9Router") await setupConnection(ctx);
+			else if (action === "Use Advanced env reference") await configureConnection(ctx);
 			return;
 		}
 		while (true) {
@@ -924,10 +1100,48 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			]);
 			const enabled = entries.filter((entry) => entry.enabled).length;
 			const projected = projection?.models.length ?? 0;
-			const available = ctx.modelRegistry.getAvailable().filter((model) => model.provider === providerId).length;
+			const available = providerVisibleModels(ctx.modelRegistry).length;
 			ctx.ui.notify(`${safeStatusLine(status)} catalog=${entries.length} enabled=${enabled} projected=${projected} available=${available}`, "info");
 		} catch (error) {
 			notifyError(ctx, "9Router status failed", error);
+		}
+	};
+
+	const setupConnection = async (ctx: ExtensionCommandContext): Promise<void> => {
+		if (ctx.mode !== "tui") {
+			ctx.ui.notify("Set Up 9Router requires TUI mode so the API key can be masked", "error");
+			return;
+		}
+		if (!requireIdle(ctx)) return;
+		if (!manager.testConnection || !options.credentialSetup) {
+			ctx.ui.notify("Secure setup is unavailable in this Pi runtime. Use Advanced env:NINEROUTER_API_KEY instead; no plaintext fallback is permitted.", "warning");
+			return;
+		}
+		const baseUrl = await ctx.ui.input("9Router base URL", "http://127.0.0.1:3000");
+		if (!baseUrl?.trim()) return;
+		let secret = await readMaskedSecret(ctx, "9Router API key");
+		if (!secret) return;
+		try {
+			if (!(await ctx.ui.confirm("Test & Save 9Router connection?", "The API key will be tested, then stored in Pi auth."))) return;
+			const tested = await manager.testConnection(baseUrl.trim(), secret, ctx.signal);
+			await options.credentialSetup.setApiKey(providerId, baseUrl.trim(), secret);
+			await manager.configure(baseUrl.trim(), { store: "pi-auth", key: providerId });
+			try {
+				await manager.refresh(ctx.signal);
+			} catch {
+				ctx.ui.notify("Connected and saved securely, but the catalog refresh failed; retry 9Router refresh.", "warning");
+				return;
+			}
+			const result = await reconcile();
+			if (result.error) {
+				notifyError(ctx, "9Router provider activation failed", result.error);
+				return;
+			}
+			ctx.ui.notify(`Connected to 9Router; ${tested.length} model${tested.length === 1 ? "" : "s"} discovered. Browse Models & 9Router or configure a pool.`, "info");
+		} catch (error) {
+			notifyError(ctx, "9Router setup failed", error);
+		} finally {
+			secret = "";
 		}
 	};
 
@@ -978,14 +1192,15 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const view = await poolManager.getPool(poolId);
 		const projection = await Promise.resolve(manager.providerProjection()).catch(() => undefined);
 		const projected = projection ? new Set(projection.models.map((model) => model.routeId)) : undefined;
-		const available = ctx.modelRegistry?.getAvailable() ?? [];
+		const available = providerVisibleModels(ctx.modelRegistry);
 		return {
 			...view,
 			entries: view.entries.map((entry) => ({
 				...entry,
+				...(entry.state === "unknown" && available.some((model) => model.id === entry.remoteModelId) ? { state: "active" as const } : {}),
 				...(projected ? { projectedPiAvailable: projected.has(entry.routeId) } : {}),
 				...(ctx.modelRegistry ? {
-					actualPiAvailable: available.some((model) => model.provider === NINEROUTER_PROVIDER_ID && model.id === entry.remoteModelId),
+					actualPiAvailable: available.some((model) => model.id === entry.remoteModelId),
 				} : {}),
 			})),
 		};
@@ -1194,6 +1409,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const gateway = value.gateway;
 		const cache = value.cache;
 		const state = typeof value.state === "string" ? value.state.toUpperCase() : "";
+		if (state === "PI-PROVIDER-READY") return "PI-READY";
+		if (state === "UNCONFIGURED") return "SETUP";
+		if (state === "READY") return "READY";
 		if (state.includes("LIVE") || state === "REACHABLE") return "LIVE";
 		if (state.includes("STALE")) return "STALE";
 		if (state.includes("CORRUPT") || state.includes("ERROR")) return "ERROR";
@@ -3232,7 +3450,11 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	if (piOn) piOn.call(pi, "input", handleInput);
 
 	const setProviderRegistry = (registry: PiProviderRegistry): void => {
-		if (!disposed) providerRegistry = registry;
+		if (!disposed) {
+			providerRegistry = registry;
+			if (options.providerRegistryRef) options.providerRegistryRef.current = registry;
+			void syncPiProviderCatalog();
+		}
 	};
 
 	return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.routingMemoryStore ? { routingMemoryStore: options.routingMemoryStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, setProviderRegistry, registerCommands, dispose };
@@ -3253,12 +3475,43 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 				delete: async () => undefined,
 			} as never,
 		});
-		providerRegistry = { getProvider: (providerId) => providerProbe.getProvider(providerId) };
+		providerRegistry = {
+			getProvider: (providerId) => providerProbe.getProvider(providerId),
+			getAvailableModels: (providerId) => providerProbe.getModels(providerId),
+			refresh: (options) => providerProbe.refresh(options),
+		};
 	} catch {
 		// Never overwrite an uninspectable provider namespace at factory time.
 		providerRegistry = { getProvider: () => { throw new Error("Pi provider registry is unavailable"); } };
 	}
+	const providerRegistryRef: { current?: PiProviderRegistry } = { current: providerRegistry };
 	const root = process.env.PI_MULTI_ORCH_CONFIG_ROOT ?? join(runtime.getAgentDir(), "pi-multi-orchestrator");
+	const envSecretResolver = new EnvSecretResolver();
+	const secretResolver: SecretResolver = {
+		resolve: async (reference, signal) => {
+			const ref = typeof reference === "string" ? undefined : reference;
+			if (!ref || ref.store === "env") return envSecretResolver.resolve(reference, signal);
+			if (ref.store !== "pi-auth") throw new SecretResolutionError("unsupported-store", "The configured secret store is unavailable");
+			if (signal?.aborted) throw new SecretResolutionError("missing", "Secret resolution was cancelled");
+			const stored = runtime.readStoredCredential(ref.key);
+			const secret = stored?.type === "api_key" ? stored.key : undefined;
+			if (!secret) throw new SecretResolutionError("missing", "The Pi auth credential is not configured");
+			if (/[\r\n\u0000]/u.test(secret)) throw new SecretResolutionError("empty", "The Pi auth credential is unusable");
+			return secret;
+		},
+	};
+	const credentialSetup: PiCredentialSetup = {
+		setApiKey: async (providerId, baseUrl, secret) => {
+			const credentialRuntime = await RuntimeModelRuntime.create({ modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
+			credentialRuntime.registerProvider(providerId, {
+				name: "9Router",
+				baseUrl,
+				api: "openai-completions",
+				models: [],
+			});
+			await credentialRuntime.login(providerId, "api_key", { prompt: async () => secret, notify: () => undefined });
+		},
+	};
 	const configStore = new ConfigStore({ root });
 	const smartRoutingStore = new SmartRoutingSettingsStore({ root });
 	const routingMemoryStore = new RoutingMemoryStore({ root });
@@ -3271,7 +3524,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 		// Telemetry is non-critical; execution remains available if its DB is unavailable.
 		analyticsStore = undefined;
 	}
-	const manager = createNineRouterManager(root, configStore) as PiManagerContract;
+	const manager = createNineRouterManager(root, configStore, secretResolver) as PiManagerContract;
 	const poolManager = createPoolManager(root, configStore);
 	const healthStore = new HealthStore({ root });
 	let missionStore: MissionStoreAdapter | undefined;
@@ -3287,21 +3540,21 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	}
 	let subagentExecutor: SubagentExecutor | undefined;
 	try {
-		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, undefined, trustStore);
+		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, undefined, trustStore, () => providerRegistryRef.current);
 	} catch {
 		// Keep the M2/M3/M4 host available when no configured route can yet be resolved.
 		subagentExecutor = undefined;
 	}
 	let qualityExecutor: SubagentExecutor | undefined;
 	try {
-		qualityExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, () => createVerificationResultProtocol(), trustStore);
+		qualityExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, () => createVerificationResultProtocol(), trustStore, () => providerRegistryRef.current);
 	} catch {
 		qualityExecutor = undefined;
 	}
 	let recommendationAnalyst: RecommendationAnalystService | undefined;
 	if (analyticsStore) {
 		let analystExecutor: SubagentExecutor | undefined;
-		try { analystExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => createAnalystResultProtocol(request), trustStore); } catch { analystExecutor = undefined; }
+		try { analystExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => createAnalystResultProtocol(request), trustStore, () => providerRegistryRef.current); } catch { analystExecutor = undefined; }
 		recommendationAnalyst = createRecommendationAnalyst({
 			store: analyticsStore,
 			routeProvider: async (): Promise<readonly AnalystRoute[]> => {
@@ -3334,7 +3587,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 			},
 		});
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, routingMemoryStore, healthStore, trustStore, providerRegistry, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, routingMemoryStore, healthStore, trustStore, providerRegistry, providerRegistryRef, credentialSetup, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();

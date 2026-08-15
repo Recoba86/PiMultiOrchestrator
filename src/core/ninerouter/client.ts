@@ -1,4 +1,4 @@
-import { EnvSecretResolver } from "./secrets.js";
+import { EnvSecretResolver, type SecretResolver } from "./secrets.js";
 import { NineRouterError, safeCatalogErrorMessage, safeCatalogErrorStage } from "./errors.js";
 import { nineRouterModelsUrl, normalizeNineRouterBaseUrl } from "./connection.js";
 import type { CatalogCapability, CatalogCapabilityMetadata, CatalogFieldProvenance, RemoteCatalogEntry } from "./types.js";
@@ -14,7 +14,7 @@ const STABLE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 export interface NineRouterClientOptions {
   readonly baseUrl?: string;
   readonly credentialRef?: SecretRefV1;
-  readonly resolver?: EnvSecretResolver;
+  readonly resolver?: SecretResolver;
   readonly timeoutMs?: number;
   readonly maxBytes?: number;
   readonly fetchImpl?: typeof fetch;
@@ -30,7 +30,7 @@ export interface ListModelsOptions {
 export class NineRouterClient {
   private readonly configuredBaseUrl: string | undefined;
   private readonly configuredCredentialRef: SecretRefV1 | undefined;
-  private readonly resolver: EnvSecretResolver;
+  private readonly resolver: SecretResolver;
   private readonly timeoutMs: number;
   private readonly maxBytes: number;
   private readonly fetchImpl: typeof fetch;

@@ -7,9 +7,10 @@ import { NineRouterError, NineRouterManagerError, safeCatalogErrorMessage, safeC
 import { normalizeNineRouterBaseUrl, validateNineRouterGateway } from "./connection.js";
 import { NineRouterClient } from "./client.js";
 import { stableRouteId } from "./identity.js";
-import { isEnvironmentReference } from "./secrets.js";
+import { InlineSecretResolver, isEnvironmentReference, type SecretResolver } from "./secrets.js";
 import {
   NINEROUTER_GATEWAY_ID,
+  NINEROUTER_PI_AUTH_REFERENCE,
   NINEROUTER_PROVIDER_ID,
   type CatalogCacheV1,
   type CatalogRow,
@@ -19,6 +20,8 @@ import {
   type NineRouterStatus,
   type ProviderModelProjection,
   type ProviderProjection,
+  type PiProviderCatalog,
+  type PiProviderCatalogModel,
   type RefreshResult,
   type RemoteCatalogEntry,
   type SetEnabledOptions,
@@ -38,6 +41,7 @@ export class NineRouterManager {
   private readonly now: () => Date;
   private lastGatewayState: "reachable" | "unreachable" | "not-checked" = "not-checked";
   private refreshQueue: Promise<unknown> = Promise.resolve();
+  private piCatalog: PiProviderCatalog | undefined;
 
   constructor(options: NineRouterManagerOptions);
   constructor(configStore: ConfigStore, cacheStore: CatalogCacheStore, client: NineRouterClient, now?: () => Date);
@@ -67,22 +71,26 @@ export class NineRouterManager {
     const cacheResult = await this.cacheStore.load();
     const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl);
     const routes = Object.values(config.routes).filter((route) => route.gatewayId === NINEROUTER_GATEWAY_ID && route.enabled);
+    const catalogEntries = mergeCatalogEntries(cache?.entries ?? [], this.piCatalog);
     const projection = this.buildProjection(config, cacheResult);
-    const missing = cache
-      ? routes.filter((route) => !cache.entries.some((entry) => entry.remoteId === route.remoteModelId)).length
+    const missing = catalogEntries.length > 0
+      ? routes.filter((route) => !catalogEntries.some((entry) => entry.remoteId === route.remoteModelId)).length
       : 0;
+    const state = this.statusState(gateway !== undefined, catalogEntries.length, cacheResult.status === "corrupt", cache?.lastError !== undefined);
     return {
       configured: gateway !== undefined,
       gatewayId: NINEROUTER_GATEWAY_ID,
       ...(gateway ? { baseUrl: gateway.baseUrl } : {}),
       gateway: gateway?.enabled && (cache || this.lastGatewayState === "unreachable") ? this.lastGatewayState : "not-checked",
       cache: cacheResult.status === "corrupt" ? "corrupt" : !cache ? "empty" : this.cacheFreshness(cache),
-      catalogEntries: cache?.entries.length ?? 0,
+      catalogEntries: catalogEntries.length,
       enabledRoutes: routes.length,
       registeredModels: projection.models.length,
       missingEnabledRoutes: missing,
       ...(cache?.lastSuccessAt ? { lastSuccessfulRefresh: cache.lastSuccessAt } : {}),
       ...(cache?.lastError ? { lastError: cache.lastError } : {}),
+      state,
+      ...(this.piCatalog ? { piProviderAvailable: this.piCatalog.available, piProviderModels: this.piCatalog.models.length } : {}),
     };
   }
 
@@ -92,7 +100,7 @@ export class NineRouterManager {
     const cacheResult = await this.cacheStore.load();
     const gateway = config.gateways[NINEROUTER_GATEWAY_ID];
     const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl);
-    const entries = cache?.entries ?? [];
+    const entries = mergeCatalogEntries(cache?.entries ?? [], this.piCatalog);
     const configured = Object.values(config.routes).filter((route) => route.gatewayId === NINEROUTER_GATEWAY_ID);
     const routeGroups = groupRoutes(configured);
     const rows: CatalogRow[] = entries.map((entry) => this.rowFor(routeGroups.get(entry.remoteId) ?? [], entry, cache));
@@ -227,6 +235,24 @@ export class NineRouterManager {
     return { generation: mutation.generation, gatewayId: NINEROUTER_GATEWAY_ID, baseUrl: normalized };
   }
 
+  async testConnection(baseUrl: string, secret: string, signal?: AbortSignal): Promise<readonly RemoteCatalogEntry[]> {
+		const normalized = normalizeNineRouterBaseUrl(baseUrl);
+		const client = new NineRouterClient({ resolver: new InlineSecretResolver(secret) });
+		return client.listModels({
+			baseUrl: normalized,
+			credentialRef: { store: "env", key: "PMO_TRANSIENT" },
+			...(signal ? { signal } : {}),
+		});
+	}
+
+	async adoptPiProviderCatalog(catalog: PiProviderCatalog): Promise<void> {
+		if (catalog.providerId !== NINEROUTER_PROVIDER_ID) return;
+		this.piCatalog = {
+			...catalog,
+			models: catalog.models.filter((model) => typeof model.id === "string" && model.id.length > 0).slice(0, 512),
+		};
+	}
+
   async setEnabled(remoteId: string, enabled: boolean, options: SetEnabledOptions = {}): Promise<SetEnabledResult> {
     const config = await this.loadConfig();
     const matchingRoutes = Object.values(config.routes).filter((route) => route.gatewayId === NINEROUTER_GATEWAY_ID && route.remoteModelId === remoteId);
@@ -238,7 +264,7 @@ export class NineRouterManager {
     let entry: RemoteCatalogEntry | undefined;
     if (enabled) {
       const cache = (await this.cacheStore.load()).cache;
-      entry = cache?.entries.find((candidate) => candidate.remoteId === remoteId);
+      entry = cache?.entries.find((candidate) => candidate.remoteId === remoteId) ?? this.externalEntry(remoteId);
       if (!entry) throw new NineRouterManagerError("model-not-found", "The model is not present in the last successful catalog");
       if (entry.capability === "non-chat") throw new NineRouterManagerError("model-not-found", "The selected catalog entry is not chat-compatible");
     }
@@ -260,6 +286,15 @@ export class NineRouterManager {
         current.enabled = true;
         return;
       }
+      if (!draft.gateways[NINEROUTER_GATEWAY_ID] && this.piCatalog?.baseUrl) {
+			draft.gateways[NINEROUTER_GATEWAY_ID] = {
+				id: NINEROUTER_GATEWAY_ID,
+				kind: "9router",
+				baseUrl: normalizeNineRouterBaseUrl(this.piCatalog.baseUrl),
+				enabled: true,
+				timeoutMs: DEFAULT_GATEWAY_TIMEOUT,
+			};
+		}
       const candidate = entry!;
       const route: RouteConfigV1 = {
         id: routeId,
@@ -307,7 +342,8 @@ export class NineRouterManager {
     if (cacheResult.cache && !cache) warnings.push("Catalog cache belongs to a different 9Router endpoint; refresh is required");
     if (cache?.lastError) warnings.push(cache.lastError.message);
     const models: ProviderModelProjection[] = [];
-    if (gateway?.enabled && cache) {
+    const catalogEntries = mergeCatalogEntries(cache?.entries ?? [], this.piCatalog);
+    if (gateway?.enabled && catalogEntries.length > 0) {
       const enabledGroups = groupRoutes(Object.values(config.routes).filter(
         (route) => route.enabled && route.gatewayId === NINEROUTER_GATEWAY_ID,
       ));
@@ -317,7 +353,7 @@ export class NineRouterManager {
           continue;
         }
         const route = routes[0]!;
-        const entry = cache.entries.find((candidate) => candidate.remoteId === route.remoteModelId);
+        const entry = catalogEntries.find((candidate) => candidate.remoteId === route.remoteModelId);
         if (!entry) continue;
         if (entry.capability === "non-chat") continue;
         const warning = [
@@ -328,7 +364,9 @@ export class NineRouterManager {
         models.push(toProviderModel(route, entry, warning));
       }
     }
-    const apiKeyReference = isEnvironmentReference(gateway?.credentialRef) ? `$${gateway!.credentialRef!.key}` : undefined;
+    const apiKeyReference = isEnvironmentReference(gateway?.credentialRef)
+		? `$${gateway!.credentialRef!.key}`
+		: gateway?.credentialRef?.store === "pi-auth" ? NINEROUTER_PI_AUTH_REFERENCE : undefined;
     if (gateway?.credentialRef && !apiKeyReference) warnings.push("Configured credential store is unavailable for Pi provider registration");
     return {
       providerId: NINEROUTER_PROVIDER_ID,
@@ -342,6 +380,20 @@ export class NineRouterManager {
       warnings: [...new Set(warnings)],
     };
   }
+
+	private externalEntry(remoteId: string): RemoteCatalogEntry | undefined {
+		const model = this.piCatalog?.models.find((candidate) => candidate.id === remoteId);
+		return model ? piModelToCatalogEntry(model) : undefined;
+	}
+
+	private statusState(configured: boolean, entries: number, corrupt: boolean, stale: boolean): Exclude<NineRouterStatus["state"], undefined> {
+		if (corrupt) return "error";
+		if (this.piCatalog?.available && this.piCatalog.models.length > 0 && !configured) return "pi-provider-ready";
+		if (stale) return "stale";
+		if (!configured) return "unconfigured";
+		if (entries === 0) return "empty";
+		return "ready";
+	}
 
   private rowFor(routes: readonly RouteConfigV1[], entry: RemoteCatalogEntry, cache?: CatalogCacheV1): CatalogRow {
     const route = routes[0];
@@ -388,16 +440,16 @@ function parseCredentialReference(value: SecretRefV1 | string | undefined): Secr
     if (value === null || typeof value !== "object") {
       throw new NineRouterError("secret", "config", "The credential reference is invalid");
     }
-    if (value.store !== "env" || !/^[A-Z_][A-Z0-9_]*$/u.test(value.key)) {
-      throw new NineRouterError("secret", "config", "Only a valid environment credential reference is supported");
-    }
-    return { store: "env", key: value.key };
+    if (value.store === "env" && /^[A-Z_][A-Z0-9_]*$/u.test(value.key)) return { store: "env", key: value.key };
+	    if ((value.store === "pi-auth" || value.store === "keychain") && /^[A-Za-z0-9_.:-]+$/u.test(value.key)) return { store: value.store, key: value.key };
+	    throw new NineRouterError("secret", "config", "The credential reference is invalid");
   }
   if (value.length === 0) throw new NineRouterError("secret", "config", "The credential reference is invalid");
   const normalized = value.startsWith("$") ? `env:${value.slice(1)}` : value;
-  const match = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(normalized);
-  if (!match) throw new NineRouterError("secret", "config", "Only env:NAME or $NAME credential references are supported");
-  return { store: "env", key: match[1]! };
+  const match = /^(env|pi-auth|keychain):([A-Za-z0-9_.:-]+)$/u.exec(normalized);
+  if (!match) throw new NineRouterError("secret", "config", "Use env:NAME, pi-auth:PROVIDER, or keychain:NAME");
+  if (match[1] === "env" && !/^[A-Z_][A-Z0-9_]*$/u.test(match[2]!)) throw new NineRouterError("secret", "config", "Use env:NAME with an uppercase environment name");
+  return { store: match[1] as SecretRefV1["store"], key: match[2]! };
 }
 
 function cacheForGateway(cache: CatalogCacheV1 | undefined, baseUrl: string | undefined): CatalogCacheV1 | undefined {
@@ -407,6 +459,33 @@ function cacheForGateway(cache: CatalogCacheV1 | undefined, baseUrl: string | un
   } catch {
     return undefined;
   }
+}
+
+function mergeCatalogEntries(entries: readonly RemoteCatalogEntry[], catalog: PiProviderCatalog | undefined): RemoteCatalogEntry[] {
+	const merged = [...entries];
+	const seen = new Set(merged.map((entry) => entry.remoteId));
+	for (const model of catalog?.models ?? []) {
+		if (seen.has(model.id)) continue;
+		merged.push(piModelToCatalogEntry(model));
+		seen.add(model.id);
+	}
+	return merged;
+}
+
+function piModelToCatalogEntry(model: PiProviderCatalogModel): RemoteCatalogEntry {
+	return {
+		remoteId: model.id,
+		displayName: (model.name ?? model.id).slice(0, MAX_CONFIG_LABEL),
+		owner: "Pi 9Router",
+		resourceClass: "other",
+		capabilities: ["chat"],
+		input: model.input && model.input.length > 0 ? [...model.input] : ["text"],
+		...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }),
+		...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
+		...(model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens }),
+		capability: "chat",
+		provenance: { remoteId: "configured", displayName: "configured", resourceClass: "configured", capabilities: "configured", input: "configured", capability: "configured" },
+	};
 }
 
 function toProviderModel(route: RouteConfigV1, entry: RemoteCatalogEntry, warning?: string): ProviderModelProjection {
@@ -423,8 +502,8 @@ function toProviderModel(route: RouteConfigV1, entry: RemoteCatalogEntry, warnin
   };
 }
 
-export function createNineRouterManager(root: string, configStore = new ConfigStore({ root })): NineRouterManager {
+export function createNineRouterManager(root: string, configStore = new ConfigStore({ root }), resolver?: SecretResolver): NineRouterManager {
   const cacheStore = new CatalogCacheStore(root);
-  const client = new NineRouterClient();
+  const client = new NineRouterClient(resolver ? { resolver } : {});
   return new NineRouterManager(configStore, cacheStore, client);
 }

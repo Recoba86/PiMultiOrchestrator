@@ -5,8 +5,12 @@ const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
 
 export type SecretEnvironment = Readonly<Record<string, string | undefined>>;
 
+export interface SecretResolver {
+	resolve(reference: SecretRefV1 | string, signal?: AbortSignal): Promise<string>;
+}
+
 /** Resolves environment references only; it never writes or persists secrets. */
-export class EnvSecretResolver {
+export class EnvSecretResolver implements SecretResolver {
   private readonly environment: SecretEnvironment;
 
   constructor(environment: SecretEnvironment = process.env) {
@@ -30,6 +34,19 @@ export class EnvSecretResolver {
     }
     return value;
   }
+}
+
+/** Resolves one setup credential in memory for connection testing only. */
+export class InlineSecretResolver implements SecretResolver {
+	constructor(private readonly secret: string) {}
+
+	async resolve(_reference: SecretRefV1 | string, signal?: AbortSignal): Promise<string> {
+		if (signal?.aborted) throw new SecretResolutionError("missing", "Secret resolution was cancelled");
+		if (this.secret.length === 0 || /[\r\n]/u.test(this.secret)) {
+			throw new SecretResolutionError("empty", "The 9Router credential is unusable");
+		}
+		return this.secret;
+	}
 }
 
 function parseReference(value: string): SecretRefV1 | undefined {

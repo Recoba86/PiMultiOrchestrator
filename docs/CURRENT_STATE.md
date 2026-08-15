@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC17 public prerelease verified; RC18 compatibility repair remains local |
+| Development phase | M10 remains the latest accepted development milestone; RC19 Pi onboarding/adoption candidate is local pending release gates |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -28,6 +28,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 final candidate | `0.1.0-rc.17` — public prerelease; exact artifact and bundle identity are bound by the detached verifier |
 | RC17 final Planner attempt | 2026-08-15 — PASS after the bounded reviewer-handoff repair; source-bound artifact is public as a prerelease |
 | RC18 compatibility repair | Local source repair at `0af7b8e`; package manifest remains `0.1.0-rc.17`; no package rebuild/release or publication is claimed |
+| RC19 candidate | `0.1.0-rc.19` — Pi-owned 9Router adoption, secure TUI setup, Pi-auth bridge, and external-provider regression coverage; publication pending release gates |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
@@ -110,6 +111,29 @@ configurable periodic sync, catalog/capability diffing, per-route capability
 views, provenance, last-known-good snapshots, stale indicators, safe user
 overrides, and a clear distinction between provider-advertised capabilities and
 empirically observed capabilities. RC18 does not implement this requirement.
+
+## RC19 — Pi 9Router onboarding and adoption
+
+- **Status:** IMPLEMENTED / LOCAL CANDIDATE; package version `0.1.0-rc.19` is
+  not yet promoted to a public release in this snapshot.
+- **Existing-provider path:** after `session_start`, PMO reads Pi's public
+  `9router` provider catalog through `getModels()`, adopts the bounded visible
+  model metadata, and never registers, replaces, or unregisters an external
+  provider. Enabling an adopted model creates only PMO route/config state; it
+  does not copy a credential or auto-assign a pool.
+- **First-run path:** with no provider, Models & 9Router offers a TUI-only
+  masked API-key component and explicit `Test & Save`. The key is tested before
+  persistence, then stored through Pi's auth API; PMO stores only the fixed
+  `pi-auth` reference. RPC setup fails closed because its installed Pi `0.84.1`
+  contract has no sensitive-input field.
+- **Compatibility boundary:** provider registration omits `apiKey` for Pi-auth
+  references so Pi resolves the stored credential rather than treating a
+  placeholder as a literal key. External refresh uses Pi's registry refresh;
+  PMO refresh remains the path for PMO-owned/env-backed configuration.
+- **Evidence:** focused provider/model-manager suites, TUI/RPC setup tests,
+  Pi `0.84.1` auth-storage API probe, typecheck, and build are required before
+  the RC19 release artifact is accepted. No live Pi credential or configuration
+  was changed during local validation.
 
 ## RC17 public prerelease publication
 

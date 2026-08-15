@@ -1104,3 +1104,48 @@ RC18 does not implement the future requirement **Dynamic Route Catalog &
 Capability Sync**; periodic sync, manual Refresh Now, diffs, provenance,
 last-known-good/stale indicators, overrides, and advertised-versus-observed
 capability distinction remain planned.
+
+## RC19 — Pi 9Router onboarding and adoption
+
+### RC19-01 — Existing Pi provider adoption
+
+- **Level:** U/I fixture, Pi `0.84.1` contract
+- **Action:** bind a Pi `9router` provider exposing 27 models through
+  `getModels()`, start the host, open `/orchestrator` → Models & 9Router, and
+  enable one model.
+- **Pass:** all exact Pi model IDs are browsable; status is not false EMPTY; no
+  API key is requested or copied; PMO makes zero register/unregister calls for
+  the external provider; route state is created only after explicit enable and
+  no pool is assigned automatically.
+
+### RC19-02 — No-provider secure setup
+
+- **Level:** U/TUI/RPC fixture
+- **Action:** with no Pi 9Router provider, open Models & 9Router, choose Set Up
+  9Router, enter a base URL, enter a key in the masked TUI component, confirm
+  Test & Save, and exercise the same entry through RPC UI mode.
+- **Pass:** the key is never rendered, notified, logged, or persisted by PMO;
+  `/v1/models` is tested before save; Pi auth storage receives the key only after
+  success; PMO receives only `{store:"pi-auth",key:"9router"}`; successful
+  setup exposes models and a pool handoff; RPC refuses raw-key setup.
+
+### RC19-03 — Setup failure and auth bridge
+
+- **Level:** I/security/fixture
+- **Action:** fail the bounded catalog test, then exercise Pi `ModelRuntime.login`
+  and a fresh runtime using the stored credential with a provider registration
+  that omits `apiKey`.
+- **Pass:** failed testing causes no PMO config or credential-save call; the Pi
+  auth file is restrictive and the fresh runtime resolves the stored key; the
+  PMO provider projection never treats `$PMO_PI_AUTH` as a literal API key.
+
+### RC19-04 — External refresh and regression boundary
+
+- **Level:** U/I/P isolated Pi `0.84.1`
+- **Action:** refresh an existing external provider, reconcile/reload/dispose,
+  run the PMO-owned env-backed path, and run the full release checks.
+- **Pass:** external refresh uses Pi registry refresh rather than requiring a
+  PMO gateway; external model rows remain intact; PMO-owned registration still
+  updates/removes only its own namespace; typecheck, full tests, build, release
+  verification, exact artifact binding, `next`-only publication, and public
+  install pass. No `latest` mutation is made.

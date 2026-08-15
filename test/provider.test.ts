@@ -371,6 +371,101 @@ describe("Pi 9Router host adapter", () => {
 		assert.deepEqual(pi.unregisters, []);
 	});
 
+	it("[RC19][U][fixture-pi-0.84.1] adopts every exact external Pi model while leaving provider ownership untouched", async () => {
+		const externalModels = Array.from({ length: 27 }, (_, index) => ({ id: `external-${index}`, name: `External ${index}`, reasoning: index % 2 === 0, input: ["text"] }));
+		const fixture = managerFixture(projection([model("pmo-only-a")]));
+		fixture.adoptPiProviderCatalog = async (catalog) => {
+			fixture.entries = catalog.models.map((entry) => ({ remoteModelId: entry.id, displayName: entry.name ?? entry.id, sourceLabel: "Pi 9Router", enabled: false, available: true }));
+		};
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, {
+			manager: fixture,
+			providerRegistry: { getProvider: () => ({ getModels: () => externalModels }) },
+		});
+
+		assert.deepEqual(await host.reconcile(), { changed: false, registered: false, modelCount: 1 });
+		assert.deepEqual(fixture.entries.map((entry) => entry.remoteModelId), externalModels.map((entry) => entry.id));
+		assert.deepEqual(pi.registerCalls, []);
+		assert.deepEqual(pi.unregisters, []);
+	});
+
+	it("[RC19][U/TUI/RPC][fixture-pi-0.84.1] offers secure setup only when no provider exists", async () => {
+		const fixture = managerFixture(projection());
+		fixture.entries = [];
+		const order: string[] = [];
+		let observedSecret = "";
+		fixture.testConnection = async (_baseUrl, secret) => {
+			order.push("test");
+			observedSecret = secret;
+			return [];
+		};
+		fixture.configure = async (_baseUrl, credentialRef) => {
+			order.push("configure");
+			assert.deepEqual(credentialRef, { store: "pi-auth", key: NINEROUTER_PROVIDER_ID });
+		};
+		fixture.refresh = async () => { order.push("refresh"); };
+		const pi = piFixture();
+		const notifications: string[] = [];
+		const host = createPiHost(pi.pi, {
+			manager: fixture,
+			providerRegistry: { getProvider: () => undefined },
+			credentialSetup: {
+				setApiKey: async (_providerId, _baseUrl, secret) => {
+					order.push("save");
+					observedSecret = secret;
+				},
+			},
+		});
+		host.registerCommands();
+		const secret = "rc19-test-key";
+		await pi.commands.get("9router-models")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (title: string, choices: readonly string[]) => {
+					assert.equal(title, "Models & 9Router");
+					assert.deepEqual(choices, ["Set Up 9Router", "Use Advanced env reference", "Back"]);
+					return "Set Up 9Router";
+				},
+				input: async (title: string) => {
+					assert.equal(title, "9Router base URL");
+					return "http://127.0.0.1:3000";
+				},
+				confirm: async (title: string) => {
+					assert.equal(title, "Test & Save 9Router connection?");
+					return true;
+				},
+				custom: async (factory: unknown) => {
+					let result: string | undefined;
+					const component = (factory as (tui: unknown, theme: unknown, keybindings: unknown, done: (value: string | undefined) => void) => unknown)(undefined, undefined, undefined, (value) => { result = value; }) as { handleInput(data: string): void; render(width: number): string[] };
+					component.handleInput(secret);
+					assert.doesNotMatch(component.render(120).join("\n"), new RegExp(secret));
+					component.handleInput("\r");
+					return result;
+				},
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.deepEqual(order, ["test", "save", "configure", "refresh"]);
+		assert.equal(observedSecret, secret);
+		assert.ok(notifications.some((message) => /Connected to 9Router/.test(message)));
+		assert.ok(notifications.every((message) => !message.includes(secret)));
+
+		const rpcFixture = managerFixture(projection());
+		rpcFixture.entries = [];
+		const rpcPi = piFixture();
+		const rpcHost = createPiHost(rpcPi.pi, { manager: rpcFixture, providerRegistry: { getProvider: () => undefined } });
+		rpcHost.registerCommands();
+		const rpcNotifications: string[] = [];
+		await rpcPi.commands.get("9router-models")!.handler("", {
+			mode: "rpc",
+			hasUI: true,
+			ui: { select: async () => "Set Up 9Router", notify: (message: string) => rpcNotifications.push(message) },
+		} as unknown as ExtensionCommandContext);
+		assert.ok(rpcNotifications.some((message) => /requires TUI mode/.test(message)));
+	});
+
 	it("[U][fixture-pi-0.84.1] unregisters the owned provider on host disposal", async () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: managerFixture(projection()) });
@@ -431,7 +526,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /M12\.(?:2|3) .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /RC19 .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);

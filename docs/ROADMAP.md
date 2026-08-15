@@ -386,3 +386,30 @@ configurable periodic sync, route/capability diffs, per-route capabilities,
 provenance, last-known-good state, stale indicators, safe user overrides, and
 the distinction between provider-advertised and empirically observed
 capabilities. This is explicitly outside RC18.
+
+## RC19 — Pi 9Router onboarding and adoption
+
+Status: IMPLEMENTED / LOCAL CANDIDATE; manifest `0.1.0-rc.19`; public release
+gates are pending.
+
+RC19 closes the first-run and existing-provider compatibility gap identified by
+RC18 dogfood:
+
+- adopt the exact bounded `9router` model catalog already exposed by Pi
+  `0.84.1`, using `Provider.getModels()` without resolving or copying keys;
+- keep external provider ownership external across reconciliation, refresh,
+  reload, and disposal, while retaining explicit PMO route enablement and pool
+  assignment;
+- offer a neutral no-provider state and TUI-only masked `Test & Save` setup;
+  validate `/v1/models` before writing config, then store the key through Pi's
+  auth API and persist only a fixed `pi-auth` reference;
+- omit `apiKey` from Pi-auth provider registration so Pi resolves its stored
+  credential, preserve env-backed registration, and fail closed for raw-key RPC
+  setup;
+- verify the existing PMO path, external 27-model path, setup success/failure,
+  TUI/RPC boundaries, Pi auth storage, full checks, exact artifact identity,
+  `next`-only npm publication, and public install.
+
+No automatic pool assignment, PMO provider replacement, credential copy, or
+plaintext secret persistence is part of RC19. Dynamic Route Catalog &
+Capability Sync remains a future requirement.

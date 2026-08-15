@@ -1,8 +1,9 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the local development Control Center in Pi `0.84.1`.
-It does not make live 9Router calls, install the extension into `~/.pi/agent/`,
-or create a public release.
+This guide describes the Control Center in Pi `0.84.1`. RC19's public
+prerelease remains a `next`-tagged candidate, not a stable or production
+release. Local validation uses isolated roots and never installs into
+`~/.pi/agent/` unless the operator explicitly chooses the pinned package.
 
 ## Open the Control Center
 
@@ -36,8 +37,13 @@ message where applicable.
 
 - **Models & 9Router** searches the catalog, shows exact remote and local route
   IDs, source/resource and projected/actual availability, refreshes the
-  catalog, and confirms enable/disable changes. Credential values are never
-  displayed.
+  catalog, and confirms enable/disable changes. An existing Pi-owned 9Router
+  provider is browsed in place and is never replaced or unregistered. If no
+  provider exists, choose **Set Up 9Router**, enter the base URL, enter the key
+  in the masked TUI prompt, and confirm **Test & Save**. The catalog is tested
+  first; Pi auth stores the key and PMO stores only a `pi-auth` reference.
+  Credential values are never displayed. RPC setup fails closed because Pi
+  `0.84.1` has no masked secret-input field.
 - **Investigation Pool**, **Implementation Pool**, and **Verification Pool**
   share the same ordered editor. Add, inspect, remove, enable/disable, and
   move entries without changing provider registration. Implementation and

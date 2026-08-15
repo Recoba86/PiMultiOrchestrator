@@ -4,6 +4,8 @@ import type { ResourceClass, StableId } from "../config/types.js";
 // Pi provider namespace intentionally remains the user-facing "9router".
 export const NINEROUTER_GATEWAY_ID = "ninerouter" as StableId;
 export const NINEROUTER_PROVIDER_ID = "9router" as const;
+/** Placeholder accepted by Pi provider registration; the actual key lives in Pi auth storage. */
+export const NINEROUTER_PI_AUTH_REFERENCE = "$PMO_PI_AUTH" as const;
 
 export type CatalogCapability = "chat" | "non-chat" | "unknown";
 export type CatalogFieldProvenance = "remote" | "configured" | "conservative-default";
@@ -96,6 +98,23 @@ export interface CatalogRow {
   readonly warning?: string;
 }
 
+/** Credential-blind model metadata supplied by Pi's existing provider registry. */
+export interface PiProviderCatalogModel {
+  readonly id: string;
+  readonly name?: string;
+  readonly reasoning?: boolean;
+  readonly input?: readonly ("text" | "image")[];
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+}
+
+export interface PiProviderCatalog {
+  readonly providerId: string;
+  readonly available: boolean;
+  readonly baseUrl?: string;
+  readonly models: readonly PiProviderCatalogModel[];
+}
+
 export interface NineRouterStatus {
   readonly configured: boolean;
   readonly gatewayId: StableId;
@@ -108,6 +127,9 @@ export interface NineRouterStatus {
   readonly missingEnabledRoutes: number;
   readonly lastSuccessfulRefresh?: string;
   readonly lastError?: CatalogErrorSummary;
+  readonly state?: "unconfigured" | "pi-provider-ready" | "ready" | "stale" | "empty" | "error";
+  readonly piProviderAvailable?: boolean;
+  readonly piProviderModels?: number;
 }
 
 export interface ProviderModelProjection {
