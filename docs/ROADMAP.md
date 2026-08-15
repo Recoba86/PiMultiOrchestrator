@@ -417,7 +417,8 @@ with zero failed/cancelled/skipped/todo; typecheck/build and `20/20` integrity
 attacks passed. The registry tarball is byte-identical to the frozen artifact,
 GitHub release [v0.1.0-rc.21](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.21)
 is an explicit prerelease, and a disposable public npm install loaded RC21 in
-Pi `0.84.2` and completed offline `/9router-status`. No live Pi configuration,
+Pi `0.84.2` and completed offline `/9router-status` and `/9router-refresh`,
+including safe unconfigured/LKG failure feedback. No live Pi configuration,
 provider credential, or model request was modified/performed; no rebuild or
 repack occurred after artifact freeze.
 

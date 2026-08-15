@@ -27,7 +27,8 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   frozen artifact. GitHub release `v0.1.0-rc.21` is an explicit prerelease.
 - **Public dogfood:** a disposable npm install loaded RC21 in Pi `0.84.2`,
   registered the Model Router commands, and completed offline `/9router-status`
-  with no provider call.
+  and `/9router-refresh`, including the visible refresh start and safe
+  unconfigured/LKG failure feedback, with no provider call.
 - **Boundary:** no live Pi configuration, provider catalog, credential store,
   or model request was modified/performed. Publication used the already-frozen
   artifact; no rebuild or repack occurred after freeze.

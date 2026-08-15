@@ -54,7 +54,8 @@ picker feedback/order, and normal-row route-ID privacy.
 - **Verification:** `246/246` tests across 13 suites, zero
   failed/cancelled/skipped/todo, typecheck/build, `20/20` integrity attacks,
   and disposable public npm/Pi `0.84.2` install plus offline Model Router
-  command/status smoke all passed.
+  command/status/refresh smoke all passed, including start and safe
+  unconfigured/LKG failure feedback.
 - **Boundary:** no live Pi configuration, provider account, credential, or
   model request was modified/performed. The publication used the frozen
   artifact; no rebuild or repack occurred after freeze.

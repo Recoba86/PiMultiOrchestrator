@@ -135,7 +135,9 @@ empirically observed capabilities. RC18 does not implement this requirement.
   `20/20` release-integrity attacks passed; the exact registry tarball is
   byte-identical to the frozen artifact. Public install in disposable Pi
   `0.84.2` loaded RC21 from npm, registered the Model Router commands, and
-  completed offline `/9router-status` without a provider call.
+  completed offline `/9router-status` and `/9router-refresh`; refresh emitted
+  the expected start and safe unconfigured/LKG failure feedback without a
+  provider call.
 - **Boundary:** no live Pi configuration, provider catalog, credential store,
   or model request was modified/performed. The docs follow-up is separate from
   the immutable artifact commit and did not rebuild or repack it.
