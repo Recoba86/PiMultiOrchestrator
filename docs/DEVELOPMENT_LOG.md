@@ -6,8 +6,7 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 ## RC25 — Operational Boss / Orchestrator
 
-- **Date/status:** 2026-08-15; `IMPLEMENTED / RELEASE CANDIDATE`, with RC24
-  remaining the prior public prerelease until the RC25 closure gates pass.
+- **Date/status:** 2026-08-15; `PUBLIC PRERELEASE / RELEASE CLOSURE PASS`.
 - **Implementation:** Boss profiles now support multiple eligible routes with
   bounded integer weights and per-route Thinking Effort. One weighted Boss is
   selected and persisted per Mission, retained across all normal goal-loop
@@ -20,9 +19,25 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   RecommendationApplicationService and remain manual-only/stale-checked.
 - **Coverage:** focused RC25 suites pass for migration, weighted distribution,
   multi-cycle reject→repair→pass, pinned fallback, UI weighted presentation,
-  analytics persistence, and manual-only Boss recommendations. Full check,
-  exact artifact, public registry, GitHub prerelease, and isolated public Pi
-  runtime gates remain pending.
+  analytics persistence, and manual-only Boss recommendations. `npm run check`
+  passed `263/263` across 14 suites with zero failed/cancelled/skipped/todo.
+- **Release identity:** source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`,
+  tag `v0.1.0-rc.25`, and frozen artifact SHA-256
+  `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`.
+  The detached release verifier passed with `20/20` integrity attacks and
+  Pi `0.84.1`; a verifier-only RC25 compatibility projection repair was
+  committed as `7406c3a`, and its independently generated artifact retained
+  the frozen SHA-256.
+- **Publication:** npm version and dist-tags passed (`next=0.1.0-rc.25`,
+  `latest=0.1.0-rc.17`); the public tarball matched SHA-256 and registry
+  SHA-512 integrity. GitHub prerelease
+  [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
+  carries the exact artifact and checksum.
+- **Public Pi runtime:** fresh npm install and RC24→RC25 upgrade in isolated
+  Pi `0.84.1` roots passed offline RPC extension loading, `@orchestrator`, all
+  twelve Control Center sections, Diagnostics, candidate identity, and
+  untrusted-by-default behavior. No live Pi configuration or provider/model
+  request was used.
 
 ## RC24 — Model Router enablement hotfix
 

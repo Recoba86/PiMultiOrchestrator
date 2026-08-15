@@ -391,8 +391,8 @@ capabilities. This is explicitly outside RC18.
 
 ## RC25 — Operational Boss / Orchestrator
 
-Status: IMPLEMENTED / RELEASE CANDIDATE; RC24 remains the prior public
-prerelease until RC25 closure.
+Status: PUBLIC PRERELEASE / RELEASE CLOSURE PASS; RC25 is not stable or
+production-ready.
 
 Deliverables:
 
@@ -415,8 +415,13 @@ Deliverables:
 
 Acceptance evidence: focused migration, weighted-distribution, multi-cycle
 reject→repair→pass, fallback, UI, analytics, and recommendation suites pass;
-the clean repository check, exact artifact freeze, public npm/GitHub/Pi gates,
-and final release report remain required.
+`npm run check` passed `263/263` across 14 suites; the exact frozen artifact
+SHA-256 is
+`32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public
+npm (`next=0.1.0-rc.25`, `latest=0.1.0-rc.17`), GitHub prerelease, detached
+release verification (`20/20` integrity attacks), and isolated public Pi
+`0.84.1` fresh-install/RC24→RC25 upgrade gates all pass. The release remains
+a prerelease and is not a production-readiness claim.
 
 ## RC24 — Model Router enablement hotfix
 

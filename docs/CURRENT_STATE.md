@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC25 is the Operational Boss release candidate, RC24 remains the prior public prerelease until closure, and neither is stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC25 is the public Operational Boss prerelease, and it is not stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -32,8 +32,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC20 release | `0.1.0-rc.20` — prior public prerelease; source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag `v0.1.0-rc.20`, artifact SHA-256 `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc` |
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
-| RC25 release line | `0.1.0-rc.25` — weighted per-Mission Boss assignment, bounded canonical goal loop, pinned infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations; exact publication identity belongs to final release evidence |
-| RC24 release line | `0.1.0-rc.24` — Model Router enablement status checkboxes layered over canonical rows; prior public prerelease until RC25 closure |
+| RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
+| RC24 release line | `0.1.0-rc.24` — Model Router enablement status checkboxes layered over canonical rows; superseded public prerelease |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
@@ -72,8 +72,29 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
-| RC25 — Operational Boss / Orchestrator | IMPLEMENTED / RELEASE CANDIDATE; exact publication identity and registry/runtime evidence belong to the release closure |
+| RC25 — Operational Boss / Orchestrator | PUBLIC PRERELEASE / RELEASE CLOSURE PASS; not stable or production-ready |
 | RC24 — Model Router enablement hotfix | IMPLEMENTED / PRIOR PUBLIC PRERELEASE; superseded by the RC25 release candidate |
+
+## RC25 public prerelease closure
+
+- **Package identity:** `pi-multi-orchestrator@0.1.0-rc.25`, source commit
+  `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, and frozen
+  artifact SHA-256
+  `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`.
+- **Repository verification:** `npm run check` passed `263/263` across 14
+  suites; detached release verification passed with `20/20` integrity attacks,
+  Pi `0.84.1`, and the same artifact hash. The verifier-only compatibility
+  repair is `7406c3a`; it is outside the package allowlist.
+- **Public registry:** version exists, `next=0.1.0-rc.25`,
+  `latest=0.1.0-rc.17`; the public tarball SHA-256 and SHA-512 integrity match
+  the frozen artifact and registry metadata.
+- **Public Pi:** isolated fresh install and RC24→RC25 upgrade from npm both
+  passed Pi `0.84.1` offline RPC loading, `@orchestrator`, all 12 Control
+  Center sections, Diagnostics, package identity, and untrusted-by-default
+  behavior. No live Pi configuration, credentials, or provider/model calls
+  were used.
+- **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
+  is a non-draft prerelease carrying the exact artifact and checksum.
 
 ## RC18 real-world Pi/9Router compatibility repair
 

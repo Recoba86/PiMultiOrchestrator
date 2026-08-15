@@ -4,9 +4,9 @@ Pi Multi-Orchestrator is a Pi extension for coordinating a bounded Boss Mission 
 
 ## Status
 
-RC25 (`0.1.0-rc.25`) is the current local release candidate; RC24 remains the
-public prerelease on npm with `next` until RC25 release closure. `latest`
-remains `0.1.0-rc.17`. RC25 adds weighted, per-Mission Boss assignment and a
+RC25 (`0.1.0-rc.25`) is the current public prerelease on npm with `next`; RC24
+is superseded. `latest` remains `0.1.0-rc.17`. RC25 adds weighted,
+per-Mission Boss assignment and a
 bounded goal loop while retaining RC23's independent per-Pool Priority or
 Weighted Rotation scheduling, deterministic weighted route selection,
 scheduler-origin analytics, evidence-gated data-driven recommendations, and
@@ -73,9 +73,10 @@ use integer weights from 0 to 1000000, with zero excluding a route only in
 Weighted Rotation. Recommendations require comparable origin-tagged samples,
 show their baseline and suggested maps, and Apply/Ignore remain explicit.
 
-The published artifact is bound to the RC25 source commit, tag
-`v0.1.0-rc.25`, and its independently verified artifact checksum; the exact
-values are recorded in the final release evidence.
+The published artifact is bound to source commit
+`52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, and frozen
+artifact SHA-256
+`32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`.
 
 For the accepted RC17 publication, use the exact npm pin:
 
@@ -124,7 +125,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC25 is a prerelease candidate, not a stable or production release. See `docs/ROADMAP.md` for the release state.
+M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC25 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 

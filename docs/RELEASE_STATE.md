@@ -12,8 +12,8 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.24` — npm `next` until RC25 closure; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.25` prerelease candidate |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.25` — npm `next`; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.25` public prerelease |
 | Development manifest version | `0.1.0-rc.25` — RC25 Operational Boss / Orchestrator |
 | RC25 release line | Weighted multi-route Boss profiles, one pinned Boss per Mission, bounded goal-loop repair/replan, explicit infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations |
 | RC24 release line | Model Router rows show `[x]` for enabled PMO routes and `[ ]` for discovered-but-disabled routes; Enter opens the existing action menu and persistence path |
@@ -22,22 +22,22 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC25 implementation and focused acceptance PASS; exact release artifact, public registry, GitHub, and public Pi evidence pending |
-| Release tag | `v0.1.0-rc.21` → `68c0c0f82c5c82d7944512ea64aadd05a2e4569e` |
-| Release commit | `68c0c0f82c5c82d7944512ea64aadd05a2e4569e` |
-| GitHub release | [v0.1.0-rc.21](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.21) — prerelease |
-| Installable production release | NONE; RC20 is a prerelease |
+| Local technical release readiness | RC25 release closure PASS; public artifact, registry, GitHub, and isolated public Pi evidence verified |
+| Release tag | `v0.1.0-rc.25` → `52b665f6ace6eec078cbe8a28c35cce36a9cb045` |
+| Release commit | `52b665f6ace6eec078cbe8a28c35cce36a9cb045` |
+| Release artifact | `pi-multi-orchestrator-0.1.0-rc.25.tgz`; SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5` |
+| GitHub release | [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25) — prerelease with artifact and checksum |
+| Installable production release | NONE; RC25 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
 
-## RC25 Operational Boss / Orchestrator candidate
+## RC25 Operational Boss / Orchestrator public prerelease
 
-RC25 is the current implementation candidate. RC24 remains the public npm
-prerelease under `next` until the exact RC25 artifact is frozen and the
-publication gates pass.
+RC25 is the published public prerelease under `next`. It is not stable or
+production-ready; `latest` remains `0.1.0-rc.17`.
 
 - **Configuration:** Boss profiles retain `routeIds` import compatibility and
   add multiple enabled route entries with Thinking Effort, integer weights, and
@@ -58,10 +58,23 @@ publication gates pass.
 - **Recommendations:** the existing recommendation architecture can generate
   sample-gated Boss weight proposals. No proposal auto-applies; the user must
   explicitly Apply, and the active profile is stale-checked first.
-- **Focused evidence:** RC25 Boss runtime, weighted profile UI, analytics, and
-  recommendation tests pass. The clean repository check, exact package
-  artifact, npm/GitHub publication, public registry verification, and isolated
-  public Pi install/upgrade evidence remain release gates.
+- **Release evidence:** `npm run check` passed `263/263` tests across 14 suites
+  with zero failed/cancelled/skipped/todo tests. The detached release verifier
+  passed with `20/20` integrity attacks, Pi `0.84.1` compatibility, and the
+  same artifact SHA-256. A verifier-only RC25 compatibility projection repair
+  was committed as `7406c3a`; the package allowlist and frozen public artifact
+  remained unchanged.
+- **Registry/GitHub:** npm reports `0.1.0-rc.25`, `next` points to RC25,
+  `latest` remains RC17, and the downloaded registry tarball matches the
+  frozen SHA-256 and registry SHA-512 integrity. GitHub prerelease
+  [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
+  carries the exact tarball and checksum.
+- **Public Pi evidence:** fresh isolated `pi install
+  npm:pi-multi-orchestrator@0.1.0-rc.25` and an RC24→RC25 upgrade both loaded
+  the public package in Pi `0.84.1`; `@orchestrator`, all twelve Control Center
+  sections, Diagnostics, candidate identity, and untrusted-by-default state
+  passed through offline RPC. No live Pi configuration or provider/model call
+  was used.
 
 ## RC22 local candidate — Canonical model selector presentation
 
