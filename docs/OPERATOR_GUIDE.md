@@ -1,6 +1,6 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC19 is the public
+This guide describes the Control Center in Pi `0.84.1`. RC20 is the public
 `next`-tagged prerelease, not a stable or production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
@@ -35,9 +35,10 @@ message where applicable.
 
 ## Section guide
 
-- **Models & 9Router** searches the catalog, shows exact remote and local route
-  IDs, source/resource and projected/actual availability, refreshes the
-  catalog, and confirms enable/disable changes. An existing Pi-owned 9Router
+- **Models & 9Router** searches the discovered catalog, shows exact remote and
+  local route IDs, source/resource and projected/actual availability, and has a
+  visible **Refresh Models** action that performs a live provider/9Router
+  refresh and reports added, removed, and changed entries. An existing Pi-owned 9Router
   provider is browsed in place and is never replaced or unregistered. If no
   provider exists, choose **Set Up 9Router**, enter the base URL, enter the key
   in the masked TUI prompt, and confirm **Test & Save**. The catalog is tested
@@ -46,7 +47,11 @@ message where applicable.
   `0.84.1` has no masked secret-input field.
 - **Investigation Pool**, **Implementation Pool**, and **Verification Pool**
   share the same ordered editor. Add, inspect, remove, enable/disable, and
-  move entries without changing provider registration. Implementation and
+  move entries without changing provider registration. Add Model offers only
+  PMO-enabled routes and then asks for the supported Thinking Effort. Each
+  pool entry stores its own `Auto`, `Low`, `Medium`, `High`, `XHigh`, or `Max`
+  value; Auto omits the Pi override and is not Off. A stale explicit effort is
+  shown as invalid and is unavailable until changed. Implementation and
   other mutating actions retain their existing confirmation/idle gates. The
   Verification Pool is shared route configuration: Direct Verification Workers
   are standalone, while canonical Mission reviewers use it for M7. Use
@@ -117,6 +122,18 @@ The direct M2–M8.5 commands remain available, including `/9router-models`,
 `/pool-models`, `/pool-status`, `/routing-status`, `/route-health`,
 `/routing-settings`, `/subagent-run`, `/missions`, `/quality-status`, `/verify-task`,
 `/analytics`, `/recommendations`, and `/recommendation-analyst`.
+
+## RC20 catalog and effort safety
+
+Discovery is separate from PMO enablement, and enablement is separate from
+Pool membership. A newly discovered route is disabled until explicitly enabled;
+disabling a route preserves existing Pool entries but makes them unavailable.
+Refresh failure preserves the last-known-good catalog and marks it stale. A
+removed route remains visible as missing, with its Pool order and effort intact.
+Capability changes never silently downgrade an explicit effort. Route identity
+is based on the gateway, exact remote model ID, and available resource/source
+identity; genuine duplicate configured identities remain ambiguous and are not
+guessed.
 
 `@orchestrator <goal>` is the explicit one-step Mission entry from Pi's normal
 input surface. It creates a canonical draft Mission and shows the Goal, Status,

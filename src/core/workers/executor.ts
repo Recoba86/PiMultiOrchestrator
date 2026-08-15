@@ -37,6 +37,7 @@ import {
 } from "./types.js";
 import type { WorkerSafetyContext } from "./safety.js";
 import type { StableId } from "../config/types.js";
+import { THINKING_EFFORTS, type EffectiveThinkingEffort } from "../thinking.js";
 
 let sequence = 0;
 const testSessionFactories = new WeakMap<object, ChildSessionFactory>();
@@ -125,6 +126,11 @@ export class SubagentExecutor {
 
 			const selected = decision;
 			const routeId = selected.routeId;
+			const selectedCandidate = routingRequest.candidates.find((item) => item.routeId === routeId);
+			const attemptRequest: SubagentExecutionRequest = {
+				...request,
+				thinkingEffort: selectedCandidate?.thinkingEffort ?? request.thinkingEffort ?? "auto",
+			};
 			let route: ResolvedWorkerRoute;
 			try {
 				route = await this.resolveExactRoute(routeId, selected, routingRequest);
@@ -146,6 +152,8 @@ export class SubagentExecutor {
 					potentialMutationObserved: false,
 					sessionTerminalState: "error",
 					errorMessage: "Route resolution failed",
+					requestedThinkingEffort: attemptRequest.thinkingEffort ?? "auto",
+					effectiveThinkingEffort: "unknown",
 				});
 				return resultBase(runId, request, "child_runtime_error", attempts, fallbackCount, "Child route could not be resolved");
 			}
@@ -156,7 +164,7 @@ export class SubagentExecutor {
 				attemptId,
 				route,
 				selected,
-				request,
+				request: attemptRequest,
 				retryIndex,
 				...(signal === undefined ? {} : { signal }),
 			});
@@ -265,6 +273,7 @@ export class SubagentExecutor {
 		let protocolViolation = false;
 		let result: unknown;
 		let observedUsage: WorkerUsage | undefined;
+		let effectiveThinkingEffort: EffectiveThinkingEffort = "unknown";
 		let handle: Awaited<ReturnType<ChildSessionFactory["create"]>> | undefined;
 		let unsubscribe: (() => void) | undefined;
 		try {
@@ -277,6 +286,7 @@ export class SubagentExecutor {
 				...(this.safety === undefined ? {} : { safety: this.safety }),
 				...(options.signal === undefined ? {} : { signal: options.signal }),
 			});
+			effectiveThinkingEffort = observedThinkingEffort(handle.session);
 			unsubscribe = handle.session.subscribe((event) => {
 				if (event.type === "message_end") {
 					const usage = extractWorkerUsage(event.message);
@@ -383,6 +393,8 @@ export class SubagentExecutor {
 					...(isStructuredChildResult(result) ? { structuredResult: result } : {}),
 					...(result === undefined ? {} : { protocolResult: result }),
 			sessionTerminalState: terminalState,
+			requestedThinkingEffort: options.request.thinkingEffort ?? "auto",
+			effectiveThinkingEffort,
 		};
 		this.emit({ type: "attempt_finished", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId });
 		return { attempt, outcome, failure, result, providerSucceeded, potentialMutation: potentialMutationObserved, protocolViolation };
@@ -467,12 +479,14 @@ async function validateExecutionRequest(request: SubagentExecutionRequest, defau
 	if (typeof request.task !== "string" || request.task.trim().length === 0 || request.task.length > 32_000) throw new WorkerError("invalid-request", "Task is invalid or too large");
 	if (request.acceptanceCriteria !== undefined && (!Array.isArray(request.acceptanceCriteria) || request.acceptanceCriteria.length > 16 || request.acceptanceCriteria.some((item) => typeof item !== "string" || item.trim().length === 0 || item.length > 1_000))) throw new WorkerError("invalid-request", "Acceptance criteria are invalid or too large");
 	if (request.excludedRouteIds !== undefined && (!Array.isArray(request.excludedRouteIds) || request.excludedRouteIds.length > 64 || request.excludedRouteIds.some((item) => !isStableId(item)))) throw new WorkerError("invalid-request", "Excluded route IDs are invalid");
+	const thinkingEffort = request.thinkingEffort ?? "auto";
+	if (thinkingEffort !== "auto" && !THINKING_EFFORTS.includes(thinkingEffort as never)) throw new WorkerError("invalid-request", "Thinking effort is invalid");
 	if (typeof request.cwd !== "string" || !isAbsolute(request.cwd)) throw new WorkerError("invalid-cwd", "Execution cwd must be absolute");
 	const cwd = normalize(await realpath(request.cwd).catch(() => { throw new WorkerError("invalid-cwd", "Execution cwd could not be resolved"); }));
 	if (!(await stat(cwd).catch(() => undefined))?.isDirectory()) throw new WorkerError("invalid-cwd", "Execution cwd is not a directory");
 	const timeoutMs = request.timeoutMs ?? defaultTimeoutMs;
 	if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 86_400_000 || timeoutMs > defaultTimeoutMs) throw new WorkerError("invalid-request", "Execution timeout exceeds the configured safety ceiling");
-	return { ...request, roleId: request.roleId.trim(), task: request.task.trim(), cwd, timeoutMs };
+	return { ...request, roleId: request.roleId.trim(), task: request.task.trim(), cwd, timeoutMs, thinkingEffort };
 }
 
 const MAX_OBSERVED_NUMBER = Number.MAX_SAFE_INTEGER;
@@ -649,7 +663,14 @@ function resultBase(
 		potentialMutationObserved: attempts.some((attempt) => attempt.potentialMutationObserved),
 		fallbackCount,
 		summary: summary.slice(0, 1_000),
+		requestedThinkingEffort: request.thinkingEffort ?? "auto",
+		effectiveThinkingEffort: attempts.at(-1)?.effectiveThinkingEffort ?? "unknown",
 	};
+}
+
+function observedThinkingEffort(session: { readonly thinkingLevel?: unknown }): EffectiveThinkingEffort {
+	const level = session.thinkingLevel;
+	return level === "low" || level === "medium" || level === "high" || level === "xhigh" || level === "max" ? level : "unknown";
 }
 
 function isStructuredChildResult(value: unknown): value is StructuredChildResult {

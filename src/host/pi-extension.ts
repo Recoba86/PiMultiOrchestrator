@@ -16,6 +16,7 @@ import type {
 import { ModelRuntime as RuntimeModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createDefaultConfig } from "../core/config/defaults.js";
 import type { SecretRefV1, StableId } from "../core/config/types.js";
+import { thinkingEffortLabel, type ThinkingEffort, type ThinkingLevelMap } from "../core/thinking.js";
 import { ConfigStore } from "../core/config/store.js";
 import { HealthStore, type RouteHealthRecord } from "../core/health/index.js";
 import {
@@ -149,6 +150,7 @@ export interface PoolManagerContract {
 	moveRouteDown(poolId: PoolId, routeId: StableId): MaybePromise<unknown>;
 	moveRoute(poolId: PoolId, routeId: StableId, targetIndex: number): MaybePromise<unknown>;
 	setPoolEntryEnabled(poolId: PoolId, routeId: StableId, enabled: boolean): MaybePromise<unknown>;
+	setPoolEntryThinkingEffort?(poolId: PoolId, routeId: StableId, thinkingEffort: ThinkingEffort): MaybePromise<unknown>;
 }
 
 export type RecommendationAnalystMode = "deterministic" | "ai-assisted";
@@ -199,6 +201,11 @@ export interface ModelManagerEntry {
 	readonly capability?: string;
 	readonly status?: string;
 	readonly warning?: string;
+	readonly reasoning?: boolean;
+	readonly vision?: boolean;
+	readonly contextWindow?: number;
+	readonly maxTokens?: number;
+	readonly thinkingLevelMap?: ThinkingLevelMap;
 }
 
 
@@ -249,7 +256,7 @@ export interface PiHostOptions {
 export interface PiProviderRegistry {
 	getProvider(providerId: string): unknown;
 	getAvailableModels?(providerId: string): MaybePromise<readonly unknown[]>;
-	refresh?(options?: { readonly providers?: readonly string[]; readonly allowNetwork?: boolean }): MaybePromise<unknown>;
+	refresh?(options?: { readonly providers?: readonly string[]; readonly allowNetwork?: boolean; readonly force?: boolean; readonly signal?: AbortSignal }): MaybePromise<unknown>;
 }
 
 export interface PiCredentialSetup {
@@ -368,7 +375,33 @@ const modelLabel = (entry: ModelManagerEntry): string => {
 	const display = entry.displayName && entry.displayName !== entry.remoteModelId ? ` — ${entry.displayName}` : "";
 	const route = entry.routeId ? ` (${entry.routeId})` : "";
 	const source = entry.sourceLabel === "Pi 9Router" ? " [Pi 9Router]" : "";
-	return `${enabled} ${entry.remoteModelId}${display}${route}${source}${state}${ambiguity}`;
+	const thinking = entry.reasoning === false ? " [thinking: not supported]" : entry.reasoning === true ? " [thinking: supported]" : " [thinking: unknown]";
+	return `${enabled} ${entry.remoteModelId}${display}${route}${source}${thinking}${state}${ambiguity}`;
+};
+
+const modelCatalogFingerprint = (entry: ModelManagerEntry): string => JSON.stringify({
+	remoteModelId: entry.remoteModelId,
+	displayName: entry.displayName,
+	sourceLabel: entry.sourceLabel,
+	reasoning: entry.reasoning,
+	vision: entry.vision,
+	contextWindow: entry.contextWindow,
+	maxTokens: entry.maxTokens,
+	thinkingLevelMap: entry.thinkingLevelMap,
+	status: entry.status,
+	missing: entry.missing,
+	stale: entry.stale,
+	available: entry.available,
+});
+
+const modelCatalogDiff = (before: readonly ModelManagerEntry[], after: readonly ModelManagerEntry[]) => {
+	const previous = new Map(before.map((entry) => [entry.remoteModelId, modelCatalogFingerprint(entry)]));
+	const current = new Map(after.map((entry) => [entry.remoteModelId, modelCatalogFingerprint(entry)]));
+	return {
+		added: after.filter((entry) => !previous.has(entry.remoteModelId)).map((entry) => entry.remoteModelId),
+		removed: before.filter((entry) => !current.has(entry.remoteModelId)).map((entry) => entry.remoteModelId),
+		changed: after.filter((entry) => previous.get(entry.remoteModelId) !== undefined && previous.get(entry.remoteModelId) !== modelCatalogFingerprint(entry)).map((entry) => entry.remoteModelId),
+	};
 };
 
 const asPiProviderCatalogModel = (value: unknown): PiProviderCatalogModel | undefined => {
@@ -381,14 +414,27 @@ const asPiProviderCatalogModel = (value: unknown): PiProviderCatalogModel | unde
 	const bounded = (item: unknown): number | undefined => typeof item === "number" && Number.isSafeInteger(item) && item > 0 && item <= 10_000_000 ? item : undefined;
 	const contextWindow = bounded(candidate.contextWindow);
 	const maxTokens = bounded(candidate.maxTokens);
+	const thinkingLevelMap = sanitizeThinkingLevelMap(candidate.thinkingLevelMap ?? candidate.thinking_level_map);
 	return {
 		id: candidate.id,
 		...(typeof candidate.name === "string" && candidate.name.length > 0 ? { name: candidate.name.slice(0, 160) } : {}),
 		...(typeof candidate.reasoning === "boolean" ? { reasoning: candidate.reasoning } : {}),
+		...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
 		...(input && input.length > 0 ? { input: [...new Set(input)] } : {}),
 		...(contextWindow === undefined ? {} : { contextWindow }),
 		...(maxTokens === undefined ? {} : { maxTokens }),
 	};
+};
+
+const sanitizeThinkingLevelMap = (value: unknown): ThinkingLevelMap | undefined => {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+	const result: Record<string, string | null> = {};
+	for (const key of ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const) {
+		const item = (value as Record<string, unknown>)[key];
+		if (item === null) result[key] = null;
+		else if (typeof item === "string" && item.length > 0 && item.length <= 128 && !/\p{Cc}/u.test(item)) result[key] = item;
+	}
+	return Object.keys(result).length > 0 ? result as ThinkingLevelMap : undefined;
 };
 
 const providerBaseUrl = (provider: unknown): string | undefined => {
@@ -489,13 +535,16 @@ const poolEntryState = (entry: PoolEntryView): string =>
 				: entry.state;
 
 const poolEntryLabel = (entry: PoolEntryView): string => {
-	return `${entry.index + 1}. ${entry.displayName} — ${entry.remoteModelId} [${poolEntryState(entry).toUpperCase()}] (${entry.routeId})`;
+	const effortValue = entry.thinkingEffort ?? "auto";
+	const effort = entry.thinkingEffortValid !== false ? thinkingEffortLabel(effortValue) : `${thinkingEffortLabel(effortValue)} invalid`;
+	return `${entry.index + 1}. ${entry.displayName} — ${entry.remoteModelId} [${poolEntryState(entry).toUpperCase()}] Thinking: ${effort} (${entry.routeId})`;
 };
 
 const poolCandidateLabel = (entry: PoolRouteCandidate): string =>
-	`${entry.displayName} — ${entry.remoteModelId} [${entry.state.toUpperCase()}] (${entry.routeId})`;
+	`${entry.displayName} — ${entry.remoteModelId} [${entry.state.toUpperCase()}] Thinking: Auto (${entry.routeId})`;
 
 const routeAvailability = (entry: PoolEntryView): RouteAvailability => {
+	if (entry.thinkingEffortValid === false) return "unavailable";
 	if (entry.state === "missing") return "missing";
 	if (entry.catalogState === "stale") return "stale";
 	if (entry.state === "provider-unavailable" || entry.projectedPiAvailable === false || entry.actualPiAvailable === false) return "unavailable";
@@ -520,6 +569,7 @@ const emptyPoolManager = (): PoolManagerContract => ({
 	moveRouteDown: async () => { throw new Error("pool manager unavailable"); },
 	moveRoute: async () => { throw new Error("pool manager unavailable"); },
 	setPoolEntryEnabled: async () => { throw new Error("pool manager unavailable"); },
+	setPoolEntryThinkingEffort: async () => { throw new Error("pool manager unavailable"); },
 });
 
 const ANALYTICS_SECTIONS = [
@@ -620,6 +670,7 @@ const normalizeModelEntry = (value: unknown): ModelManagerEntry | undefined => {
 	const remote = candidate.entry as Record<string, unknown>;
 	if (typeof remote.remoteId !== "string") return undefined;
 	const status = typeof candidate.status === "string" ? candidate.status : undefined;
+	const thinkingLevelMap = sanitizeThinkingLevelMap(remote.thinkingLevelMap);
 	return {
 		remoteModelId: remote.remoteId,
 		enabled: candidate.enabled === true,
@@ -630,6 +681,11 @@ const normalizeModelEntry = (value: unknown): ModelManagerEntry | undefined => {
 		...(typeof candidate.routeId === "string" ? { routeId: candidate.routeId } : {}),
 		...(typeof candidate.sourceLabel === "string" ? { sourceLabel: candidate.sourceLabel } : typeof remote.owner === "string" ? { sourceLabel: remote.owner } : {}),
 		...(typeof remote.capability === "string" ? { capability: remote.capability } : {}),
+		...(typeof remote.reasoning === "boolean" ? { reasoning: remote.reasoning } : {}),
+		...(typeof remote.vision === "boolean" ? { vision: remote.vision } : {}),
+		...(typeof remote.contextWindow === "number" ? { contextWindow: remote.contextWindow } : {}),
+		...(typeof remote.maxTokens === "number" ? { maxTokens: remote.maxTokens } : {}),
+		...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
 		...(status ? { status } : {}),
 		...(typeof candidate.warning === "string" ? { warning: candidate.warning } : {}),
 	};
@@ -659,6 +715,7 @@ const asProviderConfig = (projection: ProviderProjection): ProviderConfig | unde
 			id: model.id,
 			name: model.name,
 			reasoning: model.reasoning,
+			...(model.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: { ...model.thinkingLevelMap } }),
 			input: [...model.input],
 			cost: { ...model.cost },
 			contextWindow: model.contextWindow,
@@ -718,6 +775,7 @@ async function resolveHostRoute(manager: PiManagerContract, routeId: StableId, p
 			id: selected.id,
 			name: selected.name,
 			reasoning: selected.reasoning,
+			...(selected.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: { ...selected.thinkingLevelMap } }),
 			input: [...selected.input],
 			cost: { ...selected.cost },
 			contextWindow: selected.contextWindow,
@@ -784,8 +842,9 @@ async function createHostSubagentExecutor(
 					remoteModelId: entry.remoteModelId,
 					...(entry.resourceId ? { resourceId: entry.resourceId } : {}),
 					...(entry.underlyingFamily ? { underlyingFamily: entry.underlyingFamily } : {}),
+					thinkingEffort: entry.thinkingEffort ?? "auto",
 					availability: entry.state === "missing" ? "missing" : entry.state === "provider-unavailable" ? "unavailable" : entry.state === "unknown" ? "unknown" : entry.catalogState === "stale" ? "stale" : "available",
-					available: entry.state === "active" && entry.globalEnabled && entry.poolEnabled,
+					available: entry.thinkingEffortValid !== false && entry.state === "active" && entry.globalEnabled && entry.poolEnabled,
 					...(health[entry.routeId] ? { health: health[entry.routeId] } : {}),
 				})),
 			};
@@ -876,6 +935,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 	let registeredFingerprint: string | undefined;
 	let ownership: "unknown" | "external" | "owned" = "unknown";
+	let ownedProvider: unknown;
 	let disposed = false;
 	const lifetime = new AbortController();
 	let routingEventSequence = 0;
@@ -924,26 +984,42 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		return false;
 	};
 
+	const ownedProviderIsCurrent = (): boolean => {
+		if (ownership !== "owned" || !providerRegistry) return true;
+		try {
+			const current = providerRegistry.getProvider(providerId);
+			return current !== undefined && (ownedProvider === undefined || current === ownedProvider);
+		} catch {
+			return false;
+		}
+	};
+
 	const reconcile = async (): Promise<ReconcileResult> => {
 		if (disposed) return { changed: false, registered: false, modelCount: 0 };
 		await syncPiProviderCatalog();
 		const projection = await manager.providerProjection();
+		if (!ownedProviderIsCurrent()) {
+			ownership = "external";
+			registeredFingerprint = undefined;
+			return { changed: false, registered: false, modelCount: projection?.models.length ?? 0 };
+		}
 		const config = projection ? asProviderConfig(projection) : undefined;
 		if (ownership !== "owned" && providerRegistry) {
 			let providerExists = true;
 			try { providerExists = providerRegistry.getProvider(providerId) !== undefined; }
 			catch { /* Fail closed: an uninspectable provider namespace is external. */ }
-			if (providerExists) {
-				ownership = "external";
-				registeredFingerprint = undefined;
-				return { changed: false, registered: false, modelCount: projection?.models.length ?? 0 };
-			}
-			if (ownership === "external") ownership = "unknown";
+				if (providerExists) {
+					ownership = "external";
+					registeredFingerprint = undefined;
+					return { changed: false, registered: false, modelCount: projection?.models.length ?? 0 };
+				}
+				if (ownership === "external") return { changed: false, registered: false, modelCount: projection?.models.length ?? 0 };
 		}
 		if (!config || !projection) {
 			if (ownership === "owned") {
 				pi.unregisterProvider(providerId);
 				registeredFingerprint = undefined;
+				ownedProvider = undefined;
 				ownership = "unknown";
 				return { changed: true, registered: false, modelCount: 0 };
 			}
@@ -961,6 +1037,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			// supplied, so registration can update an existing projection in place.
 			// This also preserves the previous safe registry if validation fails.
 			pi.registerProvider(providerId, config);
+			try { ownedProvider = providerRegistry?.getProvider(providerId); } catch { ownedProvider = undefined; }
 			registeredFingerprint = fingerprint;
 			ownership = "owned";
 			return { changed: true, registered: true, modelCount: projection.models.length };
@@ -978,20 +1055,35 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const refreshAndReconcile = async (ctx: ExtensionContext | ExtensionCommandContext): Promise<void> => {
 		if (!requireIdle(ctx)) return;
 		try {
+			let before: readonly ModelManagerEntry[] = [];
+			try { before = await modelEntries(); } catch { /* refresh remains authoritative */ }
 			let externalProvider: unknown;
 			try { externalProvider = providerRegistry?.getProvider(providerId); } catch { externalProvider = undefined; }
+			let refreshResult: unknown;
 			if (externalProvider !== undefined) {
-				await providerRegistry?.refresh?.({ providers: [providerId], allowNetwork: true });
+				refreshResult = await providerRegistry?.refresh?.({ providers: [providerId], allowNetwork: true, force: true, ...(ctx.signal ? { signal: ctx.signal } : {}) });
+				if (refreshResult && typeof refreshResult === "object") {
+					if ((refreshResult as { readonly aborted?: unknown }).aborted === true) throw new Error("Pi 9Router catalog refresh was cancelled");
+					const errors = (refreshResult as { readonly errors?: unknown }).errors;
+					if ((errors instanceof Map && errors.size > 0) || (Array.isArray(errors) && errors.length > 0)) throw new Error("Pi 9Router catalog refresh failed");
+				}
 				await syncPiProviderCatalog();
 			} else {
-				await manager.refresh(AbortSignal.any(ctx.signal ? [ctx.signal, lifetime.signal] : [lifetime.signal]));
+				refreshResult = await manager.refresh(AbortSignal.any(ctx.signal ? [ctx.signal, lifetime.signal] : [lifetime.signal]));
 			}
 			const result = await reconcile();
 			if (result.error) {
 				notifyError(ctx, "9Router provider activation failed", result.error);
 				return;
 			}
-			ctx.ui.notify(`${externalProvider !== undefined ? "Pi 9Router models refreshed" : "9Router refreshed"} (${result.modelCount} enabled model${result.modelCount === 1 ? "" : "s"})`, "info");
+			const after = await modelEntries();
+			const observed = modelCatalogDiff(before, after);
+			const reported = refreshResult && typeof refreshResult === "object" ? refreshResult as Record<string, unknown> : {};
+			const ids = (key: string): readonly string[] | undefined => Array.isArray(reported[key]) ? reported[key].filter((value): value is string => typeof value === "string") : undefined;
+			const added = ids("addedRemoteIds") ?? observed.added;
+			const removed = ids("removedRemoteIds") ?? observed.removed;
+			const changed = ids("changedRemoteIds") ?? observed.changed;
+			ctx.ui.notify(`${externalProvider !== undefined ? "Pi 9Router models refreshed" : "9Router refreshed"} (${after.length} discovered, ${after.filter((entry) => entry.enabled).length} enabled; +${added.length} added, -${removed.length} removed, ~${changed.length} changed)`, "info");
 		} catch (error) {
 			notifyError(ctx, "9Router refresh failed", error);
 		}
@@ -1034,6 +1126,11 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			`local route: ${entry.routeId ?? "not enabled"}`,
 			`source: ${entry.sourceLabel ?? "unknown"}`,
 			`capability: ${entry.capability ?? "unknown"}`,
+			`reasoning: ${entry.reasoning === undefined ? "unknown" : entry.reasoning ? "supported" : "not supported"}`,
+			`thinking levels: ${entry.reasoning === false ? "not supported" : entry.thinkingLevelMap ? Object.keys(entry.thinkingLevelMap).join(", ") : "capabilities unavailable"}`,
+			`vision: ${entry.vision === undefined ? "unknown" : entry.vision}`,
+			`context: ${entry.contextWindow ?? "unknown"}`,
+			`max output: ${entry.maxTokens ?? "unknown"}`,
 			`state: ${entry.missing ? "missing" : entry.stale ? "stale" : entry.available === false ? "unavailable" : "available"}`,
 			...(entry.warning ? [`warning: ${entry.warning}`] : []),
 		].join("\n");
@@ -1058,15 +1155,28 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				ctx.ui.notify(`No 9Router models match '${filter}'`, "warning");
 				return;
 			}
-			const action = await ctx.ui.select("Models & 9Router", ["Set Up 9Router", "Use Advanced env reference", "Back"]);
-			if (action === "Set Up 9Router") await setupConnection(ctx);
-			else if (action === "Use Advanced env reference") await configureConnection(ctx);
-			return;
+			const action = await ctx.ui.select("Models & 9Router", ["Set Up 9Router", "Use Advanced env reference", "Refresh Models", "Back"]);
+			if (action === "Set Up 9Router") { await setupConnection(ctx); return; }
+			else if (action === "Use Advanced env reference") { await configureConnection(ctx); return; }
+			else if (action === "Refresh Models") {
+				await refreshAndReconcile(ctx);
+				try { entries = await modelEntries(filter); } catch (error) { notifyError(ctx, "9Router model list failed", error); return; }
+				if (entries.length === 0) return;
+			} else return;
 		}
 		while (true) {
-			const selected = await ctx.ui.select("9Router Models — select a model", entries.map(modelLabel));
-			if (!selected) return;
-			const index = entries.map(modelLabel).indexOf(selected);
+			const modelOptions = [...entries.map(modelLabel), "Refresh Models", "Back"];
+			const selected = await ctx.ui.select("9Router Models — select a model", modelOptions);
+			if (!selected || selected === "Back") return;
+			if (selected === "Refresh Models") {
+				await refreshAndReconcile(ctx);
+				try { entries = await modelEntries(filter); } catch (error) { notifyError(ctx, "9Router model list failed", error); return; }
+				continue;
+			}
+			const index = entries.findIndex((candidate) => {
+				const label = modelLabel(candidate);
+				return label === selected || label.startsWith(`${selected} `);
+			});
 			const entry = index >= 0 ? entries[index] : undefined;
 			if (!entry) return;
 			const action = await ctx.ui.select(`9Router model: ${entry.remoteModelId}`, ["Inspect", entry.enabled ? "Disable" : "Enable", "Back"]);
@@ -1262,6 +1372,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			`remote: ${entry.remoteModelId}`,
 			`global enabled: ${entry.globalEnabled}`,
 			`pool enabled: ${entry.poolEnabled}`,
+			`thinking effort: ${thinkingEffortLabel(entry.thinkingEffort ?? "auto")}${entry.thinkingEffortValid === false ? " (invalid/stale)" : ""}`,
+			`thinking support: ${entry.thinkingSupport ?? "unknown"}${(entry.supportedThinkingEfforts ?? []).length > 0 ? ` (${(entry.supportedThinkingEfforts ?? []).map(thinkingEffortLabel).join(", ")})` : ""}`,
 			`state: ${poolEntryState(entry)}`,
 			`gateway: ${entry.gatewayId ?? "unknown"}`,
 			`source: ${entry.sourceLabel ?? "unknown"}`,
@@ -1300,7 +1412,15 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			if (!selected) return;
 			const entry = candidates[candidates.map(poolCandidateLabel).indexOf(selected)];
 			if (!entry) return;
-			await poolMutation(ctx, `Add ${entry.routeId}`, () => poolManager.addRoute(view.poolId, entry.routeId));
+			const effortOptions = ["Auto", ...(entry.supportedThinkingEfforts ?? []).map(thinkingEffortLabel)];
+			if (entry.thinkingSupport === "not-supported") ctx.ui.notify("This route does not advertise reasoning; Auto is the only valid effort.", "info");
+			if (entry.thinkingSupport === "unknown") ctx.ui.notify("Thinking capabilities are unavailable; only Auto is offered.", "warning");
+			const selectedEffort = effortOptions.length === 1 ? "Auto" : await ctx.ui.select("Thinking Effort", effortOptions);
+			if (!selectedEffort) return;
+			const effort = selectedEffort === "Auto" ? "auto" : (entry.supportedThinkingEfforts ?? []).find((candidate) => thinkingEffortLabel(candidate) === selectedEffort);
+			if (!effort) return;
+			if (!await poolMutation(ctx, `Add ${entry.routeId}`, () => poolManager.addRoute(view.poolId, entry.routeId))) return;
+			if (effort !== "auto" && poolManager.setPoolEntryThinkingEffort) await poolMutation(ctx, `Set ${entry.routeId} thinking effort`, () => poolManager.setPoolEntryThinkingEffort!(view.poolId, entry.routeId, effort));
 		} catch (error) {
 			notifyError(ctx, "Pool candidate list failed", error);
 		}
@@ -1336,11 +1456,19 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			}
 			if (selected === "No routes assigned.") continue;
 			const entryIndex = entryOptions.indexOf(selected);
-			const entry = entryIndex >= 0 ? view.entries[entryIndex] : undefined;
+			const entry = entryIndex >= 0 ? view.entries[entryIndex] : view.entries.find((candidate) => selected.includes(`(${candidate.routeId})`));
 			if (!entry) continue;
 			const toggleLabel = entry.poolEnabled ? "Disable" : "Enable";
-			const action = await ctx.ui.select(`Route ${entry.routeId}`, ["Move Up", "Move Down", "Move to position", toggleLabel, "Inspect", "Remove", "Back"]);
+			const action = await ctx.ui.select(`Route ${entry.routeId}`, ["Change Thinking Effort", "Move Up", "Move Down", "Move to position", toggleLabel, "Inspect", "Remove", "Back"]);
 			switch (action) {
+				case "Change Thinking Effort": {
+					const effortOptions = ["Auto", ...(entry.supportedThinkingEfforts ?? []).map(thinkingEffortLabel)];
+					const selectedEffort = await ctx.ui.select("Thinking Effort", effortOptions);
+					if (!selectedEffort) break;
+					const effort = selectedEffort === "Auto" ? "auto" : (entry.supportedThinkingEfforts ?? []).find((candidate) => thinkingEffortLabel(candidate) === selectedEffort);
+					if (effort && poolManager.setPoolEntryThinkingEffort) await poolMutation(ctx, `Set ${entry.routeId} thinking effort`, () => poolManager.setPoolEntryThinkingEffort!(poolId, entry.routeId, effort));
+					break;
+				}
 				case "Move Up":
 					if (entry.index === 0) ctx.ui.notify("Already first; priority unchanged.", "info");
 					else await poolMutation(ctx, `Move ${entry.routeId} up`, () => poolManager.moveRouteUp(poolId, entry.routeId));
@@ -1757,8 +1885,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			remoteModelId: entry.remoteModelId,
 			...(entry.resourceId ? { resourceId: entry.resourceId } : {}),
 			...(entry.underlyingFamily ? { underlyingFamily: entry.underlyingFamily } : {}),
+			thinkingEffort: entry.thinkingEffort ?? "auto",
 			availability: routeAvailability(entry),
-			available: entry.projectedPiAvailable === false || entry.actualPiAvailable === false ? false : entry.state === "active",
+			available: entry.thinkingEffortValid !== false && (entry.projectedPiAvailable === false || entry.actualPiAvailable === false ? false : entry.state === "active"),
 			...(health[entry.routeId] ? { health: health[entry.routeId] } : {}),
 		}));
 
@@ -1925,8 +2054,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const result = await subagentExecutor.run(request, activeSignal);
 			if (analyticsStore) {
 				const base = { runId: result.runId, roleId: params.role, poolId: params.pool };
-				const events: AnalyticsEventV1[] = [{ eventId: `run-${result.runId}`, occurredAt: new Date().toISOString(), eventType: "run", ...base, ...(result.finalRouteId ? { routeId: result.finalRouteId } : {}), ...(result.finalRemoteModelId ? { remoteModelId: result.finalRemoteModelId } : {}), outcome: result.terminalStatus, dimensions: { fallbackCount: result.fallbackCount } }];
-				for (const attempt of result.attempts) { const attemptEvent: AnalyticsEventV1 = { eventId: `attempt-${attempt.attemptId}`, occurredAt: attempt.endedAt, eventType: "attempt", ...base, attemptId: attempt.attemptId, routeId: attempt.routeId, remoteModelId: attempt.remoteModelId, outcome: attempt.outcome }; if (attempt.latencyMs !== undefined) (attemptEvent as { durationMs?: number }).durationMs = attempt.latencyMs; if (attempt.infrastructureFailure?.class) (attemptEvent as { failureClass?: string }).failureClass = attempt.infrastructureFailure.class; if (attempt.usage) (attemptEvent as { tokenUsage?: AnalyticsEventV1["tokenUsage"] }).tokenUsage = { ...(attempt.usage.input === undefined ? {} : { inputTokens: attempt.usage.input }), ...(attempt.usage.output === undefined ? {} : { outputTokens: attempt.usage.output }), ...(attempt.usage.cacheRead === undefined ? {} : { cacheReadTokens: attempt.usage.cacheRead }), ...(attempt.usage.cacheWrite === undefined ? {} : { cacheWriteTokens: attempt.usage.cacheWrite }), ...(attempt.usage.reasoning === undefined ? {} : { reasoningTokens: attempt.usage.reasoning }), ...(attempt.usage.totalTokens === undefined ? {} : { totalTokens: attempt.usage.totalTokens }), provenance: "observed" }; events.push(attemptEvent); }
+				const events: AnalyticsEventV1[] = [{ eventId: `run-${result.runId}`, occurredAt: new Date().toISOString(), eventType: "run", ...base, ...(result.finalRouteId ? { routeId: result.finalRouteId } : {}), ...(result.finalRemoteModelId ? { remoteModelId: result.finalRemoteModelId } : {}), ...(result.requestedThinkingEffort === undefined ? {} : { requestedThinkingEffort: result.requestedThinkingEffort }), ...(result.effectiveThinkingEffort === undefined ? {} : { effectiveThinkingEffort: result.effectiveThinkingEffort }), outcome: result.terminalStatus, dimensions: { fallbackCount: result.fallbackCount } }];
+				for (const attempt of result.attempts) { const attemptEvent: AnalyticsEventV1 = { eventId: `attempt-${attempt.attemptId}`, occurredAt: attempt.endedAt, eventType: "attempt", ...base, attemptId: attempt.attemptId, routeId: attempt.routeId, remoteModelId: attempt.remoteModelId, ...(attempt.requestedThinkingEffort === undefined ? {} : { requestedThinkingEffort: attempt.requestedThinkingEffort }), ...(attempt.effectiveThinkingEffort === undefined ? {} : { effectiveThinkingEffort: attempt.effectiveThinkingEffort }), outcome: attempt.outcome }; if (attempt.latencyMs !== undefined) (attemptEvent as { durationMs?: number }).durationMs = attempt.latencyMs; if (attempt.infrastructureFailure?.class) (attemptEvent as { failureClass?: string }).failureClass = attempt.infrastructureFailure.class; if (attempt.usage) (attemptEvent as { tokenUsage?: AnalyticsEventV1["tokenUsage"] }).tokenUsage = { ...(attempt.usage.input === undefined ? {} : { inputTokens: attempt.usage.input }), ...(attempt.usage.output === undefined ? {} : { outputTokens: attempt.usage.output }), ...(attempt.usage.cacheRead === undefined ? {} : { cacheReadTokens: attempt.usage.cacheRead }), ...(attempt.usage.cacheWrite === undefined ? {} : { cacheWriteTokens: attempt.usage.cacheWrite }), ...(attempt.usage.reasoning === undefined ? {} : { reasoningTokens: attempt.usage.reasoning }), ...(attempt.usage.totalTokens === undefined ? {} : { totalTokens: attempt.usage.totalTokens }), provenance: "observed" }; events.push(attemptEvent); }
 				for (let index = 0; index + 1 < result.attempts.length; index++) { const from = result.attempts[index]!; const to = result.attempts[index + 1]!; if (from.failureAction !== "FALLBACK_NEXT_ROUTE") continue; events.push({ eventId: `fallback-${result.runId}-${index}`, occurredAt: to.startedAt, eventType: "fallback", ...base, fallbackFromRouteId: from.routeId, fallbackToRouteId: to.routeId, ...(from.infrastructureFailure?.class ? { failureClass: from.infrastructureFailure.class } : {}), outcome: "fallback" }); }
 				for (const event of events) { try { analyticsStore.append(event); } catch { /* analytics is non-critical */ } }
 			}
@@ -3436,11 +3565,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		if (disposed) return;
 		disposed = true;
 		lifetime.abort();
-		if (ownership === "owned") pi.unregisterProvider(providerId);
+		if (ownership === "owned" && ownedProviderIsCurrent()) pi.unregisterProvider(providerId);
 		const close = (options.missionStore as { readonly close?: unknown } | undefined)?.close;
 		if (typeof close === "function") close.call(options.missionStore);
 		try { analyticsStore?.close?.(); } catch { /* analytics is non-critical */ }
 		registeredFingerprint = undefined;
+		ownedProvider = undefined;
 		ownership = "unknown";
 	};
 

@@ -1,5 +1,6 @@
 import type { DiversityPreference, StableId } from "../config/types.js";
 import type { PoolId } from "../pools/index.js";
+import type { ThinkingEffort } from "../thinking.js";
 
 /** Infrastructure failures are deliberately separate from quality outcomes. */
 export type FailureClass =
@@ -63,6 +64,7 @@ export interface RoutingCandidate {
 	readonly available?: boolean;
 	readonly health?: RouteHealthView;
 	readonly maxAttempts?: number;
+	readonly thinkingEffort?: ThinkingEffort;
 }
 
 export interface DiversityContext {

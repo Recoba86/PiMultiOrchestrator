@@ -46,6 +46,7 @@ const PROVENANCE_KEYS = [
   "capabilities",
   "input",
   "reasoning",
+  "thinkingLevelMap",
   "vision",
   "capabilityMetadata",
   "contextWindow",
@@ -185,8 +186,10 @@ function validateEntry(value: unknown): RemoteCatalogEntry {
   const capabilities = validateTags(value.capabilities);
   const input = validateInput(value.input);
   const reasoning = optionalBoolean(value.reasoning);
+  const thinkingLevelMap = validateThinkingLevelMap(value.thinkingLevelMap);
   const vision = optionalBoolean(value.vision);
   if (value.reasoning !== undefined && reasoning === undefined) throw new Error("Catalog cache reasoning capability is invalid");
+  if (value.thinkingLevelMap !== undefined && thinkingLevelMap === undefined) throw new Error("Catalog cache thinking level map is invalid");
   if (value.vision !== undefined && vision === undefined) throw new Error("Catalog cache vision capability is invalid");
   const capabilityMetadata = validateCapabilityMetadata(value.capabilityMetadata);
   const contextWindow = optionalBoundedInteger(value.contextWindow, 1, 10_000_000);
@@ -206,6 +209,7 @@ function validateEntry(value: unknown): RemoteCatalogEntry {
     capabilities,
     input,
     ...(reasoning === undefined ? {} : { reasoning }),
+    ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
     ...(vision === undefined ? {} : { vision }),
     ...(capabilityMetadata === undefined ? {} : { capabilityMetadata }),
     ...(contextWindow === undefined ? {} : { contextWindow }),
@@ -240,6 +244,19 @@ function validateCapabilityMetadata(value: unknown): CatalogCapabilityMetadata |
   if (value.thinkingFormat !== undefined && thinkingFormat === undefined) throw new Error("Catalog cache capability metadata is invalid");
   if (thinkingFormat !== undefined) (result as Record<string, unknown>).thinkingFormat = thinkingFormat;
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function validateThinkingLevelMap(value: unknown): import("../thinking.js").ThinkingLevelMap | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, string | null> = {};
+  for (const key of ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const) {
+    if (!(key in value)) continue;
+    const item = value[key];
+    if (item !== null && (typeof item !== "string" || item.length === 0 || item.length > 128 || /\p{Cc}/u.test(item))) return undefined;
+    result[key] = item as string | null;
+  }
+  return Object.keys(result).length > 0 ? result as import("../thinking.js").ThinkingLevelMap : undefined;
 }
 
 function isResourceClass(value: unknown): value is ResourceClass {

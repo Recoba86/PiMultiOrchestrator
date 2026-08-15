@@ -1,6 +1,7 @@
 import { createDefaultConfig } from "../config/defaults.js";
 import { ConfigStore, type ConfigMutationResult } from "../config/store.js";
 import type { ConfigV1, PoolRouteV1, RouteConfigV1, StableId } from "../config/types.js";
+import { isSupportedThinkingEffort, isThinkingEffort, normalizeThinkingEffort, supportedThinkingEfforts, thinkingSupport, type ExplicitThinkingEffort, type ThinkingEffort, type ThinkingSupport } from "../thinking.js";
 import { CatalogCacheStore } from "../ninerouter/cache.js";
 import { normalizeNineRouterBaseUrl } from "../ninerouter/connection.js";
 import { NINEROUTER_GATEWAY_ID, type CatalogCacheLoadResult, type CatalogCacheV1 } from "../ninerouter/types.js";
@@ -45,6 +46,10 @@ export interface PoolEntryView {
 	readonly provenance?: CatalogCacheV1["entries"][number]["provenance"];
 	/** Whether the bound last-known-good catalog contains this remote ID. */
 	readonly presentInCatalog?: boolean;
+	readonly thinkingEffort?: ThinkingEffort;
+	readonly supportedThinkingEfforts?: readonly ExplicitThinkingEffort[];
+	readonly thinkingSupport?: ThinkingSupport;
+	readonly thinkingEffortValid?: boolean;
 }
 
 export interface PoolView {
@@ -88,6 +93,7 @@ export type PoolManagerErrorCode =
 	| "route-not-found"
 	| "duplicate-route"
 	| "route-not-in-pool"
+	| "invalid-thinking-effort"
 	| "invalid-target-index";
 
 export class PoolManagerError extends Error {
@@ -174,6 +180,7 @@ export class PoolManager {
 		const needle = typeof filter === "string" ? filter.trim().toLocaleLowerCase() : filter?.filter?.trim().toLocaleLowerCase();
 		const routes = Object.values(context.config.routes)
 			.filter((route) => !members.has(route.id))
+			.filter((route) => route.enabled)
 			.filter((route) => {
 				if (!needle) return true;
 				return `${route.id} ${route.displayName} ${route.remoteModelId}`.toLocaleLowerCase().includes(needle);
@@ -192,7 +199,7 @@ export class PoolManager {
 			if (pool.entries.some((entry) => entry.routeId === routeId)) {
 				throw new PoolManagerError("duplicate-route", `Route is already assigned to ${poolId}: ${routeId}`, { poolId, routeId });
 			}
-			pool.entries.push({ routeId, enabled: true });
+			pool.entries.push({ routeId, enabled: true, thinkingEffort: "auto" });
 		});
 	}
 
@@ -229,6 +236,24 @@ export class PoolManager {
 			const entry = pool.entries.find((candidate) => candidate.routeId === routeId);
 			if (!entry) throw new PoolManagerError("route-not-in-pool", `Route is not assigned to ${poolId}: ${routeId}`, { poolId, routeId });
 			entry.enabled = enabled;
+		});
+	}
+
+	async setPoolEntryThinkingEffort(poolId: PoolId, routeId: StableId, thinkingEffort: ThinkingEffort): Promise<PoolMutationResult> {
+		assertPoolId(poolId);
+		if (!isThinkingEffort(thinkingEffort)) throw new PoolManagerError("invalid-thinking-effort", "Thinking effort is invalid", { poolId, routeId });
+		const normalized = thinkingEffort;
+		const context = await this.loadContext();
+		const route = context.config.routes[routeId];
+		const catalog = route ? boundCatalog(context.config, route, context.cacheResult) : undefined;
+		const catalogEntry = catalog?.entries.find((candidate) => candidate.remoteId === route?.remoteModelId);
+		if (normalized !== "auto" && (!route || !isSupportedThinkingEffort(routeThinkingMetadata(route, catalogEntry), normalized))) {
+			throw new PoolManagerError("invalid-thinking-effort", `Thinking effort ${normalized} is not confirmed for ${route?.remoteModelId ?? routeId}`, { poolId, routeId });
+		}
+		return this.mutate(poolId, routeId, (pool, config) => {
+			const entry = pool.entries.find((candidate) => candidate.routeId === routeId);
+			if (!entry) throw new PoolManagerError("route-not-in-pool", `Route is not assigned to ${poolId}: ${routeId}`, { poolId, routeId });
+			entry.thinkingEffort = normalized;
 		});
 	}
 
@@ -311,11 +336,21 @@ export class PoolManager {
 				catalogState: "unknown",
 				resourceClass: "unknown",
 				presentInCatalog: false,
+				thinkingEffort: normalizeThinkingEffort(entry.thinkingEffort),
+				supportedThinkingEfforts: [],
+				thinkingSupport: "unknown",
+				thinkingEffortValid: entry.thinkingEffort === undefined || entry.thinkingEffort === "auto",
 			};
 		}
 		const catalog = boundCatalog(config, route, cacheResult);
 		const catalogEntry = catalog?.entries.find((candidate) => candidate.remoteId === route.remoteModelId);
 		const state = managementState(config, route, catalog, catalogEntry);
+		const effort = normalizeThinkingEffort(entry.thinkingEffort);
+		const thinkingMetadata: { reasoning?: boolean; thinkingLevelMap?: import("../thinking.js").ThinkingLevelMap } = {};
+		if (catalogEntry?.reasoning !== undefined || route.metadata?.thinkingLevelMap !== undefined) thinkingMetadata.reasoning = catalogEntry?.reasoning ?? true;
+		const thinkingLevelMap = catalogEntry?.thinkingLevelMap ?? route.metadata?.thinkingLevelMap;
+		if (thinkingLevelMap !== undefined) thinkingMetadata.thinkingLevelMap = thinkingLevelMap;
+		const availableThinkingEfforts = supportedThinkingEfforts(thinkingMetadata);
 		const catalogState: PoolCatalogState = !catalog
 			? "unknown"
 			: !catalogEntry
@@ -340,6 +375,10 @@ export class PoolManager {
 			...(route.metadata?.underlyingVersion ? { underlyingVersion: route.metadata.underlyingVersion } : {}),
 			...(catalogEntry ? { provenance: catalogEntry.provenance } : {}),
 			...(catalog ? { presentInCatalog: catalogEntry !== undefined } : {}),
+			thinkingEffort: effort,
+			supportedThinkingEfforts: availableThinkingEfforts,
+			thinkingSupport: thinkingSupport(thinkingMetadata),
+			thinkingEffortValid: effort === "auto" || isSupportedThinkingEffort(thinkingMetadata, effort),
 		};
 	}
 }
@@ -386,4 +425,12 @@ function managementState(
 	if (!catalogEntry) return "missing";
 	if (catalogEntry.capability === "non-chat") return "provider-unavailable";
 	return "active";
+}
+
+function routeThinkingMetadata(route: RouteConfigV1, catalogEntry?: CatalogCacheV1["entries"][number]): { reasoning?: boolean; thinkingLevelMap?: import("../thinking.js").ThinkingLevelMap } {
+	const result: { reasoning?: boolean; thinkingLevelMap?: import("../thinking.js").ThinkingLevelMap } = {};
+	if (catalogEntry?.reasoning !== undefined || route.metadata?.thinkingLevelMap !== undefined) result.reasoning = catalogEntry?.reasoning ?? true;
+	const thinkingLevelMap = catalogEntry?.thinkingLevelMap ?? route.metadata?.thinkingLevelMap;
+	if (thinkingLevelMap !== undefined) result.thinkingLevelMap = thinkingLevelMap;
+	return result;
 }

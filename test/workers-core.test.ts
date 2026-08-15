@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -31,6 +31,7 @@ import {
 import { createSubagentExecutorForTesting } from "../src/core/workers/executor.js";
 import type { RoutingCandidate, RoutingPolicy } from "../src/core/routing/index.js";
 import type { StableId } from "../src/core/config/types.js";
+import type { ThinkingEffort } from "../src/core/thinking.js";
 import { createVerificationResultProtocol } from "../src/core/quality/index.js";
 
 const id = (value: string): StableId => value as StableId;
@@ -192,6 +193,53 @@ describe("M5 worker core", () => {
 		}
 	});
 
+	it("propagates every explicit pool effort and records requested/effective levels", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-worker-thinking-"));
+		try {
+			for (const effort of ["low", "medium", "high", "max"] as const) {
+				let seen: ThinkingEffort | undefined;
+				const adapter = adapterFor([candidate("route-a", 0, effort)]);
+				const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+					create: async (options) => {
+						seen = options.request.thinkingEffort;
+						const handle = fakeSessionHandle(options.resultProtocol, "complete");
+						return { ...handle, session: { ...handle.session, thinkingLevel: effort } as AgentSession };
+					},
+				});
+				const result = await executor.run(request(root, "investigation"));
+				assert.equal(seen, effort);
+				assert.equal(result.attempts[0]?.requestedThinkingEffort, effort);
+				assert.equal(result.attempts[0]?.effectiveThinkingEffort, effort);
+			}
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects unsupported explicit effort before child session creation", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-worker-thinking-invalid-"));
+		try {
+			await assert.rejects(
+				() => createChildSession({
+					cwd: root,
+					route: { routeId: id("route-a"), remoteModelId: "remote-a", model: { id: "remote-a", provider: "9router", reasoning: false } as never, modelRuntime: {} as never },
+					request: { ...request(root, "investigation"), thinkingEffort: "high" },
+					toolNames: ["read"],
+					resultProtocol: { toolName: "submit_agent_result", parameters: { type: "object" } },
+				}),
+				/Thinking effort high is not supported/u,
+			);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps Auto as an omitted Pi override rather than Off", async () => {
+		const source = await readFile(join(process.cwd(), "src/core/workers/session.ts"), "utf8");
+		assert.match(source, /requestedThinkingEffort === "auto" \? \{\} : \{ thinkingLevel: requestedThinkingEffort \}/u);
+		assert.doesNotMatch(source, /thinkingLevel:\s*["']off["']/u);
+	});
+
 	it("accepts a declarative bounded result protocol without changing M4 routing", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-worker-protocol-"));
 		try {
@@ -350,7 +398,7 @@ function request(cwd: string, poolId: SubagentExecutionRequest["poolId"]): Subag
 	return { roleId: "worker", poolId, task: "inspect the fixture", cwd, timeoutMs: 80 };
 }
 
-function candidate(routeId: string, poolPosition: number): RoutingCandidate {
+function candidate(routeId: string, poolPosition: number, thinkingEffort?: ThinkingEffort): RoutingCandidate {
 	return {
 		routeId: id(routeId),
 		poolId: "implementation",
@@ -359,6 +407,7 @@ function candidate(routeId: string, poolPosition: number): RoutingCandidate {
 		globalEnabled: true,
 		remoteModelId: `remote/${routeId}`,
 		availability: "available",
+		...(thinkingEffort === undefined ? {} : { thinkingEffort }),
 	};
 }
 

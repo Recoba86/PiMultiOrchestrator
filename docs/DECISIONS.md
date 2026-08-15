@@ -335,3 +335,26 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   contain no raw key. A failed test cannot persist setup state. Secure setup is
   TUI-only until Pi exposes an equivalent masked RPC input contract; Keychain
   fallback and automatic pool assignment remain out of scope.
+
+## ADR-040 — RC20 keeps effort per Pool entry and refreshes catalogs manually
+
+- **Decision:** Store Thinking Effort on each Pool route entry. Expose only
+  `auto`, `low`, `medium`, `high`, `xhigh`, and `max`, filtered by route
+  capability metadata. Auto omits the Pi override; explicit unsupported or
+  stale values make the entry unavailable until the user changes it. Record
+  requested and observed effective effort as bounded analytics metadata.
+- **Decision:** Make Refresh Models a visible, manual action. PMO-owned
+  connections use the live 9Router client; externally-owned Pi providers use
+  Pi's refresh API and remain external. Successful refreshes publish only
+  validated catalog data and report added/removed/changed entries. Failures
+  retain the last-known-good catalog and never alter PMO enablement, Pool order,
+  or effort settings.
+- **Decision:** Treat discovery, PMO enablement, Pool membership, and provider
+  ownership as separate state. New routes are disabled, disabled routes stay
+  in existing Pools as unavailable, and genuine duplicate identities remain
+  ambiguous rather than being guessed. Periodic synchronization and Benchmark
+  Lab are deferred.
+- **Rationale:** Pi 0.84.1 defaults an omitted thinking override through its
+  own model/provider behavior, while a hardcoded `off` defeats reasoning. Pool
+  roles need independent policy, and manual source-aware refresh addresses
+  catalog drift without taking ownership of a user's Pi provider.

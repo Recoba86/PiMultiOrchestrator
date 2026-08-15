@@ -4,6 +4,23 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC20 — Thinking-aware Pool routing and live catalog refresh
+
+- **Date/status:** 2026-08-15; implementation and focused validation complete;
+  release gate/publication evidence is recorded when the exact RC20 source
+  commit and artifact are finalized.
+- **Implementation:** Pool route entries now carry independent Thinking Effort;
+  legacy absence becomes `auto` at the ConfigStore write boundary. Auto omits
+  Pi's `thinkingLevel` override, explicit levels are capability-validated, and
+  attempts/analytics retain requested versus observed effective effort.
+- **Model Router:** Models & 9Router exposes in-place Refresh Models, uses live
+  PMO or external-Pi refresh paths, reports added/removed/changed rows, keeps a
+  validated last-known-good catalog on failure, excludes disabled routes from
+  Add Model, and preserves external provider ownership and Pool state.
+- **Scope:** periodic automatic sync, Benchmark Lab, automatic effort tuning,
+  and autonomous Pool rewrites remain future work. No live Pi configuration,
+  provider account, or credential was modified during implementation checks.
+
 ## RC19 public prerelease publication
 
 - **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE`.

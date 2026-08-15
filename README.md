@@ -4,18 +4,15 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The current public prerelease is `0.1.0-rc.19`; rc.1 through rc.18 are historical
-or superseded candidates. RC19 carries the accepted RC17/RC18 behavior plus
-Pi `0.84.1` existing-provider adoption, a neutral no-provider state, masked
-TUI `Test & Save` onboarding through Pi auth storage, and the Pi-auth provider
-bridge. RC19 is published under the `next` dist-tag, not a stable or production
-release. The release commit is `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag
-`v0.1.0-rc.19`, and artifact SHA-256
-`338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e`.
+The current prerelease line is RC20 (`0.1.0-rc.20`), built on the accepted
+RC19 provider-adoption boundary. RC20 adds per-Pool-route Thinking Effort,
+manual live `Refresh Models`, safe catalog diff/LKG handling, and explicit
+PMO route enablement separate from Pi provider ownership. It is published
+under the `next` dist-tag, not a stable or production release.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. RC13, RC15, and RC16 are historical; RC17 is the successor candidate after the final RC16 live M7 reviewer handoff blocked before structured submission. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox. RC19 never replaces an external Pi provider, auto-assigns pools, or persists a raw API key; RPC raw-key setup fails closed. A quality PASS is not by itself mission completion, canonical evidence admission, or public release readiness.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox. RC20 never replaces an external Pi provider, shrinks its catalog, silently maps Auto to Off, silently downgrades stale explicit effort, auto-assigns pools, or persists a raw API key; RPC raw-key setup fails closed. Periodic automatic catalog sync and Benchmark Lab remain future work. A quality PASS is not by itself mission completion, canonical evidence admission, or public release readiness.
 
 The implementation contract is split across the repository files
 `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`,
@@ -46,7 +43,7 @@ Evidence and proof-of-concept boundaries are recorded in `docs/ARCHITECTURE.md`.
 
 Requires Node.js `>=22.19.0` and npm.
 
-## RC19 prerelease install
+## RC20 prerelease install
 
 The `.tgz` is the immutable release artifact. Pi `0.84.1` does not unpack a
 local tarball passed directly to `pi install`; verify its checksum, extract it
@@ -55,10 +52,14 @@ isolated Pi settings. The source checkout is never the installed package. For
 the public prerelease, use Pi's npm package source:
 
 ```sh
-pi install npm:pi-multi-orchestrator@0.1.0-rc.19
+pi install npm:pi-multi-orchestrator@0.1.0-rc.20
 ```
 
-This is an early prerelease, not a stable or production release.
+This is an early prerelease, not a stable or production release. After loading,
+open `/orchestrator` → **Models & 9Router** → **Refresh Models**. Enable a PMO
+route before adding it to a Pool; each Pool entry stores its own Thinking Effort
+(`Auto`, `Low`, `Medium`, `High`, `XHigh`, or `Max` when supported). Auto omits
+the PMO override and defers to Pi/provider defaults; it is not Off.
 
 ```sh
 npm install
@@ -72,10 +73,10 @@ Tests use Node's built-in runner, temporary directories, and a random loopback f
 Development loading is explicit; the extension is not installed into the live Pi directory:
 
 ```sh
-RC19_ROOT="$(mktemp -d)"
-mkdir -p "$RC19_ROOT/pmo" "$RC19_ROOT/sessions"
-PI_MULTI_ORCH_CONFIG_ROOT="$RC19_ROOT/pmo" \
-PI_CODING_AGENT_SESSION_DIR="$RC19_ROOT/sessions" \
+RC20_ROOT="$(mktemp -d)"
+mkdir -p "$RC20_ROOT/pmo" "$RC20_ROOT/sessions"
+PI_MULTI_ORCH_CONFIG_ROOT="$RC20_ROOT/pmo" \
+PI_CODING_AGENT_SESSION_DIR="$RC20_ROOT/sessions" \
 PI_OFFLINE=1 \
   pi --no-extensions -e "$PWD/dist/host/pi-extension.js" \
   --no-session --no-context-files
@@ -85,7 +86,7 @@ This keeps PMO/session state disposable while the normal Pi model/auth
 catalog remains the operator's existing configuration. Do not run refreshes or
 model requests during a compatibility check.
 
-The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. M3 adds `/pool-models [investigation|implementation|verification]` and `/pool-status`; the same three pool editors are available from `/orchestrator`. M4 adds `/routing-status [pool]`, `/route-health [filter]`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`. M5 adds parent-only `delegate_agent` and Direct Worker `/subagent-run`; role and pool are explicit, while M4 selects the exact route/model. M6 adds `/missions` and `/mission-packet <mission-id> <task-id>` plus Context & Mission Settings in `/orchestrator`. M7 adds `/quality-status [mission-id] [task-id]` and confirmation-gated `/verify-task <mission-id> <task-id> [target-run-id]`; M8 adds `/analytics [24h|7d|30d|custom FROM TO]` and `/recommendations [pool]` with explicit details/apply/ignore actions. M8.5 adds `/recommendation-analyst` and the Statistics & Analytics → Recommendation Analyst menu with Deterministic only/AI-assisted mode, Verification Pool route selection, Analyze Now/Re-analyze, status, and last-analysis details. M9 makes `/orchestrator` the twelve-section Control Center; see the [operator guide](docs/OPERATOR_GUIDE.md). M12.1 adds `@orchestrator <goal>` at the beginning (surrounding whitespace allowed) of a normal Pi input; ordinary prompts are unchanged, and empty entry reports `Add a goal after @orchestrator.` M12.2 adds Smart Routing inside Routing & Fallback: clear prompts stay normal, clear multi-stage prompts show a Run as Mission/Run Normally choice, and ambiguous prompts may use only a configured triage route. M12.3 adds Routing Memory controls in that same section, `Always orchestrate similar tasks`, learned Mission/Normal preferences, and abstract-only Learned Behaviors/backup management. RC19 adds existing-Pi 9Router catalog adoption and TUI-only masked Test & Save setup through Pi auth; external providers remain untouched and pool assignment stays explicit. Direct Workers are foreground/ad-hoc execution; use `/verify-task` for canonical Mission/M7 verification. Analyst execution is explicit and never applies a recommendation. Task detail exposes verification history and bounded repair/re-review when reviewer and repair services are configured. Pool edits change validated configuration only and never select a route or launch a subagent. Routing status is a non-mutating preview; health reset changes only runtime health. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key; the TUI-only setup flow tests a raw key in memory before delegating storage to Pi auth. Other URL paths are rejected.
+The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. M3 adds `/pool-models [investigation|implementation|verification]` and `/pool-status`; the same three pool editors are available from `/orchestrator`. M4 adds `/routing-status [pool]`, `/route-health [filter]`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`. M5 adds parent-only `delegate_agent` and Direct Worker `/subagent-run`; role and pool are explicit, while M4 selects the exact route/model. M6 adds `/missions` and `/mission-packet <mission-id> <task-id>` plus Context & Mission Settings in `/orchestrator`. M7 adds `/quality-status [mission-id] [task-id]` and confirmation-gated `/verify-task <mission-id> <task-id> [target-run-id]`; M8 adds `/analytics [24h|7d|30d|custom FROM TO]` and `/recommendations [pool]` with explicit details/apply/ignore actions. M8.5 adds `/recommendation-analyst` and the Statistics & Analytics → Recommendation Analyst menu with Deterministic only/AI-assisted mode, Verification Pool route selection, Analyze Now/Re-analyze, status, and last-analysis details. M9 makes `/orchestrator` the twelve-section Control Center; see the [operator guide](docs/OPERATOR_GUIDE.md). M12.1 adds `@orchestrator <goal>` at the beginning (surrounding whitespace allowed) of a normal Pi input; ordinary prompts are unchanged, and empty entry reports `Add a goal after @orchestrator.` M12.2 adds Smart Routing inside Routing & Fallback: clear prompts stay normal, clear multi-stage prompts show a Run as Mission/Run Normally choice, and ambiguous prompts may use only a configured triage route. M12.3 adds Routing Memory controls in that same section, `Always orchestrate similar tasks`, learned Mission/Normal preferences, and abstract-only Learned Behaviors/backup management. RC19 adds existing-Pi 9Router catalog adoption and TUI-only masked Test & Save setup through Pi auth; RC20 adds manual live Refresh Models, discovered-versus-enabled route gating, and per-Pool-route Thinking Effort with capability-aware choices. Direct Workers are foreground/ad-hoc execution; use `/verify-task` for canonical Mission/M7 verification. Analyst execution is explicit and never applies a recommendation. Task detail exposes verification history and bounded repair/re-review when reviewer and repair services are configured. Pool edits change validated configuration only and never select a route or launch a subagent. Routing status is a non-mutating preview; health reset changes only runtime health. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key; the TUI-only setup flow tests a raw key in memory before delegating storage to Pi auth. Other URL paths are rejected.
 
 ## Scope boundary
 
@@ -98,7 +99,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC19 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
+M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC20 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 

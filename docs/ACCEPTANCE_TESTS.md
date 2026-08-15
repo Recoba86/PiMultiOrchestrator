@@ -1149,3 +1149,42 @@ capability distinction remain planned.
   updates/removes only its own namespace; typecheck, full tests, build, release
   verification, exact artifact binding, `next`-only publication, and public
   install pass. No `latest` mutation is made.
+
+## RC20 — Thinking-aware Pool routing and live catalog refresh
+
+### RC20-01 — Pool-entry effort and Auto semantics
+
+- **Level:** U/I/P, Pi `0.84.1`
+- **Pass:** legacy Pool entries persist as `auto`; Auto omits the Pi override;
+  supported explicit values are `low`, `medium`, `high`, `xhigh`, and `max`;
+  unsupported values fail before model execution; the same route can persist
+  different effort values in different Pools without changing route ID/order.
+
+### RC20-02 — Execution and safe metadata
+
+- **Level:** I/P, fixture Pi `0.84.1`
+- **Pass:** Direct Workers and shared Mission/M7 executor paths select the
+  Pool-entry effort, child session state is observed, and analytics records
+  bounded requested/effective effort without prompts, credentials, or raw
+  provider data. A stale explicit effort is unavailable and is not silently
+  downgraded.
+
+### RC20-03 — Model Router enablement and refresh
+
+- **Level:** U/I/P/TUI/RPC, fake gateway and external-Pi fixtures
+- **Pass:** Models & 9Router visibly offers Refresh Models; live refresh shows
+  added/removed/changed rows, new rows default disabled, removed Pool routes
+  remain missing/unavailable, enabled flags and Pool order/effort survive, and
+  disabled PMO routes are excluded from Add Model. PMO enablement never shrinks
+  or unregisters an external Pi provider.
+
+### RC20-04 — Last-known-good and identity safety
+
+- **Level:** I/security
+- **Pass:** timeout, auth, malformed, empty, duplicate, and provider refresh
+  failures retain the prior valid catalog; exact Pi/live route matches reconcile
+  deterministically; genuine duplicate configured identities remain ambiguous;
+  refresh and diagnostics never expose credential values.
+
+Periodic automatic synchronization and Benchmark Lab are not RC20 acceptance
+requirements and remain future work.

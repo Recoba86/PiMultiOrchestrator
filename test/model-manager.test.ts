@@ -107,7 +107,7 @@ describe("NineRouterManager", () => {
       remoteCatalog = [...remoteCatalog, { id: "remote-new", name: "Remote New", capabilities: ["chat"] }];
       await manager.refresh();
       const newRow = (await manager.list()).find((row) => row.remoteModelId === "remote-new");
-      assert.equal(newRow?.status, "ambiguous");
+      assert.equal(newRow?.status, "new");
       assert.equal(newRow?.enabled, false);
       assert.equal((await manager.providerProjection()).models.length, 5);
 

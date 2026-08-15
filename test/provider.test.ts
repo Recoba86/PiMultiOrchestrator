@@ -425,7 +425,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: {
 				select: async (title: string, choices: readonly string[]) => {
 					assert.equal(title, "Models & 9Router");
-					assert.deepEqual(choices, ["Set Up 9Router", "Use Advanced env reference", "Back"]);
+					assert.deepEqual(choices, ["Set Up 9Router", "Use Advanced env reference", "Refresh Models", "Back"]);
 					return "Set Up 9Router";
 				},
 				input: async (title: string) => {
@@ -510,6 +510,37 @@ describe("Pi 9Router host adapter", () => {
 		assert.deepEqual(fixture.setEnabledCalls, []);
 		assert.match(notifications[0] ?? "", /remote: remote-a/);
 		assert.ok(notifications.some((message) => /active 9Router model/.test(message)));
+	});
+
+	it("[RC20][U/TUI][fixture-pi-0.84.1] exposes Refresh Models and redraws changed catalog rows", async () => {
+		const fixture = managerFixture(projection());
+		const pi = piFixture();
+		fixture.refresh = async () => {
+			fixture.entries.push({ remoteModelId: "remote-new", displayName: "Remote New", sourceLabel: "fixture", enabled: false, available: true });
+		};
+		const host = createPiHost(pi.pi, { manager: fixture });
+		host.registerCommands();
+		const notifications: string[] = [];
+		let first = true;
+		await pi.commands.get("9router-models")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (_title: string, choices: readonly string[]) => {
+					if (first) {
+						first = false;
+						assert.ok(choices.includes("Refresh Models"));
+						return "Refresh Models";
+					}
+					assert.ok(choices.some((choice) => choice.includes("remote-new")));
+					return "Back";
+				},
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.ok(notifications.some((message) => /\+1 added/u.test(message)));
+		assert.equal(fixture.entries.find((entry) => entry.remoteModelId === "remote-new")?.enabled, false);
 	});
 
 	it("[U][fixture-pi-0.84.1][M10] exposes Security & Trust without adding a control-center section", async () => {

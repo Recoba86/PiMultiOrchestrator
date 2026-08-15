@@ -17,6 +17,7 @@ import type {
 } from "../routing/index.js";
 import type { PoolId } from "../pools/index.js";
 import type { WorkerSafetyContext } from "./safety.js";
+import type { EffectiveThinkingEffort, ThinkingEffort } from "../thinking.js";
 
 export const WORKER_PROTOCOL_VERSION = 1 as const;
 
@@ -38,6 +39,8 @@ export interface SubagentExecutionRequest extends WorkerTimeoutPolicy {
 	readonly acceptanceCriteria?: readonly string[];
 	readonly diversity?: RoutingRequest["diversity"];
 	readonly excludedRouteIds?: readonly StableId[];
+	/** Pool-entry policy; absence is the legacy/Auto semantic. */
+	readonly thinkingEffort?: ThinkingEffort;
 }
 
 export interface ProtocolCaptureState {
@@ -136,6 +139,8 @@ export interface SubagentAttempt {
 	readonly protocolResult?: unknown;
 	readonly sessionTerminalState: "idle" | "aborted" | "disposed" | "error";
 	readonly errorMessage?: string;
+	readonly requestedThinkingEffort?: ThinkingEffort;
+	readonly effectiveThinkingEffort?: EffectiveThinkingEffort;
 }
 
 export type SubagentTerminalStatus =
@@ -162,6 +167,8 @@ export interface SubagentRunResult {
 	readonly potentialMutationObserved: boolean;
 	readonly fallbackCount: number;
 	readonly summary: string;
+	readonly requestedThinkingEffort?: ThinkingEffort;
+	readonly effectiveThinkingEffort?: EffectiveThinkingEffort;
 }
 
 export interface ResolvedWorkerRoute {

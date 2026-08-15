@@ -1,4 +1,5 @@
 import { ConfigValidationError, type ConfigIssue } from "./errors.js";
+import { THINKING_EFFORTS } from "../thinking.js";
 import type {
   AnalyticsPolicyV1,
   BillingPolicyV2,
@@ -221,11 +222,23 @@ const validateSecretRef = (value: unknown, path: string, issues: ConfigIssue[]):
 const validateMetadata = (value: unknown, path: string, issues: ConfigIssue[]): RouteMetadataV1 | undefined => {
   const object = record(value, path, issues);
   if (!object) return undefined;
-  ensureKeys(object, ["underlyingFamily", "underlyingVersion", "sourceLabel"], path, issues);
+  ensureKeys(object, ["underlyingFamily", "underlyingVersion", "sourceLabel", "thinkingLevelMap"], path, issues);
   for (const key of ["underlyingFamily", "underlyingVersion", "sourceLabel"] as const) {
     if (key in object) validateLabel(object[key], fieldPath(path, key), issues);
   }
+  if ("thinkingLevelMap" in object) validateThinkingLevelMap(object.thinkingLevelMap, fieldPath(path, "thinkingLevelMap"), issues);
   return value as RouteMetadataV1;
+};
+
+const validateThinkingLevelMap = (value: unknown, path: string, issues: ConfigIssue[]): void => {
+  const object = record(value, path, issues);
+  if (!object) return;
+  ensureKeys(object, ["off", "minimal", "low", "medium", "high", "xhigh", "max"], path, issues);
+  for (const key of ["off", "minimal", ...THINKING_EFFORTS] as const) {
+    if (!(key in object)) continue;
+    const item = object[key];
+    if (item !== null) stringValue(item, fieldPath(path, key), issues, { maxLength: 128 });
+  }
 };
 
 const validateGateway = (value: unknown, path: string, issues: ConfigIssue[]): GatewayConfigV1 | undefined => {
@@ -278,11 +291,12 @@ const validateRoute = (value: unknown, path: string, issues: ConfigIssue[]): Rou
 const validatePoolEntry = (value: unknown, path: string, issues: ConfigIssue[]): PoolRouteV1 | undefined => {
   const object = record(value, path, issues);
   if (!object) return undefined;
-  ensureKeys(object, ["routeId", "enabled", "timeoutMs", "maxAttempts"], path, issues);
+  ensureKeys(object, ["routeId", "enabled", "timeoutMs", "maxAttempts", "thinkingEffort"], path, issues);
   stableId(object.routeId, fieldPath(path, "routeId"), issues);
   booleanValue(object.enabled, fieldPath(path, "enabled"), issues);
   if ("timeoutMs" in object) boundedInteger(object.timeoutMs, fieldPath(path, "timeoutMs"), issues, 1_000, 600_000);
   if ("maxAttempts" in object) boundedInteger(object.maxAttempts, fieldPath(path, "maxAttempts"), issues, 1, 16);
+  if ("thinkingEffort" in object) enumValue(object.thinkingEffort, fieldPath(path, "thinkingEffort"), issues, ["auto", ...THINKING_EFFORTS] as const);
   return value as PoolRouteV1;
 };
 

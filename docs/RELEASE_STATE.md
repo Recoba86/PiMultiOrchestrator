@@ -15,6 +15,7 @@ This file records releasable product state. It does not promote development prog
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.19` — GitHub prerelease and npm `next` |
 | Product version | NONE assigned |
 | Development manifest version | `0.1.0-rc.19` — RC19 public prerelease |
+| RC20 release candidate | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; release gate pending |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
@@ -28,6 +29,17 @@ This file records releasable product state. It does not promote development prog
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC20 release candidate
+
+RC20 is the next public prerelease candidate. It adds independent Pool-entry
+Thinking Effort with omission-based Auto semantics, capability-aware explicit
+levels, requested/effective run metadata, manual live Refresh Models, catalog
+diff/LKG safety, disabled-route gating, and deterministic route identity
+handling. The source-bound commit, tag, artifact checksum, npm `next`, GitHub
+prerelease, and public install evidence are intentionally recorded only after
+the clean release gate completes. It remains prerelease-only; `latest` must not
+move.
 
 ## RC19 public prerelease publication
 

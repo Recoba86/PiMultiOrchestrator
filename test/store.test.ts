@@ -65,10 +65,10 @@ describe("ConfigStore persistence", () => {
     await assert.rejects(readFile(join(path, "config.json")));
   });
 
-  it("[I][fixture-v1] save is atomic with history and restrictive modes", async () => {
-    const path = await root();
-    const audit: unknown[] = [];
-    const store = new ConfigStore({ root: path, clock: fixedClock(), onAudit: (event) => { audit.push(event); } });
+	it("[I][fixture-v1] save is atomic with history and restrictive modes", async () => {
+		const path = await root();
+		const audit: unknown[] = [];
+		const store = new ConfigStore({ root: path, clock: fixedClock(), onAudit: (event) => { audit.push(event); } });
     const first = await store.initialize(fixture());
     assert.equal(first.generation, 1);
     const second = await store.update((draft) => { draft.pools.implementation.entries.reverse(); });
@@ -93,10 +93,19 @@ describe("ConfigStore persistence", () => {
       generation: 2,
       previousGeneration: 1,
       timestamp: "2026-01-01T00:00:01.000Z",
-    });
-  });
+		});
+	});
 
-  it("[I][fixture-v1] invalid save leaves active bytes unchanged", async () => {
+	it("[RC20][I][fixture-v1] persists Auto for legacy pool entries", async () => {
+		const path = await root();
+		const store = new ConfigStore({ root: path });
+		await store.initialize(fixture());
+		const persisted = JSON.parse(await readFile(join(path, "config.json"), "utf8")) as { config: ConfigV1 };
+		assert.equal(persisted.config.pools.implementation.entries[0]?.thinkingEffort, "auto");
+		assert.equal((await store.load()).snapshot?.config.pools.implementation.entries[0]?.thinkingEffort, "auto");
+	});
+
+	it("[I][fixture-v1] invalid save leaves active bytes unchanged", async () => {
     const path = await root();
     const store = new ConfigStore({ root: path });
     await store.initialize(fixture());

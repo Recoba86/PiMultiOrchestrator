@@ -2,6 +2,7 @@ import { backup as sqliteBackup, DatabaseSync } from "node:sqlite";
 import { chmodSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
+import type { EffectiveThinkingEffort, ThinkingEffort } from "../thinking.js";
 
 export const ANALYTICS_SCHEMA_VERSION = 1 as const;
 export const ANALYTICS_SCHEMA_V1 = `
@@ -119,6 +120,8 @@ export interface AnalyticsEventV1 {
   readonly sourceLabel?: string;
   readonly resourceClass?: string;
   readonly resourceId?: string;
+  readonly requestedThinkingEffort?: ThinkingEffort;
+  readonly effectiveThinkingEffort?: EffectiveThinkingEffort;
   readonly durationMs?: number;
   readonly outcome?: string;
   readonly failureClass?: string;
@@ -259,6 +262,7 @@ const ANALYTICS_CLASSIFICATIONS: readonly AnalyticsClassification[] = ["observed
 const safeClassification = (value: unknown): AnalyticsClassification | undefined => ANALYTICS_CLASSIFICATIONS.includes(value as AnalyticsClassification) ? value as AnalyticsClassification : undefined;
 const safeRoutingCode = (value: unknown): string | undefined => typeof value === "string" && /^[a-z][a-z0-9_:-]{0,63}$/u.test(value) ? value : undefined;
 const safeRoutingAction = (value: unknown): AnalyticsRoutingTelemetryV1["action"] => ["continued", "run_as_mission", "run_normally", "cancelled", "headless_normal", "failed", "auto_mission_explicit", "auto_mission_learned", "learned_normal", "memory_conflict", "rule_created_explicit", "rule_created_learned", "rule_disabled", "rule_deleted", "learned_reset", "full_reset", "memory_bypassed_complexity"].includes(value as string) ? value as AnalyticsRoutingTelemetryV1["action"] : undefined;
+const safeThinkingEffort = (value: unknown): ThinkingEffort | "unknown" | undefined => value === "auto" || value === "low" || value === "medium" || value === "high" || value === "xhigh" || value === "max" || value === "unknown" ? value : undefined;
 type StoredAnalystAnalysis = import("./analyst.js").AnalystAnalysisRecord;
 const safeAnalystText = (value: unknown, max = 512): string | undefined => {
 	const text = safeText(value, max);
@@ -357,6 +361,7 @@ const safeJson = (event: AnalyticsEventV1): string => JSON.stringify({
   eventId: safeText(event.eventId, 160), occurredAt: safeText(event.occurredAt, 64), eventType: event.eventType,
   missionId: safeText(event.missionId), taskId: safeText(event.taskId), runId: safeText(event.runId), attemptId: safeText(event.attemptId), verificationId: safeText(event.verificationId),
   qualityRound: numberValue(event.qualityRound), roleId: safeText(event.roleId), poolId: safeText(event.poolId), routeId: safeText(event.routeId), remoteModelId: safeText(event.remoteModelId), gatewayId: safeText(event.gatewayId), sourceLabel: safeText(event.sourceLabel), resourceClass: safeText(event.resourceClass), resourceId: safeText(event.resourceId), durationMs: numberValue(event.durationMs), outcome: safeText(event.outcome), failureClass: safeText(event.failureClass), fallbackFromRouteId: safeText(event.fallbackFromRouteId), fallbackToRouteId: safeText(event.fallbackToRouteId), qualityOutcome: safeText(event.qualityOutcome), firstPass: boolValue(event.firstPass), repairRound: numberValue(event.repairRound),
+  requestedThinkingEffort: safeThinkingEffort(event.requestedThinkingEffort), effectiveThinkingEffort: safeThinkingEffort(event.effectiveThinkingEffort),
   tokenUsage: safeTokenUsage(event.tokenUsage),
   cost: safeCost(event.cost),
 	routing: event.routing ? {

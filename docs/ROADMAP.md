@@ -387,6 +387,26 @@ provenance, last-known-good state, stale indicators, safe user overrides, and
 the distinction between provider-advertised and empirically observed
 capabilities. This is explicitly outside RC18.
 
+## RC20 — Thinking-aware Pool routing and live catalog refresh
+
+Status: IMPLEMENTED / PUBLIC PRERELEASE; manifest `0.1.0-rc.20` is the
+`next`-tagged prerelease and is not stable or production-ready.
+
+RC20 adds per-Pool-route Thinking Effort (`Auto`, `Low`, `Medium`, `High`,
+`XHigh`, `Max` when supported), omission-based Auto semantics, capability-aware
+validation, requested/effective run metadata, and stale explicit-effort
+blocking. Models & 9Router has a visible manual Refresh Models action that
+refreshes the authoritative PMO-owned 9Router client or the existing external
+Pi provider, reports added/removed/changed entries, preserves last-known-good
+state on failure, and keeps PMO enablement separate from external provider
+ownership. New discovered routes are disabled, Pool order/effort survive
+refresh, and removed Pool routes remain missing/unavailable. True duplicate
+route identities remain ambiguous; deterministic exact matches are not marked
+ambiguous merely because a resource field is unknown.
+
+RC20 intentionally does not implement periodic automatic catalog sync,
+Benchmark Lab, automatic effort optimization, or autonomous Pool rewrites.
+
 ## RC19 — Pi 9Router onboarding and adoption
 
 Status: PUBLISHED / PRERELEASE; manifest `0.1.0-rc.19`; public npm and GitHub

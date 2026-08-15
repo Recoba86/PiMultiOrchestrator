@@ -2,6 +2,7 @@ import { EnvSecretResolver, type SecretResolver } from "./secrets.js";
 import { NineRouterError, safeCatalogErrorMessage, safeCatalogErrorStage } from "./errors.js";
 import { nineRouterModelsUrl, normalizeNineRouterBaseUrl } from "./connection.js";
 import type { CatalogCapability, CatalogCapabilityMetadata, CatalogFieldProvenance, RemoteCatalogEntry } from "./types.js";
+import type { ThinkingLevelMap } from "../thinking.js";
 import type { ResourceClass, SecretRefV1, StableId } from "../config/types.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -225,6 +226,8 @@ function parseEntry(value: unknown, index: number): RemoteCatalogEntry {
   if (contextWindow) provenance.contextWindow = "remote";
   if (maxTokens) provenance.maxTokens = "remote";
   if (parsedCapabilityMetadata?.reasoning !== undefined) provenance.reasoning = "remote";
+  const thinkingLevelMap = parseThinkingLevelMap(value.thinkingLevelMap ?? value.thinking_level_map ?? parsedCapabilityMetadata?.thinkingLevelMap);
+  if (thinkingLevelMap !== undefined) provenance.thinkingLevelMap = "remote";
   if (parsedCapabilityMetadata?.vision !== undefined) provenance.vision = "remote";
   if (capabilityMetadata !== undefined) provenance.capabilityMetadata = "remote";
   return {
@@ -238,6 +241,7 @@ function parseEntry(value: unknown, index: number): RemoteCatalogEntry {
     capabilities,
     input,
     ...(parsedCapabilityMetadata?.reasoning === undefined ? {} : { reasoning: parsedCapabilityMetadata.reasoning }),
+    ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
     ...(parsedCapabilityMetadata?.vision === undefined ? {} : { vision: parsedCapabilityMetadata.vision }),
     ...(capabilityMetadata === undefined ? {} : { capabilityMetadata }),
     ...(contextWindow ? { contextWindow } : {}),
@@ -329,6 +333,7 @@ type ParsedCapabilityMetadata = {
   maxOutput?: number;
   reasoning?: boolean;
   vision?: boolean;
+  thinkingLevelMap?: ThinkingLevelMap;
 };
 
 function parseCapabilityMetadata(value: unknown): ParsedCapabilityMetadata | undefined {
@@ -347,7 +352,21 @@ function parseCapabilityMetadata(value: unknown): ParsedCapabilityMetadata | und
   const thinkingFormat = optionalString(value.thinkingFormat, 64);
   if (thinkingFormat !== undefined) result.thinkingFormat = thinkingFormat;
   if (typeof value.thinkingCanDisable === "boolean") result.thinkingCanDisable = value.thinkingCanDisable;
+  const thinkingLevelMap = parseThinkingLevelMap(value.thinkingLevelMap ?? value.thinking_level_map);
+  if (thinkingLevelMap !== undefined) result.thinkingLevelMap = thinkingLevelMap;
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parseThinkingLevelMap(value: unknown): ThinkingLevelMap | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Partial<ThinkingLevelMap> = {};
+  for (const key of ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const) {
+    if (!(key in value)) continue;
+    const item = value[key];
+    if (item === null) result[key] = null;
+    else if (typeof item === "string" && item.length > 0 && item.length <= 128 && !/\p{Cc}/u.test(item)) result[key] = item;
+  }
+  return Object.keys(result).length > 0 ? result as ThinkingLevelMap : undefined;
 }
 
 function toCatalogCapabilityMetadata(value: ParsedCapabilityMetadata | undefined): CatalogCapabilityMetadata | undefined {

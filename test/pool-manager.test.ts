@@ -100,13 +100,40 @@ describe("PoolManager", () => {
 	it("[I][fixture-v1] preserves cross-pool membership and same-family route identities", async () => {
 		const { root, manager } = await setup();
 		try {
+			assert.equal((await manager.getPool("implementation")).entries[0]?.thinkingEffort, "auto");
 			await manager.addRoute("investigation", id("route-a"));
 			await manager.addRoute("verification", id("route-a"));
 			await manager.addRoute("implementation", id("route-e"));
+			const now = new Date().toISOString();
+			await new CatalogCacheStore(root).save({
+				cacheVersion: 1,
+				gatewayId: NINEROUTER_GATEWAY_ID,
+				baseUrl: "http://127.0.0.1:4100/v1",
+				generation: 1,
+				fetchedAt: now,
+				lastSuccessAt: now,
+				lastAttemptAt: now,
+				entries: [{
+					remoteId: "same-model",
+					displayName: "Same model",
+					resourceClass: "subscription",
+					capabilities: ["chat"],
+					input: ["text"],
+					reasoning: true,
+					thinkingLevelMap: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" },
+					capability: "chat",
+					provenance: { remoteId: "remote", displayName: "remote", resourceClass: "remote", capabilities: "remote", input: "remote", capability: "remote" },
+				}],
+			});
+			await manager.setPoolEntryThinkingEffort("investigation", id("route-a"), "medium");
+			await manager.setPoolEntryThinkingEffort("verification", id("route-a"), "max");
 			const implementation = await manager.listMembers("implementation");
 			assert.deepEqual(implementation.map((entry) => entry.routeId), ["route-a", "route-b", "route-c", "route-d", "route-e"]);
 			assert.deepEqual((await manager.listMembers("investigation")).map((entry) => entry.routeId), ["route-a"]);
 			assert.deepEqual((await manager.listMembers("verification")).map((entry) => entry.routeId), ["route-a"]);
+			assert.equal((await manager.getPool("investigation")).entries[0]?.thinkingEffort, "medium");
+			assert.equal((await manager.getPool("verification")).entries[0]?.thinkingEffort, "max");
+			assert.equal((await manager.getPool("implementation")).entries[0]?.thinkingEffort, "auto");
 			await manager.removeRoute("investigation", id("route-a"));
 			assert.deepEqual((await manager.listMembers("verification")).map((entry) => entry.routeId), ["route-a"]);
 		} finally {
@@ -154,9 +181,8 @@ describe("PoolManager", () => {
 			assert.deepEqual((await manager.getAvailableCandidatesToAdd("implementation")).map((entry) => entry.routeId), [
 				"route-e",
 				"route-missing",
-				"route-disabled",
 			]);
-			assert.deepEqual((await manager.getAvailableCandidatesToAdd("investigation", "DISABLED")).map((entry) => entry.routeId), ["route-disabled"]);
+			assert.deepEqual((await manager.getAvailableCandidatesToAdd("investigation", "DISABLED")).map((entry) => entry.routeId), []);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

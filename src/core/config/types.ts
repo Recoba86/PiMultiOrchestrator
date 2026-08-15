@@ -1,3 +1,5 @@
+import type { ThinkingEffort, ThinkingLevelMap } from "../thinking.js";
+
 /**
  * Stable identifiers are deliberately human-readable.  Runtime validation
  * applies the syntax/length limits; the brand prevents accidentally passing a
@@ -56,6 +58,8 @@ export interface RouteMetadataV1 {
   underlyingFamily?: string;
   underlyingVersion?: string;
   sourceLabel?: string;
+  /** Credential-blind Pi/provider capability mapping retained for pool validation. */
+  thinkingLevelMap?: ThinkingLevelMap;
 }
 
 export interface RouteConfigV1 {
@@ -75,6 +79,8 @@ export interface PoolRouteV1 {
   enabled: boolean;
   timeoutMs?: number;
   maxAttempts?: number;
+  /** Missing in RC19 configs; migration and runtime semantics treat it as auto. */
+  thinkingEffort?: ThinkingEffort;
 }
 
 export interface PoolV1 {

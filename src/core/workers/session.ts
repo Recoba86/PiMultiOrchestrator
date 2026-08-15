@@ -10,6 +10,7 @@ import { createProtocolCaptureState, createProtocolOnlyCaptureTool } from "./res
 import { createWorkerSafetyGuard, workerSafetyBlockMessage } from "./safety.js";
 import { isWorkerResultToolName, toolProfileForWorker, workerProfileFor } from "./profiles.js";
 import { WorkerError, type ChildSessionFactory, type ChildSessionHandle, type ChildSessionOptions } from "./types.js";
+import { isSupportedThinkingEffort } from "../thinking.js";
 
 
 /**
@@ -30,6 +31,10 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 	if (!options.resultProtocol || !isWorkerResultToolName(options.resultProtocol.toolName)) throw new WorkerError("session-create", "Child result tool is not supported");
 	if (options.route.model.id !== options.route.remoteModelId) {
 		throw new WorkerError("route-model-mismatch", "Resolved route model does not match its exact remote model ID");
+	}
+	const requestedThinkingEffort = options.request.thinkingEffort ?? "auto";
+	if (!isSupportedThinkingEffort(options.route.model, requestedThinkingEffort)) {
+		throw new WorkerError("invalid-request", `Thinking effort ${requestedThinkingEffort} is not supported by the selected route`);
 	}
 	const settingsManager = SettingsManager.inMemory({
 		compaction: { enabled: false },
@@ -68,7 +73,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 			cwd: options.cwd,
 			agentDir: options.cwd,
 			model: options.route.model,
-			thinkingLevel: "off",
+			...(requestedThinkingEffort === "auto" ? {} : { thinkingLevel: requestedThinkingEffort }),
 			// An empty scope prevents Ctrl+P/model cycling to another route.
 			scopedModels: [],
 			modelRuntime: options.route.modelRuntime,

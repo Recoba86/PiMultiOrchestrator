@@ -112,6 +112,7 @@ describe("9Router domain primitives", () => {
             videoInput: false,
             thinkingFormat: "gemini",
             thinkingCanDisable: true,
+            thinkingLevelMap: { low: "low", medium: "medium", high: "high", max: "max" },
             contextWindow: 1_048_576,
             maxOutput: 65_536,
           },
@@ -129,6 +130,7 @@ describe("9Router domain primitives", () => {
     const legacy = entries.find((entry) => entry.remoteId === "legacy/chat");
     assert.deepEqual(gemini?.input, ["text", "image"]);
     assert.equal(gemini?.reasoning, true);
+    assert.deepEqual(gemini?.thinkingLevelMap, { low: "low", medium: "medium", high: "high", max: "max" });
     assert.equal(gemini?.contextWindow, 1_048_576);
     assert.equal(gemini?.maxTokens, 65_536);
     assert.deepEqual(gemini?.capabilityMetadata, { tools: true, search: true, audioInput: false, videoInput: false, thinkingFormat: "gemini", thinkingCanDisable: true });

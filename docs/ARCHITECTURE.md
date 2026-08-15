@@ -851,3 +851,22 @@ tampering by themselves. Compatibility state is created and read with M10
 modules, then read with rc.4 modules, then read again with M10 modules after
 rollback; equality and data-loss results are derived from the observed
 machine-readable snapshots.
+
+## 23.4 RC20 Thinking Effort and live catalog boundary
+
+RC20 keeps five boundaries separate: Pi's provider/model catalog, PMO route
+enablement, Pool membership, Pool-entry priority, and Pool-entry Thinking
+Effort. `auto` is represented by omission of `thinkingLevel` in
+`createAgentSession`; explicit effort is validated against the route's
+allowlisted `thinkingLevelMap` and Pi reasoning metadata. A child attempt records
+the requested policy and the session's observed effective level, or `unknown`.
+
+Catalog refresh is source-aware. PMO-owned routes refresh through the bounded
+9Router client and cache a validated last-known-good snapshot; external Pi
+providers refresh through Pi's provider registry and are adopted credential-
+blind. Refreshes produce added/removed/changed IDs, preserve enabled flags and
+Pool order, keep removed Pool routes as missing, and never replace or unregister
+an external provider. A stale explicit effort becomes unavailable rather than
+being silently downgraded. Exact remote/resource/source identity is used for
+reconciliation; only actual duplicate configured identities remain ambiguous.
+Automatic periodic refresh and Benchmark Lab are deliberately deferred.

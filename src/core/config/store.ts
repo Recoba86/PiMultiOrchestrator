@@ -24,7 +24,7 @@ import {
   type StorageFaultPoint,
 } from "./history.js";
 import { serializeConfig, deterministicJson } from "./serialize.js";
-import { migrateConfig } from "./migrations.js";
+import { migrateConfig, migratePoolThinkingEffort } from "./migrations.js";
 import { validateConfig, validateStoredConfig } from "./schema.js";
 import { exportConfig, parseConfigImport } from "./transfer.js";
 import type { ConfigV1, StoredConfigV1 } from "./types.js";
@@ -147,8 +147,8 @@ export class ConfigStore {
           warnings: [],
         };
       }
-      if (active.kind === "invalid") throw new ConfigRecoveryError("active-config-invalid");
-      return this.commit(candidate, undefined, "initialize");
+		if (active.kind === "invalid") throw new ConfigRecoveryError("active-config-invalid");
+		return this.commit(candidate, undefined, "initialize");
     });
   }
 
@@ -161,10 +161,10 @@ export class ConfigStore {
     }
     return this.enqueue(async () => {
       const active = await this.readActive();
-      const current = active.kind === "valid" ? active.stored : undefined;
-      this.assertExpected(options.expectedGeneration, current?.generation ?? 0);
-      if (active.kind === "invalid") throw new ConfigRecoveryError("active-config-invalid");
-      return this.commit(candidate, current, "save");
+		const current = active.kind === "valid" ? active.stored : undefined;
+		this.assertExpected(options.expectedGeneration, current?.generation ?? 0);
+		if (active.kind === "invalid") throw new ConfigRecoveryError("active-config-invalid");
+		return this.commit(candidate, current, "save");
     });
   }
 
@@ -176,7 +176,7 @@ export class ConfigStore {
       const current = active.kind === "valid" ? active.stored : undefined;
       const base = current ? structuredClone(current.config) : this.validateCandidate(this.defaults());
       const result = await mutator(base);
-      const candidate = this.validateCandidate(result ?? base);
+		const candidate = migratePoolThinkingEffort(this.validateCandidate(result ?? base));
       if (current && serializeConfig(current.config) === serializeConfig(candidate)) {
         return {
           changed: false,
@@ -233,7 +233,7 @@ export class ConfigStore {
       const generation = await this.nextGeneration(history.entries, true);
       const candidate = this.validateCandidate(target.stored.config);
       const savedAt = this.nowIso();
-      const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: candidate };
+		const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: migratePoolThinkingEffort(candidate) };
       try {
         await ensureStorageDirectories(this.root, this.hooks);
         const write = await writeAtomicFile(join(this.root, ACTIVE_FILE), this.serializeStored(stored), this.hooks, "active");
@@ -399,7 +399,7 @@ export class ConfigStore {
   ): Promise<ConfigMutationResult> {
     const generation = await this.nextGeneration(current ? [current] : []);
     const savedAt = this.nowIso();
-    const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: candidate };
+		const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: migratePoolThinkingEffort(candidate) };
     await ensureStorageDirectories(this.root, this.hooks);
     let historyPath: string | undefined;
     if (current) {

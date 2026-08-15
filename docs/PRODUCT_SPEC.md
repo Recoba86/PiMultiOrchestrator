@@ -434,3 +434,27 @@ Product behavior is accepted only through measurable cases in [ACCEPTANCE_TESTS.
   PMO-owned/env-backed refresh MUST continue through the PMO catalog client.
 - RC19 MUST preserve the existing PMO provider/pool behavior and verify the
   full package/release boundary separately from live provider calls.
+
+## 23. RC20 Thinking Effort and live catalog refresh
+
+- Pool route entries MUST store an independent Thinking Effort. The supported
+  PMO domain is `auto`, `low`, `medium`, `high`, `xhigh`, and `max`; explicit
+  choices MUST be derived from the route's Pi/provider capability metadata.
+- `auto` MUST omit a PMO thinking override and defer to Pi/model/provider
+  defaults. It MUST NOT be translated to `off`. Requested and observed
+  effective effort are separate bounded run metadata; an unobservable result
+  remains `unknown`.
+- Existing pool entries without the new field MUST migrate deterministically to
+  `auto` at the ConfigStore write boundary without changing route identity,
+  order, enablement, health, mission history, or analytics.
+- Models & 9Router MUST distinguish discovered catalog rows, PMO-enabled routes,
+  and Pool membership. Only enabled PMO routes may appear in Add Model. A
+  disabled route remains in existing Pools but is unavailable and is never
+  silently replaced.
+- Models & 9Router MUST expose a visible manual Refresh Models action. A live
+  refresh MUST report added/removed/changed entries, preserve the last-known-good
+  catalog on failure, preserve route enablement and Pool state, and retain
+  missing Pool routes without retargeting them.
+- External Pi provider ownership remains unchanged: PMO MUST NOT replace,
+  shrink, or unregister an external provider. Automatic periodic refresh and
+  Benchmark Lab remain future work.

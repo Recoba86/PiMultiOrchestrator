@@ -6,7 +6,7 @@ import { CatalogCacheStore } from "./cache.js";
 import { NineRouterError, NineRouterManagerError, safeCatalogErrorMessage, safeCatalogErrorStage } from "./errors.js";
 import { normalizeNineRouterBaseUrl, validateNineRouterGateway } from "./connection.js";
 import { NineRouterClient } from "./client.js";
-import { stableRouteId } from "./identity.js";
+import { routeIdentityMatches, stableRouteId } from "./identity.js";
 import { InlineSecretResolver, isEnvironmentReference, type SecretResolver } from "./secrets.js";
 import {
   NINEROUTER_GATEWAY_ID,
@@ -178,6 +178,7 @@ export class NineRouterManager {
         ...(gateway.credentialRef ? { credentialRef: gateway.credentialRef } : {}),
       };
       const entries = await this.client.listModels(requestOptions);
+      if (entries.length === 0) throw new NineRouterError("malformed", "schema", "The 9Router catalog was empty; the last-known-good catalog was preserved");
       const at = this.now().toISOString();
       const cache: CatalogCacheV1 = {
         cacheVersion: 1,
@@ -193,11 +194,13 @@ export class NineRouterManager {
       this.lastGatewayState = "reachable";
       const priorIds = new Set(prior?.entries.map((entry) => entry.remoteId) ?? []);
       const nextIds = new Set(entries.map((entry) => entry.remoteId));
+      const priorById = new Map((prior?.entries ?? []).map((entry) => [entry.remoteId, JSON.stringify(entry)]));
       return {
         generation: cache.generation,
         entries,
         addedRemoteIds: entries.filter((entry) => !priorIds.has(entry.remoteId)).map((entry) => entry.remoteId),
         removedRemoteIds: (prior?.entries ?? []).filter((entry) => !nextIds.has(entry.remoteId)).map((entry) => entry.remoteId),
+        changedRemoteIds: entries.filter((entry) => priorById.has(entry.remoteId) && priorById.get(entry.remoteId) !== JSON.stringify(entry)).map((entry) => entry.remoteId),
         stale: false,
       };
     } catch (error) {
@@ -247,6 +250,7 @@ export class NineRouterManager {
 
 	async adoptPiProviderCatalog(catalog: PiProviderCatalog): Promise<void> {
 		if (catalog.providerId !== NINEROUTER_PROVIDER_ID) return;
+		if (catalog.available && catalog.models.length === 0 && this.piCatalog?.available && this.piCatalog.models.length > 0) return;
 		this.piCatalog = {
 			...catalog,
 			models: catalog.models.filter((model) => typeof model.id === "string" && model.id.length > 0).slice(0, 512),
@@ -264,10 +268,14 @@ export class NineRouterManager {
     let entry: RemoteCatalogEntry | undefined;
     if (enabled) {
       const cache = (await this.cacheStore.load()).cache;
-      entry = cache?.entries.find((candidate) => candidate.remoteId === remoteId) ?? this.externalEntry(remoteId);
+		entry = this.externalEntry(remoteId) ?? cache?.entries.find((candidate) => candidate.remoteId === remoteId);
       if (!entry) throw new NineRouterManagerError("model-not-found", "The model is not present in the last successful catalog");
       if (entry.capability === "non-chat") throw new NineRouterManagerError("model-not-found", "The selected catalog entry is not chat-compatible");
     }
+    if (enabled && existing && entry && !routeIdentityMatches(
+      { gatewayId: NINEROUTER_GATEWAY_ID, remoteModelId: existing.remoteModelId, ...(existing.resource.id ? { resourceId: existing.resource.id } : {}), ...(existing.metadata?.sourceLabel ? { sourceLabel: existing.metadata.sourceLabel } : {}) },
+      { gatewayId: NINEROUTER_GATEWAY_ID, remoteModelId: entry.remoteId, ...(entry.resourceId ? { resourceId: entry.resourceId } : {}), ...(entry.owner ? { sourceLabel: entry.owner } : {}) },
+    )) throw new NineRouterManagerError("model-ambiguous", "The discovered model identity does not exactly match the configured route");
     if (!existing && !entry) throw new NineRouterManagerError("model-not-found", "The configured route was not found");
     const routeId = existing?.id ?? stableRouteId(NINEROUTER_GATEWAY_ID, remoteId);
     const mutation = await this.configStore.update((draft) => {
@@ -314,6 +322,7 @@ export class NineRouterManager {
                 ...(candidate.underlyingFamily ? { underlyingFamily: candidate.underlyingFamily.slice(0, MAX_CONFIG_LABEL) } : {}),
                 ...(candidate.underlyingVersion ? { underlyingVersion: candidate.underlyingVersion.slice(0, MAX_CONFIG_LABEL) } : {}),
                 ...(candidate.owner ? { sourceLabel: candidate.owner.slice(0, MAX_CONFIG_LABEL) } : {}),
+                ...(candidate.thinkingLevelMap ? { thinkingLevelMap: { ...candidate.thinkingLevelMap } } : {}),
               },
             }
           : {}),
@@ -397,7 +406,7 @@ export class NineRouterManager {
 
   private rowFor(routes: readonly RouteConfigV1[], entry: RemoteCatalogEntry, cache?: CatalogCacheV1): CatalogRow {
     const route = routes[0];
-    const ambiguous = routes.length > 1 || (entry.resourceClass === "unknown" && entry.resourceId === undefined);
+	const ambiguous = routes.length > 1;
     return {
       entry,
       remoteModelId: entry.remoteId,
@@ -462,12 +471,13 @@ function cacheForGateway(cache: CatalogCacheV1 | undefined, baseUrl: string | un
 }
 
 function mergeCatalogEntries(entries: readonly RemoteCatalogEntry[], catalog: PiProviderCatalog | undefined): RemoteCatalogEntry[] {
-	const merged = [...entries];
+	const external = new Map((catalog?.models ?? []).map((model) => [model.id, piModelToCatalogEntry(model)]));
+	const merged = entries.map((entry) => external.get(entry.remoteId) ?? entry);
 	const seen = new Set(merged.map((entry) => entry.remoteId));
-	for (const model of catalog?.models ?? []) {
-		if (seen.has(model.id)) continue;
-		merged.push(piModelToCatalogEntry(model));
-		seen.add(model.id);
+	for (const entry of external.values()) {
+		if (seen.has(entry.remoteId)) continue;
+		merged.push(entry);
+		seen.add(entry.remoteId);
 	}
 	return merged;
 }
@@ -481,6 +491,7 @@ function piModelToCatalogEntry(model: PiProviderCatalogModel): RemoteCatalogEntr
 		capabilities: ["chat"],
 		input: model.input && model.input.length > 0 ? [...model.input] : ["text"],
 		...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }),
+		...(model.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: { ...model.thinkingLevelMap } }),
 		...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
 		...(model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens }),
 		capability: "chat",
@@ -494,6 +505,7 @@ function toProviderModel(route: RouteConfigV1, entry: RemoteCatalogEntry, warnin
     id: entry.remoteId,
     name: entry.displayName,
     reasoning: entry.reasoning ?? false,
+    ...(entry.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: { ...entry.thinkingLevelMap } }),
     input: entry.input.length > 0 ? [...entry.input] : ["text"],
     cost: DEFAULT_COST,
     contextWindow: entry.contextWindow ?? DEFAULT_CONTEXT_WINDOW,

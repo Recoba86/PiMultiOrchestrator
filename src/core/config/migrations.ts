@@ -1,6 +1,6 @@
 import { ConfigMigrationError, ConfigVersionError } from "./errors.js";
 import { CURRENT_CONFIG_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, validateConfig, validateConfigV2 } from "./schema.js";
-import type { ConfigV1, ConfigV2 } from "./types.js";
+import type { ConfigV1, ConfigV2, PoolRouteV1 } from "./types.js";
 
 export { CURRENT_SCHEMA_VERSION } from "./schema.js";
 
@@ -117,5 +117,20 @@ export const currentMigrationRegistry = new MigrationRegistry({
 });
 
 export function migrateConfigToCurrent(value: unknown): ConfigV2 {
-  return currentMigrationRegistry.migrate(value) as ConfigV2;
+	return currentMigrationRegistry.migrate(value) as ConfigV2;
+}
+
+/**
+ * RC19 -> RC20 additive pool migration. It intentionally leaves the legacy
+ * schema number alone because ConfigStore still persists the V1 semantic
+ * envelope; the new field is optional for backward-compatible readers.
+ */
+export function migratePoolThinkingEffort(value: ConfigV1): ConfigV1 {
+	const next = structuredClone(value);
+	for (const pool of Object.values(next.pools)) {
+		for (const entry of pool.entries as PoolRouteV1[]) {
+			if (entry.thinkingEffort === undefined) entry.thinkingEffort = "auto";
+		}
+	}
+	return next;
 }

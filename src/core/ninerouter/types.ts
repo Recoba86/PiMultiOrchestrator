@@ -1,4 +1,5 @@
 import type { ResourceClass, StableId } from "../config/types.js";
+import type { ThinkingLevelMap } from "../thinking.js";
 
 // Config IDs follow M1's stable-ID grammar (must start with a letter).  The
 // Pi provider namespace intentionally remains the user-facing "9router".
@@ -32,6 +33,7 @@ export interface RemoteCatalogEntry {
   readonly capabilities: readonly string[];
   readonly input: readonly ("text" | "image")[];
   readonly reasoning?: boolean;
+  readonly thinkingLevelMap?: ThinkingLevelMap;
   readonly vision?: boolean;
   readonly capabilityMetadata?: CatalogCapabilityMetadata;
   readonly contextWindow?: number;
@@ -103,6 +105,7 @@ export interface PiProviderCatalogModel {
   readonly id: string;
   readonly name?: string;
   readonly reasoning?: boolean;
+  readonly thinkingLevelMap?: ThinkingLevelMap;
   readonly input?: readonly ("text" | "image")[];
   readonly contextWindow?: number;
   readonly maxTokens?: number;
@@ -138,6 +141,7 @@ export interface ProviderModelProjection {
   readonly id: string;
   readonly name: string;
   readonly reasoning: boolean;
+  readonly thinkingLevelMap?: ThinkingLevelMap;
   readonly input: readonly ("text" | "image")[];
   readonly cost: {
     readonly input: number;
@@ -168,6 +172,7 @@ export interface RefreshResult {
   readonly entries: readonly RemoteCatalogEntry[];
   readonly addedRemoteIds: readonly string[];
   readonly removedRemoteIds: readonly string[];
+  readonly changedRemoteIds: readonly string[];
   readonly stale: false;
 }
 

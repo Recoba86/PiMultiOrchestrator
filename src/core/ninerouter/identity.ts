@@ -2,6 +2,25 @@ import { createHash } from "node:crypto";
 
 import type { StableId } from "../config/types.js";
 
+export interface RouteIdentityParts {
+	readonly gatewayId: string;
+	readonly remoteModelId: string;
+	readonly resourceId?: string;
+	readonly sourceLabel?: string;
+}
+
+/** Exact discovery identity; effort and display names are intentionally absent. */
+export function exactRouteIdentity(parts: RouteIdentityParts): string {
+	return [parts.gatewayId, parts.remoteModelId, parts.resourceId ?? "", parts.sourceLabel ?? ""].join("\0");
+}
+
+export function routeIdentityMatches(left: RouteIdentityParts, right: RouteIdentityParts): boolean {
+	return left.gatewayId === right.gatewayId
+		&& left.remoteModelId === right.remoteModelId
+		&& (left.resourceId === undefined || right.resourceId === undefined || left.resourceId === right.resourceId)
+		&& (left.sourceLabel === undefined || right.sourceLabel === undefined || left.sourceLabel === right.sourceLabel);
+}
+
 function slug(value: string, max: number): string {
   const normalized = value
     .toLowerCase()
