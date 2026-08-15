@@ -12,34 +12,48 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.19` — GitHub prerelease and npm `next` |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.20` — GitHub prerelease and npm `next` |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.19` — RC19 public prerelease |
-| RC20 release candidate | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; release gate pending |
+| Development manifest version | `0.1.0-rc.20` — RC20 public prerelease |
+| RC20 release | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; published prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | PUBLISHED PRERELEASE — RC19 full gate, artifact, registry, GitHub, and public Pi dogfood pass; not stable/production-ready |
-| Release tag | `v0.1.0-rc.19` → `717a20413fc22f7ca7fde8df8a841ebde05b0f1a` |
-| Release commit | `717a20413fc22f7ca7fde8df8a841ebde05b0f1a` |
-| GitHub release | [v0.1.0-rc.19](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.19) — prerelease |
-| Installable production release | NONE; RC19 is a prerelease |
+| Local technical release readiness | PUBLISHED PRERELEASE — RC20 full gate, artifact, registry, GitHub, and public Pi dogfood pass; not stable/production-ready |
+| Release tag | `v0.1.0-rc.20` → `8bcb4a61796623ea09bd1ed09c411656bd657138` |
+| Release commit | `8bcb4a61796623ea09bd1ed09c411656bd657138` |
+| GitHub release | [v0.1.0-rc.20](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.20) — prerelease |
+| Installable production release | NONE; RC20 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
 
-## RC20 release candidate
+## RC20 public prerelease publication
 
-RC20 is the next public prerelease candidate. It adds independent Pool-entry
+RC20 is the current public prerelease. It adds independent Pool-entry
 Thinking Effort with omission-based Auto semantics, capability-aware explicit
 levels, requested/effective run metadata, manual live Refresh Models, catalog
 diff/LKG safety, disabled-route gating, and deterministic route identity
-handling. The source-bound commit, tag, artifact checksum, npm `next`, GitHub
-prerelease, and public install evidence are intentionally recorded only after
-the clean release gate completes. It remains prerelease-only; `latest` must not
-move.
+handling. It remains prerelease-only; `latest` must not move.
+
+- **Package:** `pi-multi-orchestrator@0.1.0-rc.20`, published with npm access
+  `public`, dist-tag `next`, and `--ignore-scripts`.
+- **Source binding:** commit
+  `8bcb4a61796623ea09bd1ed09c411656bd657138`; tag `v0.1.0-rc.20` peels to
+  that commit.
+- **Artifact:** `pi-multi-orchestrator-0.1.0-rc.20.tgz`, SHA-256
+  `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc`.
+- **Verification:** `242/242` tests, Pi `0.84.1`, `20/20` integrity attacks,
+  exact package identity, byte-identical registry tarball, and isolated public
+  npm install all passed. npm `next` points to RC20 and `latest` remains
+  `0.1.0-rc.17`.
+- **GitHub:** [v0.1.0-rc.20](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.20)
+  is an explicit prerelease with the exact artifact and checksum assets.
+- **Boundary:** no live Pi configuration, provider account, credential,
+  refresh, or model request was modified/performed; the final Pi probe was
+  read-only/offline with temporary PMO/session roots.
 
 ## RC19 public prerelease publication
 

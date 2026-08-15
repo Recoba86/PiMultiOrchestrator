@@ -6,9 +6,11 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 ## RC20 — Thinking-aware Pool routing and live catalog refresh
 
-- **Date/status:** 2026-08-15; implementation and focused validation complete;
-  release gate/publication evidence is recorded when the exact RC20 source
-  commit and artifact are finalized.
+- **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE` on npm and GitHub.
+- **Identity:** package `pi-multi-orchestrator@0.1.0-rc.20`, source commit
+  `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag `v0.1.0-rc.20`, source
+  tree `8c995d342fd95b1294be5066615bb8269b635617`, and artifact SHA-256
+  `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc`.
 - **Implementation:** Pool route entries now carry independent Thinking Effort;
   legacy absence becomes `auto` at the ConfigStore write boundary. Auto omits
   Pi's `thinkingLevel` override, explicit levels are capability-validated, and
@@ -17,9 +19,17 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   PMO or external-Pi refresh paths, reports added/removed/changed rows, keeps a
   validated last-known-good catalog on failure, excludes disabled routes from
   Add Model, and preserves external provider ownership and Pool state.
+- **Release evidence:** clean `npm run check` passed `242/242` tests across 13
+  suites with zero failed/cancelled/skipped/todo; independent release
+  verification passed Pi `0.84.1`, `20/20` integrity attacks, and public npm
+  install. npm `next` points to RC20 while `latest` remains RC17; the GitHub
+  release is explicitly a prerelease and carries the exact artifact/checksum.
+- **Dogfood/boundary:** published RC20 loaded through Pi `0.84.1` in a
+  read-only `--offline` catalog probe with 27 existing `9router` rows, using
+  temporary PMO/session roots. No live Pi configuration, provider account,
+  credential, refresh, or model request was modified/performed.
 - **Scope:** periodic automatic sync, Benchmark Lab, automatic effort tuning,
-  and autonomous Pool rewrites remain future work. No live Pi configuration,
-  provider account, or credential was modified during implementation checks.
+  and autonomous Pool rewrites remain future work.
 
 ## RC19 public prerelease publication
 

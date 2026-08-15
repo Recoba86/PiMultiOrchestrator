@@ -407,6 +407,15 @@ ambiguous merely because a resource field is unknown.
 RC20 intentionally does not implement periodic automatic catalog sync,
 Benchmark Lab, automatic effort optimization, or autonomous Pool rewrites.
 
+Exit evidence: source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag
+`v0.1.0-rc.20`, clean `npm run check` with `242/242` tests across 13 suites,
+independent Pi `0.84.1` release verification, `20/20` integrity attacks, and
+public npm/GitHub prerelease verification passed. Artifact SHA-256 is
+`556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc`; npm
+`next` points to RC20 and `latest` remains RC17. The final published-extension
+Pi probe was read-only/offline with 27 existing catalog rows and temporary
+PMO/session roots; no live configuration or model request was used.
+
 ## RC19 — Pi 9Router onboarding and adoption
 
 Status: PUBLISHED / PRERELEASE; manifest `0.1.0-rc.19`; public npm and GitHub

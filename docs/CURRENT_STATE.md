@@ -29,7 +29,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC17 final Planner attempt | 2026-08-15 — PASS after the bounded reviewer-handoff repair; source-bound artifact is public as a prerelease |
 | RC18 compatibility repair | Local source repair at `0af7b8e`; package manifest remains `0.1.0-rc.17`; no package rebuild/release or publication is claimed |
 | RC19 release | `0.1.0-rc.19` — public prerelease; commit `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag `v0.1.0-rc.19`, artifact SHA-256 `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e` |
-| RC20 candidate | `0.1.0-rc.20` — Thinking-aware Pool routing, manual live catalog refresh, LKG/diff/identity handling; release gate pending |
+| RC20 release | `0.1.0-rc.20` — public prerelease under npm `next`; source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag `v0.1.0-rc.20`, artifact SHA-256 `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc` |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
@@ -115,8 +115,8 @@ empirically observed capabilities. RC18 does not implement this requirement.
 
 ## RC20 — Thinking-aware Pool routing and live catalog refresh
 
-- **Status:** implementation complete in the current worktree; package/public
-  release identity is recorded only after the clean RC20 release gate.
+- **Status:** `PUBLISHED / PRERELEASE`; RC20 is public under npm `next` and
+  GitHub, not stable or production-ready.
 - **Thinking Effort:** each Pool route entry stores `auto`, `low`, `medium`,
   `high`, `xhigh`, or `max` when the route advertises that level. Auto omits
   the Pi override and is not Off. Legacy missing fields migrate to Auto at the
@@ -128,9 +128,21 @@ empirically observed capabilities. RC18 does not implement this requirement.
   authoritative PMO-owned or external-Pi source, reports added/removed/changed
   entries, preserves last-known-good data on failure, excludes disabled routes
   from Add Model, and retains missing Pool routes/order/effort.
-- **Boundary:** no periodic automatic sync or Benchmark Lab is included. No
-  live Pi configuration, provider account, or credential was changed during
-  implementation validation.
+- **Release identity:** source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`,
+  tree `8c995d342fd95b1294be5066615bb8269b635617`, source digest
+  `32ff52f43ea808d48bab62cb54033e5e1e6a43af454e6388d4b7dcb7ca005252`, build
+  digest `40032ddcb65a8878c8339a8cbe405c3b6cf54411ebcd3011aba72221b7bd1055`,
+  tag `v0.1.0-rc.20`, and artifact SHA-256
+  `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc`.
+- **Release evidence:** clean `npm run check` passed `242/242`; independent
+  release verification passed Pi `0.84.1`, privacy/worker-safety checks, and
+  `20/20` integrity attacks. npm `next` points to RC20, `latest` remains
+  `0.1.0-rc.17`, and the public registry tarball matches the local artifact
+  byte-for-byte. GitHub release `v0.1.0-rc.20` is a prerelease.
+- **Boundary:** no periodic automatic sync or Benchmark Lab is included. The
+  final live check was read-only/offline with 27 catalog rows and temporary
+  PMO/session roots; no live Pi configuration, provider account, credential,
+  refresh, or model request was modified/performed.
 
 ## RC19 — Pi 9Router onboarding and adoption
 
