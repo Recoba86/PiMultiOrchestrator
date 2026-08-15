@@ -454,7 +454,7 @@ Deliverables:
   with `latestAcceptedMilestone` remaining M10 and `productionReady` remaining
   false; unknown versions fail closed as `stale-development-line:*`;
 - retained entrypoint convergence for `@orchestrator` and Smart Routing
-  Run as Mission/AUTO_MISSION into the same canonical Boss loop.
+  Run as Mission/AUTO_MISSION into the same canonical Boss loop;
 - producer-side sanitization of persisted Pi install/remove/startup evidence
   so review-bundle privacy scanning cannot observe local absolute machine
   paths; package version remains `0.1.0-rc.26`.
