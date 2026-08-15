@@ -1,6 +1,6 @@
 # Current project state
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 Read this first for a fast operational snapshot. Git and verification evidence take precedence if this file is stale; see [Project state policy](PROJECT_STATE_POLICY.md).
 
@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC26 is the current public prerelease; RC27 is implemented / pre-release ready in source and is not public; none of these are stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC27 is the current public prerelease; RC28 is implemented / pre-release ready in source and is not public; none of these are stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -33,7 +33,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
-| RC27 local candidate | `0.1.0-rc.27` — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; implemented / pre-release ready in source; not tagged or published |
+| RC28 local candidate | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; implemented / pre-release ready in source; not tagged or published |
+| RC27 release | `0.1.0-rc.27` — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release | `0.1.0-rc.26` — Goal Terminal Semantics & Runtime Metadata Correctness; public prerelease; source `11153f0587634bcba732a5b214c95319c305f9e6`, tag `v0.1.0-rc.26`, artifact SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a`; immutable |
 | RC24 release line | `0.1.0-rc.24` — Model Router enablement status checkboxes layered over canonical rows; superseded public prerelease |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
@@ -74,7 +75,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
-| RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair | IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or production-ready |
+| RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics | IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or production-ready |
+| RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC26 — Goal Terminal Semantics & Runtime Metadata Correctness | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC25 — Operational Boss / Orchestrator | PRIOR PUBLIC PRERELEASE; superseded by RC26 |
 | RC24 — Model Router enablement hotfix | IMPLEMENTED / PRIOR PUBLIC PRERELEASE; superseded by the RC25 public prerelease |
@@ -100,7 +102,42 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
   is a non-draft prerelease carrying the exact artifact and checksum.
 
+## RC28 implemented / pre-release ready
+
+- **Status:** `IMPLEMENTED / PRE-RELEASE READY`. Source is prepared as
+  `pi-multi-orchestrator@0.1.0-rc.28`. This is not a public prerelease, npm
+  publication, GitHub Release, or accepted development milestone.
+- **Dogfood evidence (public RC27, not rewritten):** Mission
+  `mission-89d5e163-17ee-4218-b06c-dea5fa4b480b` pinned `cu/cursor-grok-4.6-high`,
+  persisted 11 labelled Goal criteria, then exhausted 4 protocol cycles with
+  0 tasks after the live Boss adapter received no usable assistant text
+  (`Boss provider returned no decision`), terminal `AWAITING_USER`, fallback
+  none. Mission `mission-aa30ed69-3213-4cf0-882a-a60be426412d` selected and
+  pinned `Tabi/claude-opus-5-thinking` (weight 1, share 100%) then blocked at
+  cycle 0 with `Boss infrastructure is unavailable and no configured fallback
+  remains` after the original structured invocation failure was discarded and
+  the weight-0 Cursor route could not be used as infrastructure fallback.
+  These are observed route/runtime compatibility failures, not bootstrap or
+  user-configuration regressions, and not a claim about a named vendor.
+- **Runtime:** one canonical Boss-response normalization layer accepts Pi
+  `AssistantMessage` shapes; user-visible text is only `type:"text"`; `length`
+  with a complete decision is usable; failures keep stage/class/stopReason;
+  scheduling eligibility ≠ fallback eligibility ≠ protocol validity; weight 0
+  remains excluded from normal assignment and may still infrastructure-fallback;
+  Inspect and terminal reasons are classified rather than a black box; Boss
+  Profile UI distinguishes scheduled Boss, editor selection, and fallback
+  eligibility and does not show `Unconfigured Boss` after routes exist.
+- **Publication boundary:** public RC27 remains immutable. RC28 is not tagged,
+  npm was not published, and the live Pi installation was not modified.
+
 ## RC27 implemented / pre-release ready
+
+Correction 2026-08-16: RC27 is the public immutable prerelease baseline
+(`pi-multi-orchestrator@0.1.0-rc.27`, source
+`267612d15dcc0784856e7dafd6704d2f802272b9`, artifact SHA-256
+`d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55`). The
+original source-handoff text below is retained; it is not rewritten. RC28 is
+the new unpublished candidate.
 
 - **Status:** `IMPLEMENTED / PRE-RELEASE READY`. Source is prepared as
   `pi-multi-orchestrator@0.1.0-rc.27`. This is not a public prerelease, npm

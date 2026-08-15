@@ -6,12 +6,14 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 ## Current planning boundary
 
-RC25 is the current public prerelease and adds the bounded operational Boss
-loop. M10 remains the latest accepted development milestone; M11 remains
-implemented but not accepted. The next practical work is the already-recorded
-M11 acceptance/review gates, not an implicit new product milestone. Future
-ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md), whose presence does not
-authorize implementation.
+RC27 is the current public prerelease and adds autonomous Mission bootstrap
+plus Boss protocol validation. RC28 is implemented in source as the next
+unpublished candidate for live Boss invocation compatibility. M10 remains the
+latest accepted development milestone; M11 remains implemented but not
+accepted. The next practical work after RC28 publication gates is the
+already-recorded M11 acceptance/review gates, not an implicit new product
+milestone. Future ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md), whose
+presence does not authorize implementation.
 
 ## M0 — Specification freeze and repository foundation
 
@@ -432,10 +434,39 @@ release verification (`20/20` integrity attacks), and isolated public Pi
 `0.84.1` fresh-install/RC24→RC25 upgrade gates all pass. The release remains
 a prerelease and is not a production-readiness claim.
 
-## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
+## RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics
 
 Status: IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or
-production-ready. Public RC26 remains immutable.
+production-ready. Public RC27 remains immutable.
+
+Deliverables:
+
+- canonical Boss-response normalization over Pi `completeSimple`
+  `AssistantMessage` (`stop | length | toolUse | error | aborted | pending | deferred`,
+  text-only extraction, never thinking/CoT);
+- classified invocation diagnostics (stage, class, stopReason, hasText,
+  fallback) without secrets or raw provider payloads;
+- `selectBossFallbackEntry` independent of weighted scheduling; weight 0 may
+  still infrastructure-fallback; protocol/quality still must not;
+- Boss Profile UI distinguishes scheduled Boss, editor selection, scheduling
+  eligibility, and fallback eligibility;
+- recorded public RC27 dogfood: Missions
+  `mission-89d5e163-17ee-4218-b06c-dea5fa4b480b` and
+  `mission-aa30ed69-3213-4cf0-882a-a60be426412d` as observed route/runtime
+  compatibility failures.
+
+Exit evidence: focused Boss response/fallback/UI suites plus `npm run check`
+and detached release verification. Publication, tagging, npm dist-tags, GitHub
+Release, and live Pi install remain operator-owned. RC27 is not mutated.
+
+## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
+
+Status: PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or
+production-ready. Identity: `0.1.0-rc.27`, source
+`267612d15dcc0784856e7dafd6704d2f802272b9`, artifact SHA-256
+`d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55`.
+The original source-handoff described pre-release readiness; that text is not
+rewritten below.
 
 Deliverables:
 

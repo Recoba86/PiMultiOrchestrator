@@ -1,9 +1,9 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC26 is the current
-public `next`-tagged prerelease; RC25 is superseded. Source currently also
-prepares RC27 (`0.1.0-rc.27`) as implemented / pre-release ready; that
-candidate is not public until the operator publishes it. Public RC26 is
+This guide describes the Control Center in Pi `0.84.1`. RC27 is the current
+public `next`-tagged prerelease; RC26 is superseded. Source currently also
+prepares RC28 (`0.1.0-rc.28`) as implemented / pre-release ready; that
+candidate is not public until the operator publishes it. Public RC27 is
 immutable. None of these are a
 stable or production release. Local validation
 uses isolated roots and never installs into
@@ -72,14 +72,22 @@ message where applicable.
   `/subagent-run` for the former and `/verify-task` for the latter.
 - **Boss / Orchestrator Profiles** edits the active Boss profile. Select
   multiple available chat routes, set each route's Thinking Effort and integer
-  weight, and enable/disable the profile. Normal rows show canonical remote
+  weight, and enable/disable the profile. The view shows the profile name,
+  the Boss that weighted scheduling would actually select, the current editor
+  selection, and each route's scheduling vs fallback eligibility. A stored
+  default name of `Unconfigured Boss` is not shown after routes exist.
+  Normal rows show canonical remote
   model labels; exact route IDs are available only through Inspect. Shares are
   calculated from positive weights. A Mission selects one eligible Boss route
   once using deterministic weighted assignment and persists that pin across
   planning, worker-task evaluation, repair/replan cycles, M7 interpretation,
-  and the terminal decision. Infrastructure failure may use one explicit
-  unused fallback and records the original/replacement route and reason;
-  quality rejection never rotates the Boss.
+  and the terminal decision. Weight 0 excludes a route from that assignment
+  but does not by itself forbid infrastructure fallback. Infrastructure failure
+  may use one explicit unused fallback, including a weight-0 enabled route,
+  and records the original/replacement route, failure class, and reason;
+  protocol or quality rejection never rotates the Boss. Inspect reports the
+  classified invocation stage and class rather than a black-box infrastructure
+  sentence.
 - **Routing & Fallback** is a non-executing preview of policy, eligibility,
   diversity, cooldown, and no-route reasons. Its settings also contain Smart
   Routing. Smart Routing is ON by default: clear explanations/questions and

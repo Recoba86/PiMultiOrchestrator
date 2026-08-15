@@ -1,10 +1,35 @@
 # Development log
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics
+
+- **Date/status:** 2026-08-16; `IMPLEMENTED / PRE-RELEASE READY`. Source is
+  prepared as `0.1.0-rc.28`. Not public, tagged, npm-published, accepted, or
+  production-ready. Public RC27 remains immutable.
+- **Dogfood incidents (public RC27):** Mission
+  `mission-89d5e163-17ee-4218-b06c-dea5fa4b480b` pinned Cursor, kept labelled
+  Goal criteria, then exhausted protocol cycles with 0 tasks after no usable
+  assistant text. Mission
+  `mission-aa30ed69-3213-4cf0-882a-a60be426412d` pinned Tabi then blocked at
+  cycle 0 with a black-box infrastructure sentence and no fallback. Recorded as
+  observed route/runtime compatibility failures, not provider blame.
+- **Root causes:** `parseBossInferenceResponse` required `stopReason === "stop"`
+  and only `type:"text"`; empty thinking-only completions became a generic
+  protocol miss. `invokeBossInference` flattened route/capability/request
+  failures. `fallbackEntry` reused weighted scheduling and required weight > 0.
+  Boss Profile UI kept `Unconfigured Boss` and could label a weight-0 editor
+  route as `model:`.
+- **Fix:** canonical `parseBossAssistantResponse` over Pi's public
+  `AssistantMessage` contract; classified invocation diagnostics; separate
+  `selectBossFallbackEntry`; truthful Boss Profile overview.
+- **Publication:** none. No `v0.1.0-rc.28` tag, npm dist-tag change, GitHub
+  Release, or live Pi installation change. RC27 was not mutated.
+
 ## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
+
 
 - **Date/status:** 2026-08-15; `IMPLEMENTED / PRE-RELEASE READY`. Source is
   prepared as `0.1.0-rc.27`. Not public, tagged, npm-published, accepted, or

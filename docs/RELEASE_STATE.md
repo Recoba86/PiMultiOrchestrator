@@ -1,6 +1,6 @@
 # Release state
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 This file records releasable product state. It does not promote development progress; see [Current state](CURRENT_STATE.md) for the operational snapshot.
 
@@ -12,10 +12,11 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.26` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.26` public prerelease |
-| Development manifest version | `0.1.0-rc.27` — RC27 Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; not public |
-| RC27 local candidate | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; implemented / pre-release ready; not published |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.27` — npm `next`; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.27` public prerelease |
+| Development manifest version | `0.1.0-rc.28` — RC28 Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; not public |
+| RC28 local candidate | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; implemented / pre-release ready; not published |
+| RC27 release line | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release line | Goal terminal CANCELLED/SAFETY_STOP plus truthful runtime package metadata; public prerelease; immutable |
 | RC25 release line | Weighted multi-route Boss profiles, one pinned Boss per Mission, bounded goal-loop repair/replan, explicit infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations |
 | RC24 release line | Model Router rows show `[x]` for enabled PMO routes and `[ ]` for discovered-but-disabled routes; Enter opens the existing action menu and persistence path |
@@ -24,17 +25,41 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC27 IMPLEMENTED / PRE-RELEASE READY in source; RC26 remains the verified public prerelease |
-| Release tag | `v0.1.0-rc.26` → `11153f0587634bcba732a5b214c95319c305f9e6` |
-| Release commit | `11153f0587634bcba732a5b214c95319c305f9e6` |
-| Release artifact | `pi-multi-orchestrator-0.1.0-rc.26.tgz`; SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a` |
-| GitHub release | `v0.1.0-rc.26` — public prerelease identity recorded by the RC27 baseline; RC26 is immutable |
-| Installable production release | NONE; RC26 is a prerelease |
+| Local technical release readiness | RC28 IMPLEMENTED / PRE-RELEASE READY in source; RC27 remains the verified public prerelease |
+| Release tag | `v0.1.0-rc.27` → `267612d15dcc0784856e7dafd6704d2f802272b9` |
+| Release commit | `267612d15dcc0784856e7dafd6704d2f802272b9` |
+| Release artifact | `pi-multi-orchestrator-0.1.0-rc.27.tgz`; SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
+| GitHub release | `v0.1.0-rc.27` — public prerelease identity recorded by the RC28 baseline; RC27 is immutable |
+| Installable production release | NONE; RC27 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC28 Real Boss Invocation Compatibility (unpublished candidate)
+
+RC28 is implemented in source and prepared as `0.1.0-rc.28`. It is **not**
+tagged, npm-published, or a GitHub Release. Public RC27 is immutable.
+
+- **Normalization:** live Boss inference uses one canonical adapter over Pi
+  `completeSimple` `AssistantMessage` values. User-visible text is only
+  `type:"text"`. `stop` and `length` are usable when a complete BossDecision
+  exists. Thinking/CoT is never the decision.
+- **Diagnostics:** request/response/protocol failures persist safe stage, class,
+  stopReason, hasText, and fallback fields. Terminal reasons keep the classified
+  failure instead of a black-box infrastructure sentence. Secrets and raw
+  provider payloads are not persisted.
+- **Fallback:** scheduling eligibility ≠ infrastructure fallback eligibility ≠
+  protocol validity. Weight 0 is excluded from normal assignment and may still
+  fallback. Protocol/quality still does not fallback. Successful fallback remains
+  the Mission pin.
+- **UI:** configured Boss profiles are not labelled `Unconfigured Boss`;
+  scheduled Boss is distinct from editor selection and fallback eligibility.
+- **Dogfood recorded:** RC27 Missions
+  `mission-89d5e163-17ee-4218-b06c-dea5fa4b480b` and
+  `mission-aa30ed69-3213-4cf0-882a-a60be426412d` as observed route/runtime
+  compatibility failures, not provider blame.
 
 ## RC25 Operational Boss / Orchestrator public prerelease
 

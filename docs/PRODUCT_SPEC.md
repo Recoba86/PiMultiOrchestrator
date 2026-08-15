@@ -143,9 +143,16 @@ The extension MUST register `/orchestrator`. In interactive Pi mode it MUST open
 - **BOSS-004:** A profile switch during activity MUST take effect only at a safe idle/checkpoint boundary.
 - **BOSS-005:** Boss infrastructure fallback MAY change model/route while retaining canonical mission continuity.
 - **BOSS-006:** A failed Boss turn that executed tools or produced side effects MUST NOT be blindly replayed on another route.
-- **BOSS-007:** A Boss profile MUST support multiple eligible routes with validated numeric weights and thinking policy; one route MUST be selected once at Mission start and pinned for every normal planning, evaluation, repair, verification-interpretation, and final-decision turn.
-- **BOSS-008:** A genuine Boss infrastructure failure MAY replace the pinned route only through an explicit recorded fallback containing original route, replacement route, failure class, and reason; the replacement MUST remain pinned and quality rejection MUST NOT trigger fallback rotation.
+- **BOSS-007:** A Boss profile MUST support multiple eligible routes with validated numeric weights and thinking policy; one route MUST be selected once at Mission start and pinned for every normal planning, evaluation, repair, verification-interpretation, and final-decision turn. Normal assignment uses enabled routes with positive scheduling weight; weight 0 excludes a route from that weighted selection.
+- **BOSS-008:** A genuine Boss infrastructure failure MAY replace the pinned route only through an explicit recorded fallback containing original route, replacement route, failure class, and reason; the replacement MUST remain pinned and quality rejection MUST NOT trigger fallback rotation. Infrastructure fallback eligibility is separate from scheduling eligibility: an enabled, available, compatible Boss route with scheduling weight 0 MAY still serve as fallback unless an explicit separate fallback-disable policy exists. Protocol or quality failure MUST NOT trigger infrastructure fallback.
 - **BOSS-009:** Boss assignment, fallback, repair/replan cycles, verification outcomes, terminal state, elapsed time, and authoritative usage/cost metadata MUST be persisted as bounded Mission analytics; recommendations MUST use the canonical Recommendation architecture and MUST require explicit Apply.
+- **BOSS-010:** Live Boss inference MUST normalize Pi `completeSimple` / `AssistantMessage` responses through one canonical layer: user-visible `type:"text"` content only, never hidden thinking; successful-enough stop reasons include `stop` and `length` when a complete decision exists. Failures MUST be classified by stage and class (route-resolution, capability, request, response, decision-protocol) with Inspectable safe diagnostics. Empty text, truncated output, unsupported shape, refusal, cancellation, and transport/provider failure MUST remain distinguishable. Secrets, authorization material, unrestricted provider payloads, and hidden reasoning MUST NOT be persisted.
+
+These three Boss predicates are distinct and MUST NOT be collapsed:
+
+- Boss scheduling eligibility
+- Boss infrastructure fallback eligibility
+- Boss response protocol validity
 
 ### 8.4 Budget/quality profiles
 

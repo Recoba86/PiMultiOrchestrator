@@ -17,9 +17,11 @@ import {
 	normalizeBossDecision,
 	runMissionGoalLoop,
 	selectBossEntry,
+	selectBossFallbackEntry,
 	type BossDecision,
 	type BossRouteCandidate,
 } from "../src/core/mission/boss.js";
+import { bossInfrastructureError, parseBossAssistantResponse } from "../src/core/mission/boss-response.js";
 import { createMissionStore } from "../src/core/mission/index.js";
 import type { TaskRecord } from "../src/core/mission/types.js";
 
@@ -222,6 +224,7 @@ const orchestration = (store: ReturnType<typeof createMissionStore>, missionId: 
 	readonly protocolFailures?: number;
 	readonly actionablePlanFailures?: number;
 	readonly lastProtocolError?: string;
+	readonly lastInvocation?: { readonly stage?: string; readonly failureClass?: string; readonly hasText?: boolean; readonly stopReason?: string; readonly fallbackAttempted?: boolean; readonly fallbackSelectedRouteId?: string };
 	readonly acceptanceCriteriaProvenance?: string;
 	readonly terminal?: string;
 	readonly terminalReason?: string;
@@ -233,6 +236,7 @@ const orchestration = (store: ReturnType<typeof createMissionStore>, missionId: 
 	readonly protocolFailures?: number;
 	readonly actionablePlanFailures?: number;
 	readonly lastProtocolError?: string;
+	readonly lastInvocation?: { readonly stage?: string; readonly failureClass?: string; readonly hasText?: boolean; readonly stopReason?: string; readonly fallbackAttempted?: boolean; readonly fallbackSelectedRouteId?: string };
 	readonly acceptanceCriteriaProvenance?: string;
 	readonly terminal?: string;
 	readonly terminalReason?: string;
@@ -822,6 +826,220 @@ describe("RC27 autonomous Mission bootstrap and Boss protocol", () => {
 			});
 			assert.deepEqual(store.getMission(mission.missionId)?.acceptanceCriteria, ["keep the user criterion"]);
 			assert.equal(orchestration(store, String(mission.missionId))?.acceptanceCriteriaProvenance, "explicit");
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
+const rc28DecisionText = JSON.stringify({
+	action: "dispatch",
+	summary: "create the first bounded task",
+	tasks: [{ roleId: "implementer", executionClass: "implementation", poolId: "implementation", objective: "perform the bounded work", acceptanceCriteria: ["the change is documented"] }],
+});
+
+const rc28Assistant = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+	role: "assistant",
+	content: [{ type: "text", text: rc28DecisionText }],
+	api: "openai-completions",
+	provider: "custom",
+	model: "fixture-model",
+	usage: { input: 4, output: 6, cacheRead: 0, cacheWrite: 0, totalTokens: 10, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+	stopReason: "stop",
+	timestamp: 1,
+	...overrides,
+});
+
+describe("RC28 Boss invocation compatibility", () => {
+	it("does not block at cycle 0 when a valid Pi-shaped response produces a BossDecision", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc28-valid-pi-"));
+		try {
+			const store = createMissionStore({ root });
+			const quality = new QualityService(store);
+			const mission = store.createMission({ missionId: "rc28-valid", goal: "ship the bounded change\nAcceptance criteria:\n- documented" });
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1)],
+				invoke: async ({ phase }) => {
+					if (phase === "evaluate") return { action: "complete", summary: "goal and acceptance criteria are satisfied", tasks: [], acceptanceSatisfied: true };
+					return parseBossAssistantResponse(rc28Assistant({ stopReason: "length" }), { phase });
+				},
+				dispatch: async (task) => {
+					const attempt = store.createAttempt({ taskId: task.taskId, routeId: "worker-route", remoteModelId: "worker-remote" });
+					store.finishAttempt(attempt.attemptId, "succeeded", { result: { status: "completed" } });
+					return { taskId: String(task.taskId), status: "succeeded", summary: "worker completed" };
+				},
+				verify: async (task) => {
+					const attemptId = store.getTask(task.taskId)?.lastRunId;
+					assert.ok(attemptId);
+					const verification = quality.startVerification({ missionId: mission.missionId, taskId: task.taskId, targetRunId: attemptId, round: 0 });
+					quality.completeVerification(verification.verificationId, {
+						verdict: "pass",
+						criterionResults: [{ criterion: "the change is documented", status: "satisfied", evidenceSummary: "docs updated" }],
+						mechanicalChecks: [{ command: "npm test", outcome: "passed", provenance: "reviewer" }],
+						findings: [],
+						requiredFixes: [],
+						risks: [],
+						summary: "pass",
+					}, task.acceptanceCriteria);
+					return { verdict: "pass", summary: "verified" };
+				},
+				maxCycles: 2,
+			});
+			assert.equal(result.terminal, "COMPLETED");
+			assert.notEqual(result.cycles, 0);
+			assert.equal(store.listTasks(mission.missionId).length, 1);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps empty assistant text as a precise protocol diagnostic without infrastructure fallback", async () => {
+		const entries = [route("boss-a", 1), route("boss-b", 1)];
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc28-empty-text-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "mission-89d5e163-17ee-4218-b06c-dea5fa4b480b", goal: "bounded docs-only work\nAcceptance criteria:\n- one\n- two" });
+			const calls: string[] = [];
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries,
+				invoke: async ({ assignment }) => {
+					calls.push(assignment.routeId);
+					return parseBossAssistantResponse(rc28Assistant({
+						stopReason: "stop",
+						content: [{ type: "thinking", thinking: "no user-visible decision" }],
+					}), { phase: "plan", routeId: assignment.routeId, ...(assignment.remoteModelId === undefined ? {} : { remoteModelId: assignment.remoteModelId }) });
+				},
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "must not dispatch" }),
+				verify: async () => ({ verdict: "blocked", summary: "must not verify" }),
+				maxCycles: 4,
+			});
+			assert.equal(result.terminal, "AWAITING_USER");
+			assert.equal(new Set(calls).size, 1);
+			const state = orchestration(store, String(mission.missionId));
+			assert.equal(state?.protocolFailures, 4);
+			assert.equal(state?.fallbackHistory?.length ?? 0, 0);
+			assert.equal(state?.lastProtocolError, "Boss response contained no assistant text");
+			assert.equal(state?.lastInvocation?.stage, "response");
+			assert.equal(state?.lastInvocation?.failureClass, "empty_response");
+			assert.equal(state?.lastInvocation?.fallbackAttempted, false);
+			const inspect = formatBossLoopDiagnostics(store.getMission(mission.missionId)!, 0);
+			assert.ok(inspect.some((line) => line.includes("boss invocation stage: response")));
+			assert.ok(inspect.some((line) => line.includes("boss invocation class: empty_response")));
+			assert.ok(inspect.some((line) => line.includes("boss fallback: none")));
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps request transport failure as infrastructure and falls back to a weight-0 enabled route", async () => {
+		const entries = [route("tabi", 1), route("cursor", 0)];
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc28-weight0-fallback-"));
+		try {
+			const store = createMissionStore({ root });
+			const quality = new QualityService(store);
+			const mission = store.createMission({ missionId: "mission-aa30ed69-3213-4cf0-882a-a60be426412d", goal: "recover from live Boss invocation failure" });
+			const calls: string[] = [];
+			const secret = "sk-ant-api03-not-a-real-secret-value";
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries,
+				schedulingKey: "tabi-preferred",
+				invoke: async ({ assignment, phase }) => {
+					calls.push(assignment.routeId);
+					if (assignment.routeId === "tabi") {
+						throw bossInfrastructureError("Boss request failed: authentication_failed", {
+							stage: "request",
+							failureClass: "authentication_failed",
+							hasText: false,
+							normalized: false,
+							code: "authentication_failed",
+							routeId: assignment.routeId,
+							...(assignment.remoteModelId === undefined ? {} : { remoteModelId: assignment.remoteModelId }),
+						});
+					}
+					if (phase === "evaluate") return { action: "complete", summary: "goal and acceptance criteria are satisfied", tasks: [], acceptanceSatisfied: true };
+					return parseBossAssistantResponse(rc28Assistant(), { phase });
+				},
+				dispatch: async (task) => {
+					const attempt = store.createAttempt({ taskId: task.taskId, routeId: "worker-route", remoteModelId: "worker-remote" });
+					store.finishAttempt(attempt.attemptId, "succeeded", { result: { status: "completed" } });
+					return { taskId: String(task.taskId), status: "succeeded", summary: "worker completed" };
+				},
+				verify: async (task) => {
+					const attemptId = store.getTask(task.taskId)?.lastRunId;
+					assert.ok(attemptId);
+					const verification = quality.startVerification({ missionId: mission.missionId, taskId: task.taskId, targetRunId: attemptId, round: 0 });
+					quality.completeVerification(verification.verificationId, {
+						verdict: "pass",
+						criterionResults: [{ criterion: "the change is documented", status: "satisfied", evidenceSummary: "docs updated" }],
+						mechanicalChecks: [{ command: "npm test", outcome: "passed", provenance: "reviewer" }],
+						findings: [],
+						requiredFixes: [],
+						risks: [],
+						summary: "pass",
+					}, task.acceptanceCriteria);
+					return { verdict: "pass", summary: "verified" };
+				},
+				maxCycles: 2,
+			});
+			assert.equal(selectBossEntry(entries, "any-mission")?.routeId, "tabi");
+			assert.equal(selectBossFallbackEntry(entries, { routeId: "tabi" as never, thinkingEffort: "auto", weight: 1, assignedAt: new Date().toISOString() }, [])?.routeId, "cursor");
+			assert.deepEqual(calls.slice(0, 2), ["tabi", "cursor"]);
+			assert.equal(result.assignment?.routeId, "cursor");
+			const state = orchestration(store, String(mission.missionId));
+			assert.equal(state?.bossAssignment?.routeId, "cursor");
+			assert.equal(state?.bossAssignment?.fallbackFromRouteId, "tabi");
+			assert.equal(state?.fallbackHistory?.length, 1);
+			assert.equal(state?.lastInvocation?.stage, "request");
+			assert.equal(state?.lastInvocation?.failureClass, "authentication_failed");
+			assert.equal(state?.lastInvocation?.fallbackAttempted, true);
+			assert.equal(state?.lastInvocation?.fallbackSelectedRouteId, "cursor");
+			const persisted = JSON.stringify(store.getMission(mission.missionId)?.plan);
+			assert.doesNotMatch(persisted, new RegExp(secret, "u"));
+			assert.doesNotMatch(persisted, /authorization|apiKey|thinking":/u);
+			const inspect = formatBossLoopDiagnostics(store.getMission(mission.missionId)!, store.listTasks(mission.missionId).length);
+			assert.ok(inspect.some((line) => line.includes("boss invocation class: authentication_failed")));
+			assert.ok(inspect.some((line) => line.includes("boss fallback attempted: yes")));
+			assert.equal(result.terminal, "COMPLETED");
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("blocks with a precise reason when Tabi-shaped infrastructure fails and no fallback remains", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc28-tabi-alone-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "tabi-alone", goal: "diagnose a live Boss invocation failure" });
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("tabi", 1)],
+				invoke: async ({ assignment }) => parseBossAssistantResponse(rc28Assistant({
+					stopReason: "error",
+					errorMessage: "model_not_found",
+					rawStopReason: "model_not_found",
+					content: [],
+				}), { phase: "plan", routeId: assignment.routeId, ...(assignment.remoteModelId === undefined ? {} : { remoteModelId: assignment.remoteModelId }) }),
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "must not dispatch" }),
+				verify: async () => ({ verdict: "blocked", summary: "must not verify" }),
+				maxCycles: 1,
+			});
+			assert.equal(result.terminal, "BLOCKED");
+			assert.equal(result.cycles, 0);
+			assert.match(result.mission.plan && typeof result.mission.plan === "object" ? String((orchestration(store, String(mission.missionId))?.terminalReason)) : "", /Boss request failed: model_unavailable; no configured fallback remains/u);
+			const inspect = formatBossLoopDiagnostics(store.getMission(mission.missionId)!, 0);
+			assert.ok(inspect.some((line) => line.includes("why execution stopped: Boss request failed: model_unavailable")));
+			assert.ok(inspect.some((line) => line.includes("boss invocation stage: response")));
 			store.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });

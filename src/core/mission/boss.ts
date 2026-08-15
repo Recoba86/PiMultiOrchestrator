@@ -4,6 +4,7 @@ import { PathSafetyError, ProjectTrustRequiredError } from "../security/index.js
 import type { ThinkingEffort, ThinkingLevelMap } from "../thinking.js";
 import type { AnalyticsEventV1 } from "../analytics/index.js";
 import { inferAcceptanceCriteriaProvenance, resolveMissionAcceptanceCriteria } from "./acceptance-criteria.js";
+import { bossInvocationDiagnostic, sanitizeBossInvocationDiagnostic, type BossInvocationDiagnostic } from "./boss-response.js";
 import type { MissionId, MissionRecord, MissionStoreAdapter, MissionStatus, TaskRecord } from "./types.js";
 
 export interface BossRouteCandidate extends BossRouteV1 {
@@ -98,6 +99,7 @@ export interface BossMissionState {
 	readonly tokenUsage?: AnalyticsEventV1["tokenUsage"];
 	readonly lastDecision?: { readonly phase: "plan" | "evaluate"; readonly action: BossDecisionAction; readonly summary: string };
 	readonly lastProtocolError?: string;
+	readonly lastInvocation?: BossInvocationDiagnostic;
 	readonly acceptanceCriteriaProvenance?: "explicit" | "labelled-goal" | "derived-from-goal";
 	readonly terminal?: BossTerminalState;
 	readonly terminalReason?: string;
@@ -256,6 +258,12 @@ export function selectBossEntry(entries: readonly BossRouteCandidate[], scheduli
 	return selectWeightedRoute(entries.filter((entry) => entry.enabled && (entry.weight ?? 1) > 0), schedulingKey);
 }
 
+/** Infrastructure fallback eligibility is independent of weighted scheduling. Weight 0 may still fallback. */
+export function selectBossFallbackEntry(entries: readonly BossRouteCandidate[], current: BossAssignment, history: BossMissionState["fallbackHistory"]): BossRouteCandidate | undefined {
+	const failedRoutes = new Set(history.flatMap((item) => [item.fromRouteId, item.toRouteId]));
+	return entries.find((entry) => entry.routeId !== current.routeId && !failedRoutes.has(entry.routeId) && entry.enabled);
+}
+
 const defaultState = (): BossMissionState => ({ version: 1, cycle: 0, repairCycles: 0, protocolFailures: 0, actionablePlanFailures: 0, fallbackHistory: [] });
 
 const readState = (mission: MissionRecord): BossMissionState => {
@@ -280,6 +288,7 @@ const readState = (mission: MissionRecord): BossMissionState => {
 	const last = isRecord(value.lastDecision) && (value.lastDecision.phase === "plan" || value.lastDecision.phase === "evaluate") && typeof value.lastDecision.action === "string" && typeof value.lastDecision.summary === "string"
 		? { phase: value.lastDecision.phase as "plan" | "evaluate", action: value.lastDecision.action as BossDecisionAction, summary: value.lastDecision.summary.slice(0, 2_000) }
 		: undefined;
+	const lastInvocation = sanitizeBossInvocationDiagnostic(value.lastInvocation);
 	return {
 		version: 1,
 		cycle: typeof value.cycle === "number" && Number.isSafeInteger(value.cycle) && value.cycle >= 0 ? value.cycle : 0,
@@ -290,6 +299,7 @@ const readState = (mission: MissionRecord): BossMissionState => {
 		fallbackHistory: history,
 		...(last === undefined ? {} : { lastDecision: last }),
 		...(typeof value.lastProtocolError === "string" && value.lastProtocolError.trim() ? { lastProtocolError: value.lastProtocolError.trim().slice(0, 240) } : {}),
+		...(lastInvocation === undefined ? {} : { lastInvocation }),
 		...(value.acceptanceCriteriaProvenance === "explicit" || value.acceptanceCriteriaProvenance === "labelled-goal" || value.acceptanceCriteriaProvenance === "derived-from-goal" ? { acceptanceCriteriaProvenance: value.acceptanceCriteriaProvenance } : {}),
 		...(normalizedTokenUsage(value.tokenUsage) === undefined ? {} : { tokenUsage: normalizedTokenUsage(value.tokenUsage) }),
 		...(value.terminal === "COMPLETED" || value.terminal === "BLOCKED" || value.terminal === "AWAITING_USER" || value.terminal === "CANCELLED" || value.terminal === "SAFETY_STOP" ? { terminal: value.terminal } : {}),
@@ -308,7 +318,7 @@ const persistState = (store: MissionStoreAdapter, mission: MissionRecord, state:
 
 export function formatBossLoopDiagnostics(mission: MissionRecord, taskCount: number): readonly string[] {
 	const state = readState(mission);
-	if (!state.bossAssignment && !state.lastDecision && !state.terminal && state.protocolFailures === 0 && state.actionablePlanFailures === 0) return [];
+	if (!state.bossAssignment && !state.lastDecision && !state.terminal && state.protocolFailures === 0 && state.actionablePlanFailures === 0 && state.lastInvocation === undefined) return [];
 	const pin = state.bossAssignment?.remoteModelId ?? state.bossAssignment?.routeId;
 	const fallback = state.fallbackHistory.length === 0
 		? "none"
@@ -320,6 +330,15 @@ export function formatBossLoopDiagnostics(mission: MissionRecord, taskCount: num
 		`actionable-plan failures: ${state.actionablePlanFailures}`,
 		`tasks generated: ${taskCount}`,
 		...(state.lastProtocolError === undefined ? [] : [`last protocol error: ${state.lastProtocolError}`]),
+		...(state.lastInvocation === undefined ? [] : [
+			`boss invocation stage: ${state.lastInvocation.stage}`,
+			`boss invocation class: ${state.lastInvocation.failureClass}`,
+			...(state.lastInvocation.stopReason === undefined ? [] : [`boss invocation stopReason: ${state.lastInvocation.stopReason}`]),
+			`boss invocation hasText: ${state.lastInvocation.hasText ? "yes" : "no"}`,
+			`boss invocation normalized: ${state.lastInvocation.normalized ? "yes" : "no"}`,
+			...(state.lastInvocation.fallbackAttempted === undefined ? [] : [`boss fallback attempted: ${state.lastInvocation.fallbackAttempted ? "yes" : "no"}`]),
+			...(state.lastInvocation.fallbackSelectedRouteId === undefined ? [] : [`boss fallback selected: ${state.lastInvocation.fallbackSelectedRouteId}`]),
+		]),
 		...(state.acceptanceCriteriaProvenance === undefined ? [] : [`acceptance criteria provenance: ${state.acceptanceCriteriaProvenance}`]),
 		...(state.terminal === undefined ? [] : [`boss terminal: ${state.terminal}`]),
 		...(state.terminalReason === undefined ? [] : [`why execution stopped: ${state.terminalReason}`]),
@@ -376,9 +395,24 @@ const completedAndVerified = (store: MissionStoreAdapter, missionId: string): bo
 	return tasks.length > 0 && tasks.every((task) => task.status === "execution_completed" && store.getTaskQualityStatus(task.taskId)?.status === "passed");
 };
 
-const fallbackEntry = (entries: readonly BossRouteCandidate[], current: BossAssignment, history: BossMissionState["fallbackHistory"]): BossRouteCandidate | undefined => {
-	const failedRoutes = new Set(history.flatMap((item) => [item.fromRouteId, item.toRouteId]));
-	return entries.find((entry) => entry.routeId !== current.routeId && !failedRoutes.has(entry.routeId) && entry.enabled && (entry.weight ?? 1) > 0);
+const invocationFromError = (error: unknown, extra: Partial<BossInvocationDiagnostic> = {}): BossInvocationDiagnostic | undefined => {
+	const diagnostic = bossInvocationDiagnostic(error);
+	return sanitizeBossInvocationDiagnostic({
+		stage: extra.stage ?? "request",
+		failureClass: extra.failureClass ?? "unknown",
+		hasText: extra.hasText ?? false,
+		normalized: extra.normalized ?? false,
+		...extra,
+		...(diagnostic ?? {}),
+		...(extra.fallbackAttempted === undefined ? {} : { fallbackAttempted: extra.fallbackAttempted }),
+		...(extra.fallbackSelectedRouteId === undefined ? {} : { fallbackSelectedRouteId: extra.fallbackSelectedRouteId }),
+	});
+};
+
+const infrastructureTerminalReason = (error: unknown, phase: "plan" | "evaluate"): string => {
+	const message = error instanceof Error && error.message.trim() ? error.message.trim().slice(0, 180) : "Boss infrastructure is unavailable";
+	const prefix = phase === "evaluate" && !/during evaluation/iu.test(message) ? `${message} during evaluation` : message;
+	return `${prefix}; no configured fallback remains`.slice(0, 240);
 };
 
 const recordBossAnalytics = (sink: MissionGoalLoopOptions["analytics"], event: AnalyticsEventV1): void => {
@@ -500,8 +534,14 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 				};
 			} catch (error) {
 				if (isBossCancellationCause(error, extra.signal ?? options.signal) || isBossSafetyStopCause(error)) return { error };
-				if (!(error instanceof BossRuntimeError) || error.kind !== "infrastructure") return { error };
-				const replacement = fallbackEntry(options.entries, currentAssignment, state.fallbackHistory);
+				if (!(error instanceof BossRuntimeError) || error.kind !== "infrastructure") {
+					const diagnostic = invocationFromError(error, { stage: "decision-protocol", failureClass: "decision_protocol", fallbackAttempted: false });
+					if (diagnostic !== undefined) state = { ...state, lastInvocation: diagnostic };
+					return { error };
+				}
+				const failed = invocationFromError(error, { stage: "request", failureClass: "provider_unavailable", fallbackAttempted: false });
+				if (failed !== undefined) state = { ...state, lastInvocation: failed };
+				const replacement = selectBossFallbackEntry(options.entries, currentAssignment, state.fallbackHistory);
 				if (!replacement) return { error };
 				const reason = text(error.message, 240) || "infrastructure failure";
 				const nextAssignment: BossAssignment = {
@@ -513,9 +553,15 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 					fallbackFromRouteId: currentAssignment.routeId,
 					fallbackReason: reason,
 				};
-				state = { ...state, bossAssignment: nextAssignment, fallbackHistory: [...state.fallbackHistory, { fromRouteId: currentAssignment.routeId, toRouteId: replacement.routeId, reason }] };
+				const invocation = invocationFromError(error, { fallbackAttempted: true, fallbackSelectedRouteId: replacement.routeId }) ?? failed;
+				state = {
+					...state,
+					bossAssignment: nextAssignment,
+					fallbackHistory: [...state.fallbackHistory, { fromRouteId: currentAssignment.routeId, toRouteId: replacement.routeId, reason }],
+					...(invocation === undefined ? {} : { lastInvocation: invocation }),
+				};
 				assignment = nextAssignment;
-				mission = persistState(options.store, mission, state, { kind: "boss-fallback", fromRouteId: nextAssignment.fallbackFromRouteId, toRouteId: nextAssignment.routeId, reason });
+				mission = persistState(options.store, mission, state, { kind: "boss-fallback", fromRouteId: nextAssignment.fallbackFromRouteId, toRouteId: nextAssignment.routeId, reason, stage: invocation?.stage, failureClass: invocation?.failureClass });
 				recordBossFallback(options, missionId, currentAssignment, nextAssignment, reason, cycle, clock);
 			}
 		}
@@ -570,13 +616,15 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 	const recordProtocolFailure = (error: unknown): void => {
 		const summary = error instanceof Error ? error.message.slice(0, 240) : "Boss planning failed";
 		const actionable = error instanceof BossProtocolError && /requires at least one actionable task/u.test(error.message);
+		const invocation = invocationFromError(error, { stage: "decision-protocol", failureClass: "decision_protocol", fallbackAttempted: false });
 		state = {
 			...state,
 			protocolFailures: state.protocolFailures + 1,
 			...(actionable ? { actionablePlanFailures: state.actionablePlanFailures + 1 } : {}),
 			lastProtocolError: summary,
+			...(invocation === undefined ? {} : { lastInvocation: invocation }),
 		};
-		mission = persistState(options.store, mission, state, { kind: "boss-protocol-failure", summary, actionable });
+		mission = persistState(options.store, mission, state, { kind: "boss-protocol-failure", summary, actionable, stage: invocation?.stage, failureClass: invocation?.failureClass });
 	};
 	let feedback: unknown;
 	for (let cycle = state.cycle; cycle < maxCycles; cycle += 1) {
@@ -587,7 +635,7 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 		if (planned.decision === undefined) {
 			if (isBossCancellationCause(planned.error, options.signal)) return stopCancelled(mission, "Mission cancelled during Boss planning", cycle);
 			if (isBossSafetyStopCause(planned.error)) return stopSafety(mission, planned.error, cycle);
-			if (planned.error instanceof BossRuntimeError && planned.error.kind === "infrastructure") return terminal(options.store, mission, state, "BLOCKED", "Boss infrastructure is unavailable and no configured fallback remains", cycle, options, clock);
+			if (planned.error instanceof BossRuntimeError && planned.error.kind === "infrastructure") return terminal(options.store, mission, state, "BLOCKED", infrastructureTerminalReason(planned.error, "plan"), cycle, options, clock);
 			recordProtocolFailure(planned.error);
 			feedback = { kind: "boss-plan-failure", summary: planned.error instanceof Error ? planned.error.message.slice(0, 240) : "Boss planning failed", protocolFailures: state.protocolFailures, actionablePlanFailures: state.actionablePlanFailures };
 			if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(cycle + 1, "Boss planning did not produce a valid actionable plan"), cycle + 1, options, clock);
@@ -655,7 +703,7 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 		if (evaluated.decision === undefined) {
 			if (isBossCancellationCause(evaluated.error, options.signal)) return stopCancelled(mission, "Mission cancelled during Boss evaluation", cycle + 1);
 			if (isBossSafetyStopCause(evaluated.error)) return stopSafety(mission, evaluated.error, cycle + 1);
-			if (evaluated.error instanceof BossRuntimeError && evaluated.error.kind === "infrastructure") return terminal(options.store, mission, state, "BLOCKED", "Boss infrastructure is unavailable during evaluation and no configured fallback remains", cycle + 1, options, clock);
+			if (evaluated.error instanceof BossRuntimeError && evaluated.error.kind === "infrastructure") return terminal(options.store, mission, state, "BLOCKED", infrastructureTerminalReason(evaluated.error, "evaluate"), cycle + 1, options, clock);
 			recordProtocolFailure(evaluated.error);
 			if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(cycle + 1, "Boss evaluation did not complete within the safety bound"), cycle + 1, options, clock);
 			continue;

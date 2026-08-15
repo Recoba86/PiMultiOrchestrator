@@ -1284,11 +1284,11 @@ requirements and remain future work.
 
 - **Level:** U
 - **Setup:** load `PACKAGE_INFO` from compiled `dist`/`dist-test` output.
-- **Pass:** version equals `package.json` (`0.1.0-rc.27`); development line is
-  `RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair`; RC23 titles
+- **Pass:** version equals `package.json` (`0.1.0-rc.28`); development line is
+  `RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics`; RC23 titles
   are absent; `latestAcceptedMilestone` is M10; `productionReady` is false;
   an unmapped version would report `stale-development-line:<version>` rather
-  than an older RC title. The `0.1.0-rc.26` map entry remains historical.
+  than an older RC title. The `0.1.0-rc.26` and `0.1.0-rc.27` map entries remain historical.
   `@orchestrator` and Smart Routing Run as Mission
   still enter the same canonical Boss loop.
 
@@ -1329,6 +1329,44 @@ requirements and remain future work.
   generated, why execution stopped, the pinned Boss route, and whether fallback
   occurred, without raw prompts or secrets. CANCELLED and SAFETY_STOP remain
   intact.
+
+### RC28-01 — Valid Pi-shaped Boss responses do not block at cycle 0
+
+- **Level:** U, fake Pi `AssistantMessage` fixtures
+- **Pass:** a live-shaped `completeSimple` response with valid final `text`
+  JSON, including `stopReason: "length"` when the JSON is complete, produces a
+  `BossDecision`, creates the first Task, runs the worker and M7 path, and
+  does not terminal `BLOCKED` at cycle 0.
+
+### RC28-02 — Empty, truncated, and malformed responses are precise protocol diagnostics
+
+- **Level:** U
+- **Pass:** thinking-only `stop` (RC27 Cursor dogfood shape) is
+  `Boss response contained no assistant text` with stage `response` and class
+  `empty_response`. Truncated `length` without a complete decision reports
+  `max_tokens`. Malformed/schema-invalid JSON remains `BossProtocolError`.
+  Protocol failure does not trigger infrastructure fallback. Inspect shows
+  stage/class/stopReason/hasText without secrets or thinking.
+
+### RC28-03 — Infrastructure failure falls back independently of scheduling weight
+
+- **Level:** U
+- **Pass:** a classified request/response infrastructure failure on the
+  scheduled Boss falls back to an enabled compatible route even when that
+  replacement has scheduling weight 0. The replacement becomes the persisted
+  Mission pin. Protocol failure still does not fallback. A lone infrastructure
+  failure with no remaining fallback terminals `BLOCKED` with the classified
+  reason, not a black-box "infrastructure unavailable" sentence. Weight 0
+  remains excluded from normal weighted assignment.
+
+### RC28-04 — Boss profile UI distinguishes scheduled, editor, and fallback eligibility
+
+- **Level:** U
+- **Pass:** after routes are configured, the profile is not labelled
+  `Unconfigured Boss`. Top-level presentation shows scheduled Boss from
+  positive-weight eligibility and does not label a zero-weight editor
+  selection as the scheduled Boss. Route rows distinguish scheduling
+  eligibility from fallback eligibility.
 
 
 ### RC26-04 — Persisted Pi install evidence is machine-neutral

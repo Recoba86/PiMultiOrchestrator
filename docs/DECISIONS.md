@@ -454,3 +454,50 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   (`0.1.0-rc.26`, tag `v0.1.0-rc.26`, source
   `11153f0587634bcba732a5b214c95319c305f9e6`) is immutable. Publication, tags,
   npm dist-tags, and GitHub Releases remain a separate operator-owned step.
+
+## ADR-045 — RC28 normalizes live Boss inference and separates fallback from scheduling
+
+- **Decision:** Keep RC25–RC27 pinning, strict `normalizeBossDecision`,
+  zero-actionable-plan repair, Goal criteria provenance, autonomous Task
+  bootstrap, M4 vs M7 separation, CANCELLED, and SAFETY_STOP. Add one canonical
+  Boss-response normalization layer over Pi's public `AssistantMessage`
+  contract from `@earendil-works/pi-ai` 0.84.1: `StopReason` is
+  `pending | stop | length | toolUse | error | aborted | deferred`; user-visible
+  text is only `content[].type === "text"` (Pi `contentText()`); thinking
+  blocks are never the decision.
+- **Decision:** Treat `stop` and `length` as usable completions when final
+  text parses to a valid BossDecision. Empty assistant text, truncated
+  max-token output, unsupported shapes, represented refusals, cancellation,
+  and classified request/response failures stay distinct. Do not require
+  `stopReason === "stop"` as the only success. Do not flatten live
+  `completeSimple` failures to a generic "provider request failed".
+- **Decision:** Boss scheduling eligibility, infrastructure fallback
+  eligibility, and response protocol validity are three predicates.
+  `selectBossEntry` continues to require enabled routes with weight > 0.
+  `selectBossFallbackEntry` requires enabled/available/compatible unused
+  routes and MUST NOT require positive weight. No separate fallback-disable
+  policy exists in this RC, so weight 0 may still fallback. Protocol/quality
+  errors still must not fallback. A successful fallback remains the Mission pin.
+- **Decision:** Persist only sanitized invocation diagnostics (stage, class,
+  stopReason, hasText, normalized, optional code/status, route ids, fallback
+  attempted/selected). Never persist API keys, authorization headers, raw
+  provider payloads, or hidden reasoning. Inspect and terminal reasons must
+  show the classified failure instead of a black-box infrastructure sentence.
+- **Decision:** Boss Profile UI is presentation-only: a stored display name of
+  `Unconfigured Boss` with configured routes is shown as `Default Boss`;
+  scheduled Boss is the positive-weight assignment preview; editor selection
+  is labelled separately; fallback eligibility is visible. Do not imply that a
+  zero-weight editor route is the active Boss.
+- **Rationale:** Public RC27 dogfood Mission
+  `mission-89d5e163-17ee-4218-b06c-dea5fa4b480b` persisted criteria and pin but
+  received no usable assistant text (`Boss provider returned no decision`).
+  Mission `mission-aa30ed69-3213-4cf0-882a-a60be426412d` pinned an eligible
+  Tabi route then blocked at cycle 0 with
+  `Boss infrastructure is unavailable and no configured fallback remains`
+  after the original structured failure was discarded and weight 0 Cursor
+  could not fallback. These are observed route/runtime compatibility failures,
+  not provider blame and not Mission bootstrap regressions.
+- **Boundary:** RC28 prepares `0.1.0-rc.28` in source only. Public RC27
+  (`0.1.0-rc.27`, source `267612d15dcc0784856e7dafd6704d2f802272b9`) is
+  immutable. Publication, tags, npm dist-tags, GitHub Releases, and live Pi
+  install remain a separate operator-owned step. RC27 history is not rewritten.

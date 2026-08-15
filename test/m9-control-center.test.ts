@@ -338,6 +338,9 @@ describe("M9 Control Center contract", () => {
 			assert.ok(bossView.title.includes("weight 5") && bossView.title.includes("share 50%"));
 			assert.ok(bossView.title.includes("weight 3") && bossView.title.includes("share 30%"));
 			assert.ok(bossView.title.includes("weight 2") && bossView.title.includes("share 20%"));
+			assert.ok(bossView.title.includes("scheduled Boss:"));
+			assert.ok(bossView.title.includes("scheduling-eligible"));
+			assert.ok(!bossView.title.includes("Unconfigured Boss"));
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

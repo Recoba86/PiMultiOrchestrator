@@ -483,8 +483,26 @@ goal -> plan -> dispatch Investigation/Implementation -> consume evidence
        (MissionStatus blocked + orchestration.terminal = SAFETY_STOP)
 ```
 
-Only a genuine infrastructure failure may invoke Boss fallback. The fallback
-event records the original route, replacement route, failure class, and safe
+Only a genuine infrastructure failure may invoke Boss fallback. Scheduling
+eligibility, infrastructure fallback eligibility, and response protocol
+validity are distinct predicates. Normal assignment uses enabled routes with
+positive weight. Fallback uses `selectBossFallbackEntry`: enabled, available,
+compatible, unused in this Mission's fallback history, and not the current pin.
+Weight 0 excludes a route from weighted assignment but does not by itself
+forbid infrastructure fallback. Protocol/quality failures, cancellation, and
+safety-stop do not rotate the Boss.
+
+The host normalizes Pi `completeSimple` `AssistantMessage` values through one
+canonical layer before `normalizeBossDecision`. Pi's public contract exposes
+`stopReason` values `pending | stop | length | toolUse | error | aborted | deferred`
+and content blocks `text | thinking | toolCall`. User-visible decision text is
+exactly the `type:"text"` blocks (Pi `contentText()`). Thinking/CoT is never
+used as the decision. `length` with complete JSON is a usable completion;
+empty text, truncated JSON, unsupported shape, refusal, cancellation, and
+classified request/response failures remain distinct. Inspect persists only
+safe stage/class/stopReason/hasText/fallback fields.
+
+The fallback event records the original route, replacement route, failure class, and safe
 reason, then pins the replacement for the remaining Mission. Quality rejection,
 cancellation, and safety-stop do not rotate the Boss. The loop persists bounded
 cycle/repair dimensions and terminal analytics, including `CANCELLED` and

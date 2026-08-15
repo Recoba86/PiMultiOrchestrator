@@ -55,7 +55,6 @@ import {
 } from "../core/ninerouter/index.js";
 import {
 	createSubagentExecutor,
-	extractWorkerUsage,
 	WorkerError,
 	 type ResultProtocolSpec,
 	 type SubagentExecutionRequest,
@@ -80,7 +79,6 @@ import {
 	formatBossLoopDiagnostics,
 	isBossCancellationCause,
 	isBossSafetyStopCause,
-	normalizeBossDecision,
 	runMissionGoalLoop,
 	type BossDecision,
 	type BossInferenceRequest,
@@ -88,6 +86,8 @@ import {
 	type BossTaskOutcome,
 	type BossVerificationOutcome,
 } from "../core/mission/boss.js";
+import { bossInfrastructureError, parseBossAssistantResponse, wrapBossRequestFailure } from "../core/mission/boss-response.js";
+import { formatBossProfileOverview } from "../core/mission/boss-profile-view.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
 import {
@@ -874,56 +874,43 @@ const bossInferencePrompt = (request: BossInferenceRequest): string => {
 	].join("\n");
 };
 
-const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>, signal?: AbortSignal, phase?: BossInferenceRequest["phase"]): BossDecision => {
-	if (signal?.aborted || response.stopReason === "aborted") {
-		const error = new Error("Boss inference was cancelled");
-		error.name = "AbortError";
-		throw error;
-	}
-	if (response.stopReason !== "stop") throw new BossInfrastructureError("Boss provider did not complete the orchestration response");
-	const usage = extractWorkerUsage(response);
-	const tokenUsage = usage === undefined ? undefined : {
-		...(usage.input === undefined ? {} : { inputTokens: usage.input }),
-		...(usage.output === undefined ? {} : { outputTokens: usage.output }),
-		...(usage.cacheRead === undefined ? {} : { cacheReadTokens: usage.cacheRead }),
-		...(usage.cacheWrite === undefined ? {} : { cacheWriteTokens: usage.cacheWrite }),
-		...(usage.reasoning === undefined ? {} : { reasoningTokens: usage.reasoning }),
-		...(usage.totalTokens === undefined ? {} : { totalTokens: usage.totalTokens }),
-		provenance: "observed" as const,
-	};
-	const withUsage = (value: BossDecision): BossDecision => tokenUsage === undefined ? value : { ...value, tokenUsage };
-	const raw = response.content.filter((block): block is { readonly type: "text"; readonly text: string } => block.type === "text").map((block) => block.text).join("").trim();
-	if (!raw) throw new BossProtocolError("Boss provider returned no decision");
-	const candidates = [raw, raw.replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "")];
-	for (const candidate of candidates) {
-		try {
-			const parsed: unknown = JSON.parse(candidate);
-			return withUsage(normalizeBossDecision(parsed, phase === undefined ? {} : { phase }));
-		} catch (error) {
-			if (error instanceof BossProtocolError) throw error;
-		}
-	}
-	const start = raw.indexOf("{");
-	const end = raw.lastIndexOf("}");
-	if (start >= 0 && end > start) {
-		try {
-			const parsed: unknown = JSON.parse(raw.slice(start, end + 1));
-			return withUsage(normalizeBossDecision(parsed, phase === undefined ? {} : { phase }));
-		} catch (error) {
-			if (error instanceof BossProtocolError) throw error;
-		}
-	}
-	throw new BossProtocolError("Boss provider returned malformed JSON");
-};
+const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>, signal?: AbortSignal, phase?: BossInferenceRequest["phase"], identity?: { readonly routeId?: string; readonly remoteModelId?: string }): BossDecision =>
+	parseBossAssistantResponse(response, {
+		...(signal === undefined ? {} : { signal }),
+		...(phase === undefined ? {} : { phase }),
+		...(identity?.routeId === undefined ? {} : { routeId: identity.routeId }),
+		...(identity?.remoteModelId === undefined ? {} : { remoteModelId: identity.remoteModelId }),
+	});
 
 const invokeBossInference = async (manager: PiManagerContract, providerRegistry: PiProviderRegistry | undefined, request: BossInferenceRequest): Promise<BossDecision> => {
+	const identity = { routeId: request.assignment.routeId, ...(request.assignment.remoteModelId === undefined ? {} : { remoteModelId: request.assignment.remoteModelId }) };
 	let route: ResolvedWorkerRoute;
 	try { route = await resolveHostRoute(manager, request.assignment.routeId, providerRegistry); }
-	catch { throw new BossInfrastructureError("Pinned Boss route is unavailable"); }
+	catch {
+		throw bossInfrastructureError("Boss route resolution failed", {
+			stage: "route-resolution",
+			failureClass: "model_unavailable",
+			hasText: false,
+			normalized: false,
+			code: "route_unavailable",
+			...identity,
+		});
+	}
 	const model = route.model as unknown as { readonly reasoning?: boolean; readonly thinkingLevelMap?: ThinkingLevelMap };
 	const thinkingLevelMap = model.thinkingLevelMap;
 	const thinkingMetadata = { ...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }), ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }) };
-	if (!isSupportedThinkingEffort(thinkingMetadata, request.assignment.thinkingEffort)) throw new BossInfrastructureError("Pinned Boss thinking effort is unavailable");
+	if (!isSupportedThinkingEffort(thinkingMetadata, request.assignment.thinkingEffort)) {
+		throw bossInfrastructureError("Boss thinking effort is unavailable", {
+			stage: "capability",
+			failureClass: "invalid_request",
+			hasText: false,
+			normalized: false,
+			code: "thinking_effort",
+			routeId: identity.routeId,
+			remoteModelId: identity.remoteModelId ?? route.remoteModelId,
+		});
+	}
+	const resolvedIdentity = { ...identity, remoteModelId: identity.remoteModelId ?? route.remoteModelId };
 	try {
 		const response = await route.modelRuntime.completeSimple(route.model, {
 			systemPrompt: BOSS_SYSTEM_PROMPT,
@@ -932,7 +919,7 @@ const invokeBossInference = async (manager: PiManagerContract, providerRegistry:
 			...(request.assignment.thinkingEffort === "auto" ? {} : { reasoning: request.assignment.thinkingEffort }),
 			...(request.signal === undefined ? {} : { signal: request.signal }),
 		});
-		return parseBossInferenceResponse(response, request.signal, request.phase);
+		return parseBossInferenceResponse(response, request.signal, request.phase, resolvedIdentity);
 	} catch (error) {
 		if (error instanceof BossProtocolError) throw error;
 		if (isBossCancellationCause(error, request.signal) || request.signal?.aborted) {
@@ -942,7 +929,7 @@ const invokeBossInference = async (manager: PiManagerContract, providerRegistry:
 		}
 		if (isBossSafetyStopCause(error)) throw error;
 		if (error instanceof BossInfrastructureError) throw error;
-		throw new BossInfrastructureError("Pinned Boss provider request failed");
+		wrapBossRequestFailure(error, resolvedIdentity);
 	}
 };
 
@@ -1942,18 +1929,24 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				const routeState = await bossRouteCandidates(latest ?? config, current);
 				const configured = bossProfileEntries(current);
 				const configuredPresentation = canonicalModelOptions(configured.map((entry) => ({ value: entry.routeId, remoteModelId: latest?.routes[entry.routeId]?.remoteModelId, displayName: latest?.routes[entry.routeId]?.displayName })));
-				const positiveTotal = configured.reduce((sum, entry) => sum + Math.max(0, entry.weight ?? 1), 0);
-				const routeLines = configured.map((entry, index) => `${configuredPresentation[index]?.label ?? "Unknown model"} — ${thinkingEffortLabel(entry.thinkingEffort ?? "auto")} — weight ${entry.weight ?? 1} — share ${positiveTotal > 0 ? Math.round(((entry.weight ?? 1) / positiveTotal) * 1000) / 10 : 0}%${entry.enabled ? "" : " [disabled]"}${routeState.eligible.some((candidate) => candidate.routeId === entry.routeId) ? "" : " [unavailable]"}`);
 				const selectedEntry = configured.find((entry) => entry.routeId === selectedRouteId) ?? configured[0];
 				if (selectedEntry) selectedRouteId = selectedEntry.routeId;
-				const summary = [
-					"Boss / Orchestrator Profile",
-					`profile: ${current.displayName}`,
-					`model: ${configuredPresentation.find((entry) => entry.value === selectedRouteId)?.label ?? (configured.length > 1 ? "Multiple configured" : "Unconfigured")}`,
-					`thinking: ${selectedEntry ? thinkingEffortLabel(selectedEntry.thinkingEffort ?? "auto") : "Unknown"}`,
-					`status: ${current.enabled ? "Enabled" : "Disabled"}${configured.length === 0 ? " / Unconfigured" : routeState.eligible.length === 0 ? " / Unavailable" : ""}`,
-					...(routeLines.length > 0 ? ["routes:", ...routeLines] : ["routes: none"]),
-				].join("\n");
+				const overview = formatBossProfileOverview({
+					displayName: current.displayName,
+					enabled: current.enabled,
+					profileId: current.id,
+					routes: configured.map((entry, index) => ({
+						routeId: entry.routeId,
+						label: configuredPresentation[index]?.label ?? "Unknown model",
+						thinkingLabel: thinkingEffortLabel(entry.thinkingEffort ?? "auto"),
+						enabled: entry.enabled,
+						available: routeState.eligible.some((candidate) => candidate.routeId === entry.routeId),
+						weight: entry.weight ?? 1,
+						...(routeState.eligible.some((candidate) => candidate.routeId === entry.routeId) ? {} : { unavailableReason: "unavailable" }),
+					})),
+					...(selectedRouteId === undefined ? {} : { editorRouteId: selectedRouteId }),
+				});
+				const summary = ["Boss / Orchestrator Profile", ...overview.lines].join("\n");
 				const action = await ctx.ui.select(summary, ["Select Model", "Thinking Effort", current.enabled ? "Disable" : "Enable", "Set Weight", "Inspect", "Back"]);
 				if (!action || action === "Back") return;
 				if (action === "Select Model") {

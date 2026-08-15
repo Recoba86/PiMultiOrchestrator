@@ -4,14 +4,14 @@ Pi Multi-Orchestrator is a Pi extension for coordinating a bounded Boss Mission 
 
 ## Status
 
-RC26 (`0.1.0-rc.26`) is the current public prerelease on npm with `next`; RC25
-is superseded. `latest` remains `0.1.0-rc.17`. Source currently prepares RC27
-(`0.1.0-rc.27`) as implemented / pre-release ready; it is not published, tagged,
-or a GitHub Release. Public RC26 is immutable and must not be retagged or
-republished. RC27 repairs autonomous `@orchestrator` Task bootstrap, Boss
-protocol validation, zero-task loop stalls, and Goal acceptance-criteria
-durability while retaining RC25/RC26 Boss pinning, infrastructure-only
-fallback, M7 quality separation, CANCELLED, and SAFETY_STOP. RC25/RC26 keep
+RC27 (`0.1.0-rc.27`) is the current public prerelease on npm with `next`; RC26
+is superseded. `latest` remains `0.1.0-rc.17`. Source currently prepares RC28
+(`0.1.0-rc.28`) as implemented / pre-release ready; it is not published, tagged,
+or a GitHub Release. Public RC27 is immutable and must not be retagged or
+republished. RC28 repairs live Boss invocation compatibility, classified
+failure diagnostics, and infrastructure-fallback semantics while retaining
+RC25/RC26/RC27 Boss pinning, protocol validation, autonomous Task bootstrap,
+Goal criteria durability, M7 quality separation, CANCELLED, and SAFETY_STOP. RC25/RC26 keep
 per-Mission Boss assignment and a
 bounded goal loop while retaining RC23's independent per-Pool Priority or
 Weighted Rotation scheduling, deterministic weighted route selection,
