@@ -97,6 +97,11 @@ procedure.
   `latestAcceptedMilestone` remains M10; `productionReady` remains false.
 - **Publication:** none. No `v0.1.0-rc.26` tag, npm dist-tag, or GitHub Release
   exists for this candidate at handoff.
+- **Evidence privacy:** `verify-pi-release` persists only sanitized command
+  results. Local absolute machine paths are replaced with `<release-dir>`,
+  `<temp-path>`, or `<local-path>` before `pi-install-evidence.json` is written.
+  Review-bundle `scanPrivacy` still rejects unsanitized `/Users` paths; there
+  is no scanner exception for this file.
 
 ## Historical RC22 local candidate — Canonical model selector presentation
 

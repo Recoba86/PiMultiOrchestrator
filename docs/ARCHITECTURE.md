@@ -869,7 +869,10 @@ artifact-derived extracted directory, machine-readable upgrade/rollback
 evidence, and self-contained review bundle outside the source checkout. It
 verifies the unpacked entrypoint without the checkout and rejects secrets,
 local paths, `.git`, runtime databases, sessions, and development
-dependencies. Pi `0.84.1` installs the checksum-verified extracted directory;
+dependencies. Pi install/remove/startup command evidence is sanitized at the
+producer so persisted review files cannot contain local absolute machine
+paths; the privacy scanner remains the rejecting gate and is not given an
+allowlist exception. Pi `0.84.1` installs the checksum-verified extracted directory;
 it does not load a `.tgz` directly. Install, upgrade, rollback, and rescue use
 isolated Pi settings/runtime roots. A rescue harness can remove or disable the
 package and restore a named M10 compatibility baseline without loading the

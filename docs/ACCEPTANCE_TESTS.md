@@ -1291,6 +1291,18 @@ requirements and remain future work.
   than an older RC title. `@orchestrator` and Smart Routing Run as Mission
   still enter the same canonical Boss loop.
 
+### RC26-04 — Persisted Pi install evidence is machine-neutral
+
+- **Level:** U
+- **Setup:** feed `safeCommandResult` synthetic Pi install/remove stdout that
+  contains `/Users/.../directory-source`, `/home/...`, `/private/var/folders`,
+  `/tmp`, `/private/tmp`, and Windows `C:\\Users\\...` paths; persist the
+  result as `pi-install-evidence.json`.
+- **Pass:** persisted stdout/stderr contain no local absolute machine paths;
+  useful `code`/`signal` remain; `scanPrivacy` on that evidence is clean with
+  no `local-absolute-path` issue and without weakening or excepting the
+  scanner.
+
 ### RC25-04 — Persisted Boss analytics and manual recommendations
 
 - **Level:** I/U

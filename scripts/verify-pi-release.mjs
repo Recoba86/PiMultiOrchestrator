@@ -5,7 +5,7 @@ import { access, constants, realpath, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { trustedNpm, trustedPi, trustedSystemExecutable, trustedToolEnvironment, trustedTypeScript, verifyReleaseDirectory } from "./release-candidate.mjs";
+import { trustedNpm, trustedPi, trustedSystemExecutable, trustedToolEnvironment, trustedTypeScript, verifyReleaseDirectory, safeCommandResult } from "./release-candidate.mjs";
 
 const fail = (message) => { throw new Error(message); };
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -34,8 +34,6 @@ const run = (command, args, options = {}) => new Promise((resolvePromise, reject
 });
 
 const text = (bytes) => Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes ?? "");
-const scrub = (value) => text(value).replace(/(?:\/private)?\/(?:tmp|var\/folders)\/[^\s\n]+/gu, "<temp-path>");
-const safeResult = (result) => ({ code: result.code, signal: result.signal, stdout: scrub(result.stdout).slice(-2_000), stderr: scrub(result.stderr).slice(-2_000) });
 
 async function resolveExecutable(requested) {
 	const candidates = isAbsolute(requested)
@@ -438,6 +436,7 @@ const main = async () => {
 		const m10Provenance = { role: "m10", commit: M10_COMMIT };
 		const candidateProvenance = { role: "candidate", commit: manifest.gitCommit };
 		const beforeState = await captureSemanticState(baselineSource, configRoot, m10Provenance, seeded);
+		const safeResult = (result) => safeCommandResult(result, { releaseDir: args.releaseDir });
 		const install = async (directory) => safeResult(await run(pi.path, ["install", directory, "--no-approve"], { cwd, env }));
 		const remove = async (directory) => safeResult(await run(pi.path, ["remove", directory], { cwd, env }));
 		const startup = async (extra = []) => safeResult(await run(pi.path, ["--offline", "--no-session", "--no-context-files", ...extra, "--mode", "rpc"], { cwd, env, input: Buffer.alloc(0) }));

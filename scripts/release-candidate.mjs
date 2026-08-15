@@ -275,7 +275,30 @@ const privacyTextPatterns = [
 ];
 const privacyRuleNames = [...privacyTextPatterns.map((item) => item.name), "local-absolute-path", "runtime-state-filename", "sqlite-signature", "nul-byte", "symlink", "non-regular-file"];
 const localPathPattern = /(?:^|[="'`\s:([{,])(?:\/(?:Users|private|home|var\/folders)\/|[A-Z]:[\\/]+Users[\\/]+)/u;
+const tempAbsolutePath = /(?:\/private)?\/(?:tmp|var\/folders)\/[^\s"'`\n]+/gu;
+const remainingAbsolutePath = /(?:\/(?:Users|private|home|tmp|var\/folders)\/|[A-Z]:[\\/]+Users[\\/]+)[^\s"'`\n]*/gu;
 const runtimeDatabaseName = /(?:^|\/)(?:[^/]+\.(?:sqlite(?:[-.][^/]*)?|sqlite3|db(?:[-.][^/]*)?|log)|(?:state|history|sessions?)(?:\/|$))/iu;
+
+const evidenceText = (value) => Buffer.isBuffer(value) ? value.toString("utf8") : String(value ?? "");
+
+export const scrubEvidenceText = (value, options = {}) => {
+	let text = evidenceText(value);
+	const releaseDir = typeof options.releaseDir === "string" ? options.releaseDir.replace(/[\\/]+$/u, "") : "";
+	if (releaseDir.length > 3) {
+		const variants = [releaseDir];
+		if (releaseDir.startsWith("/") && !releaseDir.startsWith("/private/")) variants.push(`/private${releaseDir}`);
+		variants.sort((left, right) => right.length - left.length);
+		for (const from of variants) text = text.split(from).join("<release-dir>");
+	}
+	return text.replace(tempAbsolutePath, "<temp-path>").replace(remainingAbsolutePath, "<local-path>");
+};
+
+export const safeCommandResult = (result, options = {}) => ({
+	code: result.code,
+	signal: result.signal,
+	stdout: scrubEvidenceText(result.stdout, options).slice(-(options.maxStdout ?? 2_000)),
+	stderr: scrubEvidenceText(result.stderr, options).slice(-(options.maxStderr ?? 2_000)),
+});
 
 export const scanPrivacy = async (root) => {
 	const report = {

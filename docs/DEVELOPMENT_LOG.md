@@ -4,6 +4,21 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC26 — Release evidence privacy hotfix
+
+- **Date/status:** 2026-08-15; `IMPLEMENTED / PRE-RELEASE READY` correction on
+  the unpublished `0.1.0-rc.26` line. Not public, tagged, or npm-published.
+- **Root cause:** `verify-pi-release` sent install/remove/startup results
+  through `safeResult()`, but `scrub()` only neutralized `/tmp` and
+  `/var/folders`. Pi `install` stdout containing `/Users/.../directory-source`
+  was persisted into `pi-install-evidence.json` and correctly rejected by
+  review-bundle `scanPrivacy`.
+- **Fix:** shared producer-side `scrubEvidenceText` / `safeCommandResult`
+  replace release directories, temp paths, and remaining local absolute paths
+  (`/Users`, `/private`, `/home`, `/tmp`, `/var/folders`, Windows user homes)
+  before evidence is written. The privacy scanner was not weakened.
+- **Publication:** none. Package version remains `0.1.0-rc.26`.
+
 ## RC26 — Goal Terminal Semantics & Runtime Metadata Correctness
 
 - **Date/status:** 2026-08-15; `IMPLEMENTED / PRE-RELEASE READY`. Source is

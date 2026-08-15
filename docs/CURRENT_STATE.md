@@ -117,6 +117,12 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - **Publication boundary:** RC25 remains the current public prerelease.
   `v0.1.0-rc.26` is not tagged, npm was not published, and the live Pi
   installation was not modified.
+- **Release-evidence privacy hotfix:** Pi install/remove/startup stdout and
+  stderr persisted into `pi-install-evidence.json` are sanitized at the
+  producer (`safeCommandResult` / `scrubEvidenceText`) so `/Users`, `/home`,
+  `/private`, `/tmp`, `/var/folders`, and Windows user-home paths cannot leak
+  into the review bundle. The privacy scanner is unchanged and is not
+  allowlisted around this file. Package version remains `0.1.0-rc.26`.
 
 ## Historical RC18 real-world Pi/9Router compatibility repair
 

@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 
 const root = process.cwd();
@@ -242,5 +243,42 @@ test("release build excludes untracked source and stale ignored dist output", ()
 		rmSync(output, { recursive: true, force: true });
 		if (existsSync(stalePath)) rmSync(stalePath, { force: true });
 		if (existsSync(untrackedPath)) rmSync(untrackedPath, { force: true });
+	}
+});
+
+test("Pi install evidence sanitizes local absolute paths before they are persisted", async () => {
+	const releaseDir = "/Users/amin/Documents/Witamin-Game/pi-multi-orchestrator-rc26-release";
+	const leaked = `Installing ${releaseDir}/directory-source...\n`;
+	const { safeCommandResult, scanPrivacy } = await import(pathToFileURL(script).href) as {
+		readonly safeCommandResult: (result: { readonly code: number | null; readonly signal: NodeJS.Signals | null; readonly stdout: unknown; readonly stderr: unknown }, options?: { readonly releaseDir?: string }) => { readonly code: number | null; readonly signal: NodeJS.Signals | null; readonly stdout: string; readonly stderr: string };
+		readonly scanPrivacy: (root: string) => Promise<{ readonly clean: boolean; readonly issues: ReadonlyArray<{ readonly path: string; readonly kind: string }> }>;
+	};
+	const samples = [
+		{ stdout: leaked, releaseDir, expect: /<release-dir>/u },
+		{ stdout: "Installing /home/reviewer/pi-multi-orchestrator-rc26-release/directory-source...\n", expect: /<local-path>|<release-dir>/u },
+		{ stdout: "Extracted /private/var/folders/w1/66_p12vd1hd_j9nfv_r43jvr0000gn/T/pi-m11-r8-install-abc/broken-rc4\n", expect: /<temp-path>/u },
+		{ stdout: "Using /tmp/pi-release-verify/directory-source\n", expect: /<temp-path>/u },
+		{ stdout: "Installing C:\\Users\\reviewer\\pi-multi-orchestrator-rc26-release\\directory-source\n", expect: /<local-path>/u },
+		{ stdout: "Path /private/tmp/isolated-home/.pi/agent\n", expect: /<temp-path>/u },
+	];
+	const evidenceRoot = mkdtempSync(join(tmpdir(), "pi-install-evidence-privacy-"));
+	try {
+		const installResults: Record<string, unknown> = {};
+		for (const [index, sample] of samples.entries()) {
+			const sanitized = safeCommandResult({ code: 0, signal: null, stdout: sample.stdout, stderr: "" }, sample.releaseDir === undefined ? {} : { releaseDir: sample.releaseDir });
+			assert.equal(sanitized.code, 0);
+			assert.equal(sanitized.signal, null);
+			assert.match(sanitized.stdout, sample.expect);
+			assert.doesNotMatch(sanitized.stdout, /(?:\/(?:Users|private|home|tmp|var\/folders)\/|[A-Z]:[\\/]+Users[\\/]+)/u);
+			assert.doesNotMatch(sanitized.stderr, /(?:\/(?:Users|private|home|tmp|var\/folders)\/|[A-Z]:[\\/]+Users[\\/]+)/u);
+			installResults[["baselineInstall", "baselineRemoval", "candidateInstall", "candidateRemoval", "rollbackInstall", "rollbackRemoval"][index] ?? `op${index}`] = sanitized;
+		}
+		writeFileSync(join(evidenceRoot, "pi-install-evidence.json"), `${JSON.stringify({ schemaVersion: 3, installResults }, null, 2)}\n`, "utf8");
+		const report = await scanPrivacy(evidenceRoot);
+		assert.equal(report.clean, true, JSON.stringify(report.issues));
+		assert.equal(report.issues.some((issue) => issue.kind === "local-absolute-path"), false);
+		assert.doesNotMatch(readFileSync(join(evidenceRoot, "pi-install-evidence.json"), "utf8"), /\/Users\/|\/home\/|\/private\/|\/var\/folders\/|C:\\\\Users\\\\/u);
+	} finally {
+		rmSync(evidenceRoot, { recursive: true, force: true });
 	}
 });

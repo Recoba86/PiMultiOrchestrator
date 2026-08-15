@@ -10,6 +10,7 @@ import {
 	captureTestDefinition,
 	createGitSourceStage,
 	releaseBindingFor,
+	scrubEvidenceText,
 	trustedNpm,
 	trustedPi,
 	trustedNode,
@@ -39,10 +40,7 @@ const run = (command, args, options = {}) => new Promise((resolvePromise, reject
 });
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const scrub = (value) => value
-	.replaceAll(root, "<repo>")
-	.replace(/(?:\/Users|\/private|\/home|\/tmp|\/var\/folders)\/[^\s"'`]+/gu, "<path>")
-	.replace(/[A-Z]:[\\/]Users[\\/][^\s"'`]+/gu, "<path>");
+const scrub = (value) => scrubEvidenceText(value);
 
 export const parseTapSummary = (output) => {
 	const pattern = /(?:^|\n)# tests (?<total>\d+)\n# suites (?<suites>\d+)\n# pass (?<passed>\d+)\n# fail (?<failed>\d+)\n# cancelled (?<cancelled>\d+)\n# skipped (?<skipped>\d+)\n# todo (?<todo>\d+)\n# duration_ms (?<duration>[0-9]+(?:\.[0-9]+)?)(?:\n|$)/gu;

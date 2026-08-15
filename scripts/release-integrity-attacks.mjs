@@ -7,6 +7,7 @@ import {
 	createGitSourceStage,
 	inspectTree,
 	scanPrivacy,
+	scrubEvidenceText,
 	validateTestEvidence,
 	verifyReleaseDirectory,
 } from "./release-candidate.mjs";
@@ -14,9 +15,7 @@ import { verifyBundleIntegrity, writeBundleIntegrityManifest } from "./create-re
 
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const fail = (message) => { throw new Error(message); };
-const scrub = (value) => String(value)
-	.replace(/(?:\/Users|\/private|\/home|\/tmp|\/var\/folders)\/[^\s"'`]+/gu, "<path>")
-	.replace(/[A-Z]:[\\/]Users[\\/][^\s"'`]+/gu, "<path>");
+const scrub = (value) => scrubEvidenceText(value);
 
 const run = (command, args, options = {}) => new Promise((resolvePromise, reject) => {
 	const child = spawn(command, args, { cwd: options.cwd, env: options.env, stdio: ["ignore", "pipe", "pipe"] });

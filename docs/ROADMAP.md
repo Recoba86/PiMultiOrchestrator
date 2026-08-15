@@ -455,11 +455,14 @@ Deliverables:
   false; unknown versions fail closed as `stale-development-line:*`;
 - retained entrypoint convergence for `@orchestrator` and Smart Routing
   Run as Mission/AUTO_MISSION into the same canonical Boss loop.
+- producer-side sanitization of persisted Pi install/remove/startup evidence
+  so review-bundle privacy scanning cannot observe local absolute machine
+  paths; package version remains `0.1.0-rc.26`.
 
-Exit evidence: focused Boss terminal, package-info, and entrypoint suites plus
-the repository `npm run check` gate. Publication, tagging, npm dist-tags, and
-GitHub Release remain operator-owned and are not part of this source
-preparation.
+Exit evidence: focused Boss terminal, package-info, entrypoint, and
+release-evidence privacy suites plus the repository `npm run check` gate and
+detached release/review-bundle verification. Publication, tagging, npm
+dist-tags, and GitHub Release remain operator-owned.
 
 ## Historical RC24 — Model Router enablement hotfix
 
