@@ -1252,7 +1252,9 @@ requirements and remain future work.
   replacement without random re-rotation. Recoverable failures continue through
   bounded repair/retry/replan paths; only `COMPLETED`, `BLOCKED`,
   `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP` is terminal, and a bound hit is
-  explicit blocked/review evidence rather than false completion.
+  explicit blocked/review evidence rather than false completion. A quality
+  rejection is recorded as quality escalation and does not emit or masquerade
+  as infrastructure fallback.
 
 ### RC25-04 — Persisted Boss analytics and manual recommendations
 

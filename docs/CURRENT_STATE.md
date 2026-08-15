@@ -73,7 +73,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
 | RC25 — Operational Boss / Orchestrator | PUBLIC PRERELEASE / RELEASE CLOSURE PASS; not stable or production-ready |
-| RC24 — Model Router enablement hotfix | IMPLEMENTED / PRIOR PUBLIC PRERELEASE; superseded by the RC25 release candidate |
+| RC24 — Model Router enablement hotfix | IMPLEMENTED / PRIOR PUBLIC PRERELEASE; superseded by the RC25 public prerelease |
 
 ## RC25 public prerelease closure
 
@@ -96,7 +96,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
   is a non-draft prerelease carrying the exact artifact and checksum.
 
-## RC18 real-world Pi/9Router compatibility repair
+## Historical RC18 real-world Pi/9Router compatibility repair
 
 - **Date/status:** 2026-08-15; source repair complete and locally dogfooded. This
   is an RC18 repair gate, not a new package version: `package.json` remains
@@ -141,11 +141,14 @@ views, provenance, last-known-good snapshots, stale indicators, safe user
 overrides, and a clear distinction between provider-advertised capabilities and
 empirically observed capabilities. RC18 does not implement this requirement.
 
-## RC25 — Operational Boss / Orchestrator candidate
+## Historical RC25 — Operational Boss / Orchestrator pre-closure candidate
 
-- **Status:** `IMPLEMENTED / RELEASE CANDIDATE`; RC24 remains the prior public
-  prerelease until RC25 release closure. RC25 is not stable or
-  production-ready.
+This section preserves the pre-public-closure snapshot from before the
+immutable RC25 artifact, registry, GitHub, and public-Pi evidence completed.
+The current RC25 truth is the public-prerelease closure recorded above.
+
+- **Status at that time:** `IMPLEMENTED / RELEASE CANDIDATE`; RC25 was not
+  stable or production-ready.
 - **Configuration:** Boss profiles retain additive RC24 `routeIds` compatibility
   and now persist multiple route entries with enablement, Thinking Effort,
   integer weights, and weighted scheduling. The Control Center uses canonical
@@ -156,20 +159,19 @@ empirically observed capabilities. RC18 does not implement this requirement.
   planning, worker dispatch, repair/replan cycles, M7 interpretation, and the
   final decision. Only infrastructure failure can select an unused configured
   fallback; quality rejection never rotates the Boss.
-- **Evidence:** focused RC25 tests cover additive migration, 5/3/2 weighted
+- **Evidence at that time:** focused RC25 tests cover additive migration, 5/3/2 weighted
   routes, reject→repair→M7 pass, pinned assignment, fallback pinning without
   reusing failed routes, UI presentation, Mission analytics persistence with
-  observed usage, and manual-only Boss recommendations. Full release and
-  public registry/Pi evidence remain pending.
-- **Boundary:** no source checkout claim is a public release until the exact
-  artifact is frozen, published under `next`, registry/GitHub/Pi checks pass,
-  and the final release report is recorded.
+  observed usage, and manual-only Boss recommendations.
+- **Historical boundary:** no source checkout claim was a public release until
+  the exact artifact was frozen, published under `next`, registry/GitHub/Pi
+  checks passed, and the final release report was recorded.
 
-## RC22 — Canonical model selector presentation
+## Historical RC22 — Canonical model selector presentation
 
-- **Status:** `IMPLEMENTED / LOCAL CANDIDATE`; package
-  `pi-multi-orchestrator@0.1.0-rc.22`. RC21 remains the public npm/GitHub
-  prerelease; RC22 is not stable or production-ready.
+- **Status at that time:** `IMPLEMENTED / LOCAL CANDIDATE`; package
+  `pi-multi-orchestrator@0.1.0-rc.22`. RC21 remained the public
+  npm/GitHub prerelease; RC22 was not stable or production-ready.
 - **Implementation:** one shared canonical model-option presentation helper is
   used by the Model Router, Investigation/Implementation/Verification Pool
   editors and Add Route flows, Route Health, Smart Routing Primary/Fallback,
@@ -196,7 +198,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   performed. This documentation update is a separate state-record commit and
   does not rebuild or repack the artifact.
 
-## RC21 — Model Router dogfood repair
+## Historical RC21 — Model Router dogfood repair
 
 - **Status:** `PUBLISHED / PRERELEASE`; RC21 is public on npm and GitHub with
   `next`, not stable or production-ready. `latest` remains `0.1.0-rc.17`.
@@ -224,7 +226,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   or model request was modified/performed. The docs follow-up is separate from
   the immutable artifact commit and did not rebuild or repack it.
 
-## RC20 — Thinking-aware Pool routing and live catalog refresh
+## Historical RC20 — Thinking-aware Pool routing and live catalog refresh
 
 - **Status:** `PUBLISHED / PRERELEASE`; RC20 is public on npm and GitHub, not
   stable or production-ready. The later RC17 publication checkpoint currently
@@ -257,7 +259,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   PMO/session roots; no live Pi configuration, provider account, credential,
   refresh, or model request was modified/performed.
 
-## RC19 — Pi 9Router onboarding and adoption
+## Historical RC19 — Pi 9Router onboarding and adoption
 
 - **Status:** PUBLISHED / PRERELEASE; package version `0.1.0-rc.19` is public on
   npm under `next` and is not stable or production-ready.
@@ -289,7 +291,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   remains `0.1.0-rc.17`. A clean public npm installation reports the exact
   package name and version.
 
-## RC17 public prerelease publication
+## Historical RC17 public prerelease publication
 
 - **Status:** `PUBLISHED / PRERELEASE`; RC17 is public for dogfooding only. It is
   not stable or production-ready, and RC18 is not included in this artifact.
@@ -305,7 +307,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   public registry, so no republish or repack was performed; the authenticated
   interactive npm flow moved only `next` from RC20 to RC17.
 
-## RC17 final Planner/manual acceptance — PASS
+## Historical RC17 final Planner/manual acceptance — PASS
 
 - **Terminal status:** `PMO_FINAL_PLANNER_ACCEPTANCE_PASS`. RC17 supersedes the
   RC16 live M7 block after a source-bound reviewer-handoff repair; the candidate
@@ -410,7 +412,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   passed. Planner/manual acceptance, publication, and production gates remain
   separate and require authorization.
 
-## M12.3 current implementation
+## Historical M12.3 implementation
 
 - Routing Memory is a versioned `routing-memory.json` sidecar with bounded
   history and abstract signatures only: language, task family, project scope,
@@ -495,7 +497,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   acceptance, publication, tags, push, and live Pi configuration changes remain
   outside this local pass.
 
-## M12.2 current implementation
+## Historical M12.2 implementation
 
 - Smart Routing runs on ordinary native Pi input after the explicit M12.1
   `@orchestrator <goal>` bypass. Clear explanations/questions and narrow
@@ -533,7 +535,7 @@ empirically observed capabilities. RC18 does not implement this requirement.
   No live Pi configuration or provider account was modified; M12.2 remains
   local-only and unpublished.
 
-## M12.1 current implementation
+## Historical M12.1 implementation
 
 - Pi `0.84.1` native `input` events recognize an explicit `@orchestrator <goal>` entry; ordinary input continues unchanged.
 - The entry and `/orchestrator` → Context & Mission Settings → Create mission menu call the shared `createCanonicalMission` operation and persist through the real MissionStore.
@@ -544,6 +546,10 @@ empirically observed capabilities. RC18 does not implement this requirement.
 - M10 remains the latest accepted milestone. RC16 is local-only; Planner acceptance, human/manual acceptance, and publication remain separate gates. The RC13 local final-gate live triage was performed only in disposable roots.
 
 ## Stable / accepted capabilities
+
+The sub-sections below are milestone-scoped historical snapshots. They record
+what each accepted milestone added at that boundary and do not override the
+current RC25 release/state sections above or later corrections in this file.
 
 M2 adds these accepted capabilities to the M1 configuration foundation:
 
@@ -586,17 +592,17 @@ M4 adds the accepted pure, non-executing routing boundary and runtime health sta
 - `/routing-status`, `/route-health`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`;
 - fake-clock deterministic tests and isolated Pi `0.84.1` fake-gateway RPC/reset evidence.
 
-M4 does not implement actual child/subagent execution, Boss runtime, Task Packet or Context Broker runtime, canonical mission state, quality review/escalation, analytics, auto-tuning, or full cost/budget-aware routing. It does not persist health in ConfigStore/export/history or reconstruct opaque 9Router account/combo fallback.
+At the M4 acceptance boundary, M4 did not implement actual child/subagent execution, Boss runtime, Task Packet or Context Broker runtime, canonical mission state, quality review/escalation, analytics, auto-tuning, or full cost/budget-aware routing. It did not persist health in ConfigStore/export/history or reconstruct opaque 9Router account/combo fallback.
 
 ## M5 accepted capabilities
 
-M5 adds direct Pi `0.84.1` SDK child-session execution with exact M4-selected route/model pinning, fresh isolated in-memory sessions, no automatic parent-history copy, and parent-only `delegate_agent` plus `/subagent-run`. Child recursion is prevented. Investigation, Implementation, and Verification use explicit profiles: Investigation and Verification have no edit/write tools; Implementation may use edit/write/bash. Each child receives one bounded `submit_agent_result`; missing or invalid results are not accepted. Tool calls are observed, potential mutations are detected, and safe infrastructure retry/fallback is available before mutation. Read-only fallback is supported; edit/write/bash failure stops automatic fallback, with bash treated conservatively. External cancellation aborts without fallback, timeout handling is bounded, cleanup is deterministic, HealthStore receives success/failure feedback, and mutating runs serialize per cwd. The actual Pi parent → delegate tool → routed child proof passed. Boss/planner runtime, automatic role generation, parallel subagents, worktree isolation, analytics, and auto-tuning remain deferred; M6 mission/context and M7 quality capabilities are recorded below.
+M5 adds direct Pi `0.84.1` SDK child-session execution with exact M4-selected route/model pinning, fresh isolated in-memory sessions, no automatic parent-history copy, and parent-only `delegate_agent` plus `/subagent-run`. Child recursion is prevented. Investigation, Implementation, and Verification use explicit profiles: Investigation and Verification have no edit/write tools; Implementation may use edit/write/bash. Each child receives one bounded `submit_agent_result`; missing or invalid results are not accepted. Tool calls are observed, potential mutations are detected, and safe infrastructure retry/fallback is available before mutation. Read-only fallback is supported; edit/write/bash failure stops automatic fallback, with bash treated conservatively. External cancellation aborts without fallback, timeout handling is bounded, cleanup is deterministic, HealthStore receives success/failure feedback, and mutating runs serialize per cwd. The actual Pi parent → delegate tool → routed child proof passed. At the M5 acceptance boundary, Boss/planner runtime, automatic role generation, parallel subagents, worktree isolation, analytics, and auto-tuning remained deferred; M6 mission/context and M7 quality capabilities are recorded below.
 
 ## M6 accepted capabilities
 
 M6 adds durable Canonical Mission State in a separate versioned SQLite MissionStore behind an adapter; its Mission DB schema is independent from ConfigStore. It stores missions, tasks/runs, evidence, canonical items, checkpoints, events, revisions, and conflict protection independently from ConfigStore, HealthStore, and Pi session history. Worker output enters as proposed evidence; explicit accept/reject controls canonical promotion and provenance, while ingestion preserves route/run/packet provenance. The deterministic ContextBroker admits accepted state only by default and emits immutable, bounded TaskPacketV1 values with SHA-256 digests, mission-revision lineage, and omitted-item counts. M5 consumes packet-derived context; mutation-risk recovery does not auto-rerun, and operational completion remains distinct from quality acceptance. Mission Control exposes `/missions`, Context & Mission Settings, packet/task inspection, evidence/checkpoint actions, restart/resume, and interrupted-task recovery while Pi session entries remain pointers only.
 
-M6 does not implement Boss/planner runtime, automatic decomposition or scheduling, parallel workers, worktree isolation, analytics, or auto-tuning. M7 quality state and reviewer/repair boundary are recorded below.
+At the M6 acceptance boundary, M6 did not implement Boss/planner runtime, automatic decomposition or scheduling, parallel workers, worktree isolation, analytics, or auto-tuning. M7 quality state and reviewer/repair boundary are recorded below.
 
 ## M7 accepted capabilities
 
@@ -665,6 +671,14 @@ The live probe was skipped because credentials were not present in the Codex env
 
 Fake-gateway metadata behavior is not proof of live 9Router metadata.
 
+### RC25 cancellation and safety-stop boundary
+
+The MissionStore supports `cancelled`, but the current `runMissionGoalLoop`
+implementation returns only `completed`, `blocked`, or `awaiting-review` and
+its focused RC25 evidence does not exercise a distinct Boss-loop
+`CANCELLED`/`SAFETY_STOP` result. This is a source/evidence gap, not a docs-only
+acceptance claim; this mission records it without changing runtime behavior.
+
 ### MissionStore runtime compatibility
 
 The Node `node:sqlite` API is experimental; the adapter boundary isolates that compatibility risk from the rest of the product.
@@ -679,15 +693,15 @@ implementation request showed the recommendation and created exactly one
 canonical Mission with the exact goal. Live ambiguous triage and real fallback
 were not called because no secure 9Router route/credential was available.
 
-### Deferred capabilities
+### Deferred capabilities beyond the current RC25 loop
 
-- Boss/planner runtime;
-- automatic broad mission decomposition and task scheduling;
+- broader autonomous mission decomposition and task scheduling beyond the
+  bounded RC25 goal loop;
 - general role generation;
 - parallel workers and worktree isolation/fan-out;
 - autonomous/scheduled tuning and autonomous priority mutation;
 - automatic pool reordering and budget-aware routing;
-- public publication, tag, and GitHub release;
+- stable production release;
 - Keychain credential adapter.
 
 ## Next milestone rule
@@ -723,7 +737,7 @@ M8.5 is accepted by STATE-8.5. It adds an optional, manual-only Recommendation A
 
 ## M9 accepted capability snapshot
 
-M9 adds the unified `/orchestrator` Control Center with exactly twelve top-level sections: Models & 9Router; Investigation Pool; Implementation Pool; Verification Pool; Boss / Orchestrator Profiles; Routing & Fallback; Health & Quotas; Budget / Quality Profiles; Context & Mission Settings; Statistics & Analytics; Diagnostics; and Backup / Restore. It provides a dashboard-first home, consistent keyboard/native TUI and RPC navigation, textual loading/error/stale/empty states, model and pool management, routing/health controls, mission/quality workflows, analytics/recommendations/Recommendation Analyst views, diagnostics, and safe ConfigStore backup/restore controls. Live operational status is visible without normal log inspection, and the Operator Guide documents the surface. Boss runtime, autonomous mission decomposition/scheduling, parallel workers/worktree isolation, and automatic recommendation Apply remain deferred. M10 hardening is recorded in the implementation snapshot below. Human keyboard-driven TUI smoke remains open validation, not an M9 acceptance blocker.
+M9 adds the unified `/orchestrator` Control Center with exactly twelve top-level sections: Models & 9Router; Investigation Pool; Implementation Pool; Verification Pool; Boss / Orchestrator Profiles; Routing & Fallback; Health & Quotas; Budget / Quality Profiles; Context & Mission Settings; Statistics & Analytics; Diagnostics; and Backup / Restore. It provides a dashboard-first home, consistent keyboard/native TUI and RPC navigation, textual loading/error/stale/empty states, model and pool management, routing/health controls, mission/quality workflows, analytics/recommendations/Recommendation Analyst views, diagnostics, and safe ConfigStore backup/restore controls. Live operational status is visible without normal log inspection, and the Operator Guide documents the surface. At the M9 acceptance boundary, autonomous mission decomposition/scheduling, parallel workers/worktree isolation, and automatic recommendation Apply remained deferred; RC25 later adds the bounded Boss runtime. M10 hardening is recorded in the implementation snapshot below. Human keyboard-driven TUI smoke remains open validation, not an M9 acceptance blocker.
 
 | M9 accepted evidence | Result |
 |---|---|
@@ -755,7 +769,7 @@ Config mutations now use a cross-process lock and reread-under-lock CAS path. Mi
 
 M10 does not provide kernel/OS sandboxing, autonomous approval, automatic rerun after mutation-risk failure, or live-provider verification. Review #2 found that the accepted M10 evidence did not exercise policy at the integrated real worker tool boundary; M11-R4 adds that pre-tool enforcement without changing M10's accepted status. Human keyboard-driven TUI smoke remains open validation and is not an M10 acceptance blocker. M11 is implemented but not accepted and is not production-ready.
 
-## M11 implementation snapshot — acceptance pending
+## Historical M11 implementation snapshot — acceptance pending
 
 M11 packages the compiled Pi extension as local release candidate
 `0.1.0-rc.4` using Pi's `pi-package` manifest and explicit
@@ -835,6 +849,11 @@ M10 remains the last Planner-accepted milestone.
 - Do not assume this extension is installed in the live Pi configuration.
 - Do not treat fake-gateway evidence as live 9Router proof.
 - Do not treat configured pools as runtime routing or worker execution.
-- M10 acceptance does not imply OS sandboxing, autonomous approval, Boss/planner runtime, scheduled tuning, automatic priority mutation, parallel/worktree orchestration, or release readiness.
+- M10 acceptance does not imply OS sandboxing, autonomous approval, RC25
+  development acceptance, scheduled tuning, automatic priority mutation,
+  parallel/worktree orchestration, or release readiness. RC25 is a public
+  prerelease, not an accepted development milestone or stable release.
 - Do not treat accepted pool management as runtime routing or worker execution.
-- Do not assume a GitHub remote, tag, public release, or stable package exists.
+- Do not assume a stable package or live installation exists; verify any public
+  prerelease, tag, remote, and runtime state from current Git and release
+  evidence.

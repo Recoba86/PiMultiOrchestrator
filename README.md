@@ -18,8 +18,10 @@ This is still an early development extension, not a stable public release. 9Rout
 
 The implementation contract is split across the repository files
 `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`,
-`docs/ROADMAP.md`, and `docs/DECISIONS.md`. Future agents must read `AGENTS.md`
-before changing the repository.
+`docs/ROADMAP.md`, and `docs/DECISIONS.md`. Future ideas are recorded in
+[`docs/IDEAS_BACKLOG.md`](docs/IDEAS_BACKLOG.md), which is explicitly
+non-authorizing. Future agents must read `AGENTS.md` before changing the
+repository.
 
 ## Project state
 

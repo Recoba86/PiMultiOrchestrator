@@ -349,6 +349,20 @@ Investigation/Implementation work through their existing weighted Pools, consume
 evidence, dispatch M7 Verification, evaluate the Mission goal and acceptance
 criteria, and repair/replan/reverify until a terminal condition is justified.
 
+The Boss is a Mission-level planner/evaluator/orchestrator, not an
+Implementation Worker. Investigation, Implementation, and Verification remain
+exactly the worker pools; their per-task/run scheduling is independent from
+once-per-Mission Boss assignment. Infrastructure fallback, scheduling
+selection, and M7 quality rejection/escalation remain separate state changes.
+Stable route identity is retained internally even when normal UI labels use a
+clean canonical model identity; materially different context, Thinking Effort,
+tool, resource, provider, or capability routes MUST NOT be collapsed by a
+shared visible model family.
+
+Pool/Boss recommendation views MUST reference the canonical recommendation
+state. Boss performance recommendations use observed Mission evidence with
+sample and staleness safeguards and never auto-apply.
+
 The loop MUST use bounded repair/retry/cycle controls and MUST stop only as
 `COMPLETED`, `BLOCKED`, `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP`. A failed
 worker, rejected verification, incomplete implementation, malformed evidence, or

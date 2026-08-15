@@ -4,6 +4,15 @@
 
 Each milestone is independently reviewable, migratable, and testable without paid model calls. A milestone may begin only when its dependencies and exit gate are satisfied. Later requirements do not justify speculative implementation in an earlier milestone.
 
+## Current planning boundary
+
+RC25 is the current public prerelease and adds the bounded operational Boss
+loop. M10 remains the latest accepted development milestone; M11 remains
+implemented but not accepted. The next practical work is the already-recorded
+M11 acceptance/review gates, not an implicit new product milestone. Future
+ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md), whose presence does not
+authorize implementation.
+
 ## M0 — Specification freeze and repository foundation
 
 Status: ACCEPTED / PASS.
@@ -157,7 +166,7 @@ Deliverables:
 - keyboard-accessible navigation, progress, error, stale-data, confirmation, and empty states;
 - live mission/agent/route/review visibility without log inspection.
 
-Acceptance evidence: exact twelve-section/dashboard and RPC/native selector suite `5/5 PASS`; existing provider suite `17/17 PASS`; full suite `146/146 PASS`; `npm run check`, typecheck, build, package dry-run, diff check, secret scan, and project-state consistency PASS. Human keyboard-driven TUI smoke remains pending because no authorized interactive keyboard session was available; this is open validation and not an M9 acceptance blocker. M9 does not add Boss runtime, autonomous scheduling, background work, or automatic priority mutation.
+Acceptance evidence: exact twelve-section/dashboard and RPC/native selector suite `5/5 PASS`; existing provider suite `17/17 PASS`; full suite `146/146 PASS`; `npm run check`, typecheck, build, package dry-run, diff check, secret scan, and project-state consistency PASS. Human keyboard-driven TUI smoke remains pending because no authorized interactive keyboard session was available; this is open validation and not an M9 acceptance blocker. At the M9 boundary, Boss runtime, autonomous scheduling, background work, and automatic priority mutation were outside scope; RC25 later adds the bounded Boss runtime.
 
 Exit gate: PASS — STATE-9 records Planner acceptance of implementation commit `2032a2b` with evidence HEAD `1200d3349506a1d414def0f3c1e044d712711d9d`; human keyboard smoke remains a separately open validation item.
 
@@ -196,9 +205,9 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: COMPLETE / PUBLIC PRERELEASE. RC17 is the source-bound public candidate after the bounded reviewer-handoff repair; M10 remains the latest accepted development milestone. RC18 remains local and is not included in the RC17 artifact.
+Status: COMPLETE / PUBLIC PRERELEASE (historical RC17 record). RC17 was the source-bound public candidate after the bounded reviewer-handoff repair; RC25 is the current public prerelease. M10 remains the latest accepted development milestone. RC18 remains local and was not included in the RC17 artifact.
 
-### M12 final Planner/manual acceptance — RC17
+### Historical M12 final Planner/manual acceptance — RC17
 
 Exit evidence: `PMO_FINAL_PLANNER_ACCEPTANCE_PASS`; source-bound RC17 detached
 verification and independent review passed; clean `npm run check` passed
@@ -343,7 +352,7 @@ capture in two bounded attempts, leaving M7 blocked with no decision. The
 isolated offline Pi `0.84.1` technical TUI path passed. RC17 is the accepted
 public prerelease; stable production release remains a separate gate.
 
-## RC17 public prerelease closeout
+## Historical RC17 public prerelease closeout
 
 Status: PUBLISHED / PRERELEASE. The exact source-bound tag is
 `v0.1.0-rc.17` at `5def791b31a7ad940ed87f6e720aabb0228500e7`. GitHub marks the
@@ -356,7 +365,7 @@ checkpoint. The exact immutable RC17 version and artifact were already present
 in npm, so no republish or repack was performed; authenticated interactive npm
 flow moved only `next` from RC20 to RC17.
 
-## RC18 — Real-world Pi/9Router compatibility repair
+## Historical RC18 — Real-world Pi/9Router compatibility repair
 
 Status: IMPLEMENTED / LOCAL DOGFOOD PASS; not a package version, public release,
 or acceptance promotion. The manifest remains `0.1.0-rc.17`.
@@ -423,7 +432,7 @@ release verification (`20/20` integrity attacks), and isolated public Pi
 `0.84.1` fresh-install/RC24→RC25 upgrade gates all pass. The release remains
 a prerelease and is not a production-readiness claim.
 
-## RC24 — Model Router enablement hotfix
+## Historical RC24 — Model Router enablement hotfix
 
 Status: IMPLEMENTED / RELEASE CANDIDATE; preserves RC23 weighted scheduling and
 Pool behavior.
@@ -439,7 +448,7 @@ Exit evidence: focused TUI/RPC acceptance, full repository check, independent
 release verification, frozen-artifact registry comparison, GitHub prerelease,
 and isolated public npm Pi runtime verification.
 
-## RC22 — Canonical model selector presentation
+## Historical RC22 — Canonical model selector presentation
 
 Status: IMPLEMENTED / LOCAL CANDIDATE; not accepted, public, stable, or
 production-ready. RC21 remains the public prerelease.
@@ -462,7 +471,7 @@ bundle-root SHA-256 is
 No npm publication, tag, GitHub release, live Pi configuration, provider
 account, credential store, or model request was performed.
 
-## RC21 — Model Router dogfood repair
+## Historical RC21 — Model Router dogfood repair
 
 Status: PUBLISHED / PRERELEASE; public npm and GitHub dogfood release, not
 stable or production-ready. npm `next` points to RC21 and `latest` remains
@@ -495,7 +504,7 @@ including safe unconfigured/LKG failure feedback. No live Pi configuration,
 provider credential, or model request was modified/performed; no rebuild or
 repack occurred after artifact freeze.
 
-## RC20 — Thinking-aware Pool routing and live catalog refresh
+## Historical RC20 — Thinking-aware Pool routing and live catalog refresh
 
 Status: IMPLEMENTED / PUBLIC PRERELEASE; manifest `0.1.0-rc.20` is the
 `next`-tagged prerelease and is not stable or production-ready.
@@ -524,7 +533,7 @@ public npm/GitHub prerelease verification passed. Artifact SHA-256 is
 Pi probe was read-only/offline with 27 existing catalog rows and temporary
 PMO/session roots; no live configuration or model request was used.
 
-## RC19 — Pi 9Router onboarding and adoption
+## Historical RC19 — Pi 9Router onboarding and adoption
 
 Status: PUBLISHED / PRERELEASE; manifest `0.1.0-rc.19`; public npm and GitHub
 release gates passed. RC19 is not stable or production-ready.

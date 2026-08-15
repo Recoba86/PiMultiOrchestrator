@@ -7,9 +7,10 @@ Before implementation work:
 1. Read this file and `docs/CURRENT_STATE.md`.
 2. Verify `git status`, current branch, HEAD, and worktree ownership.
 3. Read `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`, `docs/DECISIONS.md`, and the assigned milestone in `docs/ROADMAP.md`.
-4. Verify that the requested mission is authorized and that its dependencies are accepted.
-5. Do not assume in-progress capabilities are stable.
-6. Inspect the installed Pi version and types before relying on a Pi API; M0's `0.84.1` baseline may be stale.
+4. Read `docs/IDEAS_BACKLOG.md` to distinguish non-authorizing future ideas from the assigned mission.
+5. Verify that the requested mission is authorized and that its dependencies are accepted.
+6. Do not assume in-progress capabilities are stable.
+7. Inspect the installed Pi version and types before relying on a Pi API; M0's `0.84.1` baseline may be stale.
 
 Project-state rules and source precedence are defined in `docs/PROJECT_STATE_POLICY.md`.
 
@@ -23,6 +24,24 @@ Project-state rules and source precedence are defined in `docs/PROJECT_STATE_POL
 - Do not declare the whole product complete because one milestone or test suite passes.
 - Do not make optimistic completion claims or rewrite project-state documents from intention alone.
 - Do not treat `CURRENT_STATE.md` as stronger evidence than Git, tests, and the accepted handoff.
+
+## Accepted architecture guard
+
+An ad-hoc implementation prompt does not silently override an accepted product
+or architecture decision.
+
+If requested work conflicts with `PRODUCT_SPEC.md`, `ARCHITECTURE.md`,
+`DECISIONS.md`, `ACCEPTANCE_TESTS.md`, or an accepted invariant, the agent
+must:
+
+1. detect and explicitly identify the conflict before changing behavior;
+2. not silently override the established contract;
+3. require explicit mission authorization for an intentional design change;
+4. update the applicable canonical design documents; and
+5. add or update migration and regression evidence where relevant.
+
+A vague or new prompt is not implicit authorization to break an established
+invariant.
 
 ## Safety
 
@@ -50,3 +69,16 @@ Before completing an authorized milestone:
 7. Commit the documentation with the milestone unless the mission says otherwise.
 
 Never modify live Pi configuration unless explicitly authorized, and never claim release or acceptance based only on planned scope or implementation intent.
+
+## Canonical project-memory closure
+
+Before implementation, reconcile the requested scope with Git, verification
+evidence, the accepted handoff, the canonical contract documents, and the
+non-authorizing `IDEAS_BACKLOG.md`.
+
+Before completion, update the applicable `CURRENT_STATE.md`, `RELEASE_STATE.md`,
+`DEVELOPMENT_LOG.md`, `ROADMAP.md`, and `IDEAS_BACKLOG.md`; update
+`PRODUCT_SPEC.md`, `ARCHITECTURE.md`, `DECISIONS.md`, or `ACCEPTANCE_TESTS.md`
+when their contract changes. Code and canonical documentation must agree.
+Never promote idea → planned → implemented → accepted → released without the
+evidence and authorization required by `PROJECT_STATE_POLICY.md`.

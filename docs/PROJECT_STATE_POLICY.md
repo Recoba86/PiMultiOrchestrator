@@ -10,8 +10,9 @@ This policy prevents planned work, implemented work, accepted milestones, and re
 | [Release state](RELEASE_STATE.md) | Actual release, package, compatibility, and rollback claims |
 | [Development log](DEVELOPMENT_LOG.md) | Append-oriented accepted milestone history and current milestone placeholder |
 | [Roadmap](ROADMAP.md) | Planned milestone scope, order, and exit gates |
+| [Ideas backlog](IDEAS_BACKLOG.md) | Non-authorizing future ideas and their discussion status |
 
-These files may reference the same commit or milestone but must not duplicate each other's full content.
+These files may reference the same commit or milestone but must not duplicate each other's full content. `IDEAS_BACKLOG.md` is intentionally non-authoritative for implementation scope and cannot promote an idea to a requirement.
 
 ## Hierarchy of truth
 
@@ -56,6 +57,7 @@ Every accepted milestone must update, where applicable:
 - `docs/RELEASE_STATE.md` when stability, compatibility, packaging, release, or rollback information changed;
 - `docs/DEVELOPMENT_LOG.md`;
 - `docs/ROADMAP.md`; and
+- `docs/IDEAS_BACKLOG.md` when an idea is promoted, deferred, or rejected; and
 - `README.md`.
 
 Update these only when architectural or behavioral contracts change:
@@ -66,6 +68,25 @@ Update these only when architectural or behavioral contracts change:
 - `docs/ACCEPTANCE_TESTS.md`.
 
 Commit required state-document updates with the milestone unless the mission explicitly says otherwise. A milestone handoff is incomplete if its mandatory current-state update is missing.
+
+## Accepted architecture guard
+
+An ad-hoc implementation prompt does not silently override an accepted product
+or architecture decision. If requested work conflicts with `PRODUCT_SPEC.md`,
+`ARCHITECTURE.md`, `DECISIONS.md`, `ACCEPTANCE_TESTS.md`, or an accepted
+invariant, the conflict must be identified before behavior changes; the
+established contract must not be silently overridden; intentional changes
+require explicit mission authorization; affected canonical design documents
+must be updated; and migration/regression evidence must be added where
+relevant.
+
+## Canonical closure sequence
+
+Before implementation, inspect Git state, current/release state, the accepted
+handoff, the assigned roadmap gate, the contract documents, and the
+non-authorizing ideas backlog. Before completion, reconcile code, tests,
+release evidence, and canonical documentation. Never promote
+`idea -> planned -> implemented -> accepted -> released` from intention alone.
 
 ## Freshness and release independence
 

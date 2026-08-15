@@ -1,8 +1,8 @@
 # Pi Multi-Orchestrator operator guide
 
 This guide describes the Control Center in Pi `0.84.1`. RC25 is the current
-release candidate; RC24 remains the public `next`-tagged prerelease until RC25
-closure. Neither is a stable or production release. Local validation
+public `next`-tagged prerelease; RC24 is superseded. Neither is a stable or
+production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
 
@@ -174,7 +174,7 @@ analytics keyed by Mission. Use `/analytics` to inspect the evidence and
 never changes configuration until the user explicitly Applies it, and Apply
 stale-checks the active Boss profile first.
 
-## RC24 catalog, scheduling, effort, and refresh safety
+## Historical RC24 catalog, scheduling, effort, and refresh safety
 
 Discovery is separate from PMO enablement, and enablement is separate from
 Pool membership. A newly discovered route is disabled until explicitly enabled;
@@ -213,8 +213,8 @@ revoke trust immediately blocks future mutating runs. Config mutations use a
 cross-process lock, MissionStore leases require owner tokens, and analytics
 corruption degrades to diagnostics. These controls are not an OS/kernel
 sandbox. RC25 does not add background workers or parallel worktrees; Boss
-execution and Boss weight Apply remain explicit and bounded. The RC25 candidate
-is installed only into isolated temporary Pi settings until publication
-closure. If the extension fails, remove or disable the candidate and
+execution and Boss weight Apply remain explicit and bounded. The RC25 public
+prerelease is installed only into isolated temporary Pi settings for local
+validation. If the extension fails, remove or disable the candidate and
 restore the prior pinned package, or use an external Codex/harness to inspect
 the repository without importing the extension.

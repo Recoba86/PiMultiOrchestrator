@@ -76,10 +76,10 @@ production-ready; `latest` remains `0.1.0-rc.17`.
   passed through offline RPC. No live Pi configuration or provider/model call
   was used.
 
-## RC22 local candidate — Canonical model selector presentation
+## Historical RC22 local candidate — Canonical model selector presentation
 
-RC22 is an implemented local candidate. RC21 remains the public prerelease;
-RC22 is not stable or production-ready.
+At that time, RC22 was an implemented local candidate. RC21 remained the
+public prerelease; RC22 was not stable or production-ready.
 
 - **Source binding:** code commit
   `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, tree
@@ -98,9 +98,9 @@ RC22 is not stable or production-ready.
   performed. The artifact remains bound to the source commit above; this
   state-record update is separate and does not rebuild or repack it.
 
-## RC21 Model Router dogfood repair publication
+## Historical RC21 Model Router dogfood repair publication
 
-RC21 is the current public prerelease. It repairs nested catalog metadata
+At publication time, RC21 was the current public prerelease. It repaired nested catalog metadata
 normalization, conservative true/false/unknown thinking semantics, static Pi
 provider upstream refresh through Pi's existing auth bridge, LKG preservation,
 picker feedback/order, and normal-row route-ID privacy.
@@ -128,9 +128,9 @@ picker feedback/order, and normal-row route-ID privacy.
   model request was modified/performed. The publication used the frozen
   artifact; no rebuild or repack occurred after freeze.
 
-## RC20 public prerelease publication
+## Historical RC20 public prerelease publication
 
-RC20 is the current public prerelease. It adds independent Pool-entry
+At publication time, RC20 was the current public prerelease. It added independent Pool-entry
 Thinking Effort with omission-based Auto semantics, capability-aware explicit
 levels, requested/effective run metadata, manual live Refresh Models, catalog
 diff/LKG safety, disabled-route gating, and deterministic route identity
@@ -153,7 +153,7 @@ handling. It remains prerelease-only; `latest` must not move.
   refresh, or model request was modified/performed; the final Pi probe was
   read-only/offline with temporary PMO/session roots.
 
-## RC19 public prerelease publication
+## Historical RC19 public prerelease publication
 
 - **Package:** `pi-multi-orchestrator@0.1.0-rc.19`, published with npm access
   `public` and dist-tag `next` using `--ignore-scripts`.
@@ -170,7 +170,7 @@ handling. It remains prerelease-only; `latest` must not move.
 - **Boundary:** this is a public prerelease for dogfooding, not a stable or
   production release. No live Pi configuration or credential was modified.
 
-## RC17 public prerelease publication
+## Historical RC17 public prerelease publication
 
 - **Package:** `pi-multi-orchestrator@0.1.0-rc.17`.
 - **Artifact:** `pi-multi-orchestrator-0.1.0-rc.17.tgz`, SHA-256
@@ -185,7 +185,7 @@ handling. It remains prerelease-only; `latest` must not move.
   npm, so no republish or repack was performed; authenticated interactive npm
   flow moved only `next` from RC20 to RC17.
 
-## RC17 final Planner/manual acceptance
+## Historical RC17 final Planner/manual acceptance
 
 - **Disposition:** `PMO_FINAL_PLANNER_ACCEPTANCE_PASS`. RC17 is the successor
   candidate after RC16's live reviewer handoff block. It is publicly published
@@ -242,14 +242,15 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 ## Known release blockers and limitations
 
-- RC17 has a public artifact, immutable tag, GitHub prerelease, and npm version. No stable or production-ready install exists.
+- RC25 has a public artifact, immutable tag, GitHub prerelease, and npm version. No stable or production-ready install exists.
 - RC16 addresses the M12.1/M7 and recovery findings carried forward from RC15 review: explicit-entry failure preserves the original prompt, completion requires Boss authorization and passed M7 evidence, cross-Mission evidence is rejected, corrupt routing state is repairable, Unicode and input sizes are bounded, worker timeouts honor route ceilings, and the TypeScript launcher is provenance-bound. Detached release evidence passes; final development acceptance remains separate.
 - The 2026-08-15 RC16 acceptance attempt is historical and was hard-blocked at the live canonical M7 reviewer handoff. RC17 resolved that handoff with the smallest source-bound reviewer instruction and a regression assertion; the RC17 live Verification Pool run captured one valid submission and passed M7.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and stable production release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
-- RC17 technical TUI smoke passed in isolated offline Pi `0.84.1` RPC, including dashboard, Routing & Fallback, Missions, Back, clean exit, and no credential text. This is a local candidate gate, not a claim of public installation or live keyboard acceptance.
+- Broader autonomous mission decomposition/scheduling beyond the bounded RC25 loop, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and stable production release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
+- RC25 public Pi evidence passed in isolated offline Pi `0.84.1` RPC, including the dashboard, all twelve Control Center sections, Diagnostics, package identity, and untrusted-by-default behavior. This is prerelease evidence, not a stable or production-ready claim.
+- The MissionStore supports `cancelled`, but the current Boss loop result path only returns completed, blocked, or awaiting-review; a distinct Boss-loop `CANCELLED`/`SAFETY_STOP` path is not evidenced in RC25 and remains an explicit runtime follow-up. This documentation mission does not change runtime code.
 - Historical M11 RC.8 Computer-Use dogfood and canonical M7 real-route verification passed; final human sanity smoke, live metadata limits, and Planner acceptance remain open validation. RC15 is historical; RC16 detached verification passed.
-- M12.1 RC.9 changes are historical local evidence. RC17 is the public prerelease for the combined M12 final acceptance; M12.2 RC.11 and M12.3 RC.12 remain historical local candidates, and M10 remains the latest accepted development milestone.
+- M12.1 RC.9 changes are historical local evidence. RC17 was the public prerelease for the combined M12 final acceptance; RC25 is the current public prerelease. M12.2 RC.11 and M12.3 RC.12 remain historical local candidates, and M10 remains the latest accepted development milestone.
 - M12.2 and M12 final live-route triage were executed only through the secure auth bridge and disposable roots. The user Pi configuration, provider account, Keychain, credential values, and source checkout were not modified. The M12 final routing gate passed locally on RC13; RC16 carries the follow-on M12.1/M7/recovery repairs. Stable production release remains separate.
 - Residual low-risk notes accepted for the supported local workflow: local Smart Router signal analysis runs over the supplied Pi prompt before the separately bounded Triage payload, and numbered internal Routing Memory history is retention-bounded but not independently byte-capped. These are application-level resource limits; supported restore paths fail closed and no release-blocking finding remains open.
 - M10's application-level policy is not an OS/kernel sandbox. Stage 4A proves the bounded supported route and product path only; it does not promote M11 to accepted or production-ready.

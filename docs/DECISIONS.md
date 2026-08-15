@@ -401,3 +401,7 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   escalation prevents silent model roulette, while bounded goal looping prevents
   a finished child task or one-shot planner response from being mistaken for
   Mission completion.
+- **Boundary:** The Boss is not an implementation worker. Investigation,
+  Implementation, and Verification retain independent per-task/run scheduling;
+  route identity remains exact internally; and contextual/central
+  recommendations share canonical, sample/stale-safe state with explicit Apply.

@@ -4,6 +4,23 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## PMO canonical project-memory hardening
+
+- **Date/status:** 2026-08-15; documentation/project-memory mission, runtime
+  behavior unchanged.
+- **Outcome:** Added the non-authorizing ideas backlog, permanent accepted-
+  architecture and canonical-closure guards, RC25 contract clarifications,
+  current-state/release/roadmap historical labels, and the RC25 operator and
+  README boundary updates. The RC25 public prerelease remains distinct from
+  the M10 accepted development milestone and M11 acceptance state.
+- **Known runtime boundaries recorded:** the current Boss loop does not expose a
+  distinct `CANCELLED`/`SAFETY_STOP` result path in its focused evidence, and
+  runtime package metadata still reports the older RC23 development milestone.
+  Both are deliberately left for an authorized runtime mission.
+- **Validation boundary:** no TypeScript/runtime behavior, package version,
+  immutable RC25 tag, frozen artifact, live Pi configuration, provider account,
+  or credentials were modified by this documentation mission.
+
 ## RC25 — Operational Boss / Orchestrator
 
 - **Date/status:** 2026-08-15; `PUBLIC PRERELEASE / RELEASE CLOSURE PASS`.

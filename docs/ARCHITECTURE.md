@@ -487,6 +487,14 @@ does not rotate the Boss. The loop persists bounded cycle/repair dimensions and
 terminal analytics; it cannot mark completion from a single finished task or a
 Boss completion claim without execution and verification evidence.
 
+The Boss is not an Implementation Worker. The Boss owns Mission-level
+planning, evaluation, and terminal decisions; Investigation, Implementation,
+and Verification remain the only worker pools and keep their own per-task/run
+scheduling. M4 route selection/infrastructure fallback and M7 quality
+rejection/escalation are separate boundaries. Pool and Boss recommendation
+surfaces read one canonical, sample/stale-safe recommendation record, and
+normal model labels never replace the exact internal route identity.
+
 ## 12. Worker lifecycle
 
 ```text
