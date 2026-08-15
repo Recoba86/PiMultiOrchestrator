@@ -8,6 +8,7 @@ import type {
   ConfigV2,
   ProjectOverrideV2,
   BossProfileV1,
+  BossRouteV1,
   ConfigV1,
   ContextBudgetClass,
   DiversityPreference,
@@ -331,13 +332,29 @@ const validateRole = (value: unknown, path: string, issues: ConfigIssue[]): Role
 const validateBossProfile = (value: unknown, path: string, issues: ConfigIssue[]): BossProfileV1 | undefined => {
   const object = record(value, path, issues);
   if (!object) return undefined;
-  ensureKeys(object, ["id", "displayName", "enabled", "routeIds", "description"], path, issues);
+  ensureKeys(object, ["id", "displayName", "enabled", "routeIds", "entries", "schedulingPolicy", "description"], path, issues);
   stableId(object.id, fieldPath(path, "id"), issues);
   validateLabel(object.displayName, fieldPath(path, "displayName"), issues);
   booleanValue(object.enabled, fieldPath(path, "enabled"), issues);
   validateIdArray(object.routeIds, fieldPath(path, "routeIds"), issues);
+  if ("schedulingPolicy" in object) enumValue(object.schedulingPolicy, fieldPath(path, "schedulingPolicy"), issues, POOL_SCHEDULING_POLICIES);
+  if ("entries" in object) {
+    const entries = arrayValue(object.entries, fieldPath(path, "entries"), issues);
+    if (entries) entries.forEach((entry, index) => validateBossEntry(entry, `${path}.entries[${index}]`, issues));
+  }
   if ("description" in object) validateLabel(object.description, fieldPath(path, "description"), issues);
   return value as BossProfileV1;
+};
+
+const validateBossEntry = (value: unknown, path: string, issues: ConfigIssue[]): BossRouteV1 | undefined => {
+  const object = record(value, path, issues);
+  if (!object) return undefined;
+  ensureKeys(object, ["routeId", "enabled", "thinkingEffort", "weight"], path, issues);
+  stableId(object.routeId, fieldPath(path, "routeId"), issues);
+  booleanValue(object.enabled, fieldPath(path, "enabled"), issues);
+  if ("thinkingEffort" in object) enumValue(object.thinkingEffort, fieldPath(path, "thinkingEffort"), issues, ["auto", ...THINKING_EFFORTS] as const);
+  if ("weight" in object) boundedInteger(object.weight, fieldPath(path, "weight"), issues, 0, MAX_POOL_ENTRY_WEIGHT);
+  return value as BossRouteV1;
 };
 
 const validateOperationalProfile = (value: unknown, path: string, issues: ConfigIssue[]): OperationalProfileV1 | undefined => {
@@ -537,11 +554,15 @@ const semanticConfigIssues = (config: ConfigV1): ConfigIssue[] => {
     profile.routeIds.forEach((routeId, index) => {
       if (!routeExists(routeId)) issue(issues, "missing-reference", `bossProfiles{${key}}.routeIds[${index}]`, "Route reference does not exist");
     });
+    const seen = new Set<string>();
+    for (const [index, entry] of (profile.entries ?? []).entries()) {
+      if (!routeExists(entry.routeId)) issue(issues, "missing-reference", `bossProfiles{${key}}.entries[${index}].routeId`, "Route reference does not exist");
+      if (seen.has(entry.routeId)) issue(issues, "duplicate", `bossProfiles{${key}}.entries[${index}].routeId`, "Duplicate route in Boss profile");
+      seen.add(entry.routeId);
+    }
   }
   if (!Object.prototype.hasOwnProperty.call(config.bossProfiles, config.activeBossProfileId)) {
     issue(issues, "missing-reference", "activeBossProfileId", "Active Boss profile does not exist");
-  } else if (!config.bossProfiles[config.activeBossProfileId]?.enabled) {
-    issue(issues, "inactive-reference", "activeBossProfileId", "Active Boss profile is disabled");
   }
   for (const [key, profile] of Object.entries(config.operationalProfiles)) {
     if (profile.id !== key) issue(issues, "id-mismatch", `operationalProfiles{${key}}.id`, "Map key and entry ID must match");

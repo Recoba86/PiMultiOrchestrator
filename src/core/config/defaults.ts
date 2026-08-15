@@ -28,6 +28,8 @@ const defaultBossProfile = (): BossProfileV1 => ({
   displayName: "Unconfigured Boss",
   enabled: true,
   routeIds: [],
+  entries: [],
+  schedulingPolicy: "weighted",
 });
 
 const defaultOperationalProfile = (): OperationalProfileV1 => ({

@@ -143,6 +143,9 @@ The extension MUST register `/orchestrator`. In interactive Pi mode it MUST open
 - **BOSS-004:** A profile switch during activity MUST take effect only at a safe idle/checkpoint boundary.
 - **BOSS-005:** Boss infrastructure fallback MAY change model/route while retaining canonical mission continuity.
 - **BOSS-006:** A failed Boss turn that executed tools or produced side effects MUST NOT be blindly replayed on another route.
+- **BOSS-007:** A Boss profile MUST support multiple eligible routes with validated numeric weights and thinking policy; one route MUST be selected once at Mission start and pinned for every normal planning, evaluation, repair, verification-interpretation, and final-decision turn.
+- **BOSS-008:** A genuine Boss infrastructure failure MAY replace the pinned route only through an explicit recorded fallback containing original route, replacement route, failure class, and reason; the replacement MUST remain pinned and quality rejection MUST NOT trigger fallback rotation.
+- **BOSS-009:** Boss assignment, fallback, repair/replan cycles, verification outcomes, terminal state, elapsed time, and authoritative usage/cost metadata MUST be persisted as bounded Mission analytics; recommendations MUST use the canonical Recommendation architecture and MUST require explicit Apply.
 
 ### 8.4 Budget/quality profiles
 
@@ -254,7 +257,7 @@ Statistics & Analytics MUST support last 24 hours, 7 days, 30 days, all time, an
 - actual/estimated cost, subscription use, equivalent API estimate, and estimated avoided cost;
 - route/model runs, success, latency, first-pass success, review acceptance, tests, escalation, and fallback;
 - pool comparisons;
-- Boss profile missions, success, agents, retries, review loops, and planning/review tokens;
+- Boss profile missions, success/block rate, assigned routes, fallback/escalation rate, repair/replan cycles, verification outcomes, elapsed time, and planning/review tokens or other authoritative usage/cost metadata;
 - fallback class and destination analysis.
 
 ### 11.3 Scoring and recommendations
@@ -263,6 +266,7 @@ Statistics & Analytics MUST support last 24 hours, 7 days, 30 days, all time, an
 - **REC-002:** A recommendation MUST state evidence, comparison baseline, uncertainty/limitations, and proposed config diff.
 - **REC-003:** Generating or viewing a recommendation MUST NOT mutate configuration.
 - **REC-004:** Apply MUST use the normal validated, backed-up, atomic configuration save path. Ignore MUST be recorded without mutation.
+- **REC-005:** Boss weight recommendations MUST never auto-apply; only an explicit user Apply may change a Boss profile.
 
 ## 12. Observability and diagnostics
 
@@ -335,6 +339,21 @@ M0 MUST NOT implement the extension, install Pi extensions/subagents, modify liv
 ## 18. Completion rule
 
 Product behavior is accepted only through measurable cases in [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md). Milestone ordering and explicit exit gates are defined in [ROADMAP.md](ROADMAP.md).
+
+## 20. RC25 operational Boss loop
+
+RC25 makes the Boss a goal-oriented Mission runtime rather than a one-shot
+planner. Explicit `@orchestrator <goal>` and Smart Routing Mission/AUTO_MISSION
+entries MUST call the same canonical loop: plan/decompose, dispatch bounded
+Investigation/Implementation work through their existing weighted Pools, consume
+evidence, dispatch M7 Verification, evaluate the Mission goal and acceptance
+criteria, and repair/replan/reverify until a terminal condition is justified.
+
+The loop MUST use bounded repair/retry/cycle controls and MUST stop only as
+`COMPLETED`, `BLOCKED`, `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP`. A failed
+worker, rejected verification, incomplete implementation, malformed evidence, or
+recoverable provider failure MUST continue through a valid repair path when one
+exists and MUST never be treated as completion.
 
 ## 19. M12.1 explicit Mission entry
 

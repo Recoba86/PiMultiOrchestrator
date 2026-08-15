@@ -106,7 +106,7 @@ export function migrateConfig(value: unknown, registry = defaultMigrationRegistr
 
 /** Deterministic V1 -> V2 migration.  No billing assumptions are introduced. */
 export function migrateConfigV1ToV2(value: unknown): ConfigV2 {
-  const source = migratePoolScheduling(migratePoolThinkingEffort(validateConfig(value)));
+  const source = migrateBossRuntimeDefaults(migratePoolScheduling(migratePoolThinkingEffort(validateConfig(value))));
   return validateConfigV2({ ...structuredClone(source), schemaVersion: CURRENT_CONFIG_SCHEMA_VERSION, billing: { profiles: {} } });
 }
 
@@ -146,5 +146,22 @@ export function migratePoolScheduling(value: ConfigV1): ConfigV1 {
 }
 
 export function migratePoolRuntimeDefaults(value: ConfigV1): ConfigV1 {
-	return migratePoolScheduling(migratePoolThinkingEffort(value));
+	return migrateBossRuntimeDefaults(migratePoolScheduling(migratePoolThinkingEffort(value)));
+}
+
+/** RC25 additive Boss migration. Empty routeIds remain explicitly unconfigured. */
+export function migrateBossRuntimeDefaults(value: ConfigV1): ConfigV1 {
+	const next = structuredClone(value);
+	for (const profile of Object.values(next.bossProfiles)) {
+		if (profile.entries === undefined || (profile.entries.length === 0 && profile.routeIds.length > 0)) {
+			profile.entries = profile.routeIds.map((routeId) => ({ routeId, enabled: true, thinkingEffort: "max", weight: 1 }));
+		}
+		for (const entry of profile.entries) {
+			entry.thinkingEffort ??= "max";
+			entry.weight ??= 1;
+		}
+		profile.routeIds = profile.entries.map((entry) => entry.routeId);
+		profile.schedulingPolicy ??= "weighted";
+	}
+	return next;
 }

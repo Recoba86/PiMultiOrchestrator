@@ -389,6 +389,35 @@ provenance, last-known-good state, stale indicators, safe user overrides, and
 the distinction between provider-advertised and empirically observed
 capabilities. This is explicitly outside RC18.
 
+## RC25 — Operational Boss / Orchestrator
+
+Status: IMPLEMENTED / RELEASE CANDIDATE; RC24 remains the prior public
+prerelease until RC25 closure.
+
+Deliverables:
+
+- additive Boss profile entries with multiple eligible routes, per-route
+  Thinking Effort, integer weights, canonical labels, and explicit enablement;
+- deterministic weighted Boss selection once per Mission, durable assignment
+  pinning across normal planning/evaluation/repair/reverification cycles, and
+  explicit infrastructure-only fallback pinning;
+- one bounded goal-oriented Mission loop shared by explicit `@orchestrator`
+  and Smart Routing Run as Mission/AUTO_MISSION, with Investigation and
+  Implementation dispatch through existing pools and M7 Verification through
+  the existing quality path;
+- terminal completion only after goal/acceptance/task/M7 gates pass, with
+  recoverable failures causing repair/replan/reverify and bounded exhaustion
+  ending in explicit BLOCKED/AWAITING_USER review state;
+- Mission-keyed safe Boss assignment, fallback, cycle, repair, quality,
+  duration, and authoritative usage analytics; and
+- manual-only Boss weight recommendations using the existing recommendation
+  architecture with stale-checked explicit Apply.
+
+Acceptance evidence: focused migration, weighted-distribution, multi-cycle
+reject→repair→pass, fallback, UI, analytics, and recommendation suites pass;
+the clean repository check, exact artifact freeze, public npm/GitHub/Pi gates,
+and final release report remain required.
+
 ## RC24 — Model Router enablement hotfix
 
 Status: IMPLEMENTED / RELEASE CANDIDATE; preserves RC23 weighted scheduling and

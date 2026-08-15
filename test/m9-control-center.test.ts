@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
 import { describe, it } from "node:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type {
 	ExtensionAPI,
@@ -16,6 +19,8 @@ import {
 } from "../src/host/pi-extension.js";
 import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/ninerouter/index.js";
 import { POOL_IDS, type PoolId } from "../src/core/pools/index.js";
+import { ConfigStore } from "../src/core/config/store.js";
+import { createDefaultConfig } from "../src/core/config/defaults.js";
 import type { StableId } from "../src/core/config/types.js";
 
 const CONTROL_CENTER_SECTIONS = [
@@ -296,5 +301,45 @@ describe("M9 Control Center contract", () => {
 		assert.equal(pools.mutationCalls, 0);
 		assert.equal(analystCalls, 0);
 		assert.ok(!notifications.some((message) => /analyzing|analysis started|applied recommendation/iu.test(message)));
+	});
+
+	it("[RC25][U] displays multiple weighted Boss routes with canonical labels", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc25-boss-ui-"));
+		try {
+			const configStore = new ConfigStore({ root: join(root, "config") });
+			const config = createDefaultConfig();
+			for (const [routeId, remoteModelId] of [["route-a", "remote-a"], ["route-b", "remote-b"], ["route-c", "remote-c"]] as const) {
+				config.routes[routeId as StableId] = { id: routeId as StableId, displayName: `Route ${routeId.slice(-1).toUpperCase()}`, enabled: true, remoteModelId, resource: { class: "subscription" }, tags: [], capabilities: ["chat"], metadata: { thinkingLevelMap: { max: "max" } } };
+			}
+			config.bossProfiles[config.activeBossProfileId]!.entries = [
+				{ routeId: "route-a" as StableId, enabled: true, thinkingEffort: "max", weight: 5 },
+				{ routeId: "route-b" as StableId, enabled: true, thinkingEffort: "max", weight: 3 },
+				{ routeId: "route-c" as StableId, enabled: true, thinkingEffort: "max", weight: 2 },
+			];
+			config.bossProfiles[config.activeBossProfileId]!.routeIds = ["route-a", "route-b", "route-c"] as StableId[];
+			await configStore.initialize(config);
+			const manager = { ...managerFixture(), list: async () => [
+				{ remoteModelId: "remote-a", displayName: "Remote A", routeId: "route-a", enabled: true, available: true, reasoning: true, thinkingLevelMap: { max: "max" } },
+				{ remoteModelId: "remote-b", displayName: "Remote B", routeId: "route-b", enabled: true, available: true, reasoning: true, thinkingLevelMap: { max: "max" } },
+				{ remoteModelId: "remote-c", displayName: "Remote C", routeId: "route-c", enabled: true, available: true, reasoning: true, thinkingLevelMap: { max: "max" } },
+			] } satisfies PiManagerContract;
+			const pi = piFixture();
+			const calls: SelectCall[] = [];
+			const host = createPiHost(pi.pi, { manager, configStore });
+			host.registerCommands();
+			const selections = ["Boss / Orchestrator Profiles", undefined];
+			await pi.commands.get("orchestrator")!.handler("", context({ select: async (title, options) => {
+				calls.push({ title, options: [...options] });
+				if (title === "Pi Multi-Orchestrator") return selections.shift();
+				return "Back";
+			} }));
+			const bossView = calls.find((call) => call.title.startsWith("Boss / Orchestrator Profile"));
+			assert.ok(bossView);
+			assert.ok(bossView.title.includes("weight 5") && bossView.title.includes("share 50%"));
+			assert.ok(bossView.title.includes("weight 3") && bossView.title.includes("share 30%"));
+			assert.ok(bossView.title.includes("weight 2") && bossView.title.includes("share 20%"));
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 });

@@ -15,8 +15,8 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { ModelRuntime as RuntimeModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createDefaultConfig } from "../core/config/defaults.js";
-import type { PoolSchedulingPolicy, SecretRefV1, StableId } from "../core/config/types.js";
-import { thinkingEffortLabel, type ThinkingEffort, type ThinkingLevelMap } from "../core/thinking.js";
+import { MAX_POOL_ENTRY_WEIGHT, type BossProfileV1, type BossRouteV1, type PoolSchedulingPolicy, type SecretRefV1, type StableId } from "../core/config/types.js";
+import { isSupportedThinkingEffort, supportedThinkingEfforts, thinkingEffortLabel, type ThinkingEffort, type ThinkingLevelMap } from "../core/thinking.js";
 import { ConfigStore } from "../core/config/store.js";
 import { HealthStore, type RouteHealthRecord } from "../core/health/index.js";
 import {
@@ -55,6 +55,7 @@ import {
 } from "../core/ninerouter/index.js";
 import {
 	createSubagentExecutor,
+	extractWorkerUsage,
 	WorkerError,
 	 type ResultProtocolSpec,
 	 type SubagentExecutionRequest,
@@ -73,6 +74,16 @@ import type {
 } from "../core/mission/types.js";
 import { createCanonicalMission, createMissionStore } from "../core/mission/index.js";
 import { executeMissionTask } from "../core/mission/index.js";
+import {
+	BossInfrastructureError,
+	BossProtocolError,
+	runMissionGoalLoop,
+	type BossDecision,
+	type BossInferenceRequest,
+	type BossRouteCandidate,
+	type BossTaskOutcome,
+	type BossVerificationOutcome,
+} from "../core/mission/boss.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
 import {
@@ -158,6 +169,8 @@ export interface PoolManagerContract {
 	setSchedulingPolicy?(poolId: PoolId, schedulingPolicy: PoolSchedulingPolicy): MaybePromise<unknown>;
 	setPoolEntryWeight?(poolId: PoolId, routeId: StableId, weight: number): MaybePromise<unknown>;
 	updatePoolWeights?(poolId: PoolId, weights: Readonly<Record<string, number>>): MaybePromise<unknown>;
+	getBossProfile?(profileId: string): MaybePromise<{ readonly profileId: string; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] }>;
+	updateBossWeights?(profileId: string, weights: Readonly<Record<string, number>>): MaybePromise<unknown>;
 }
 
 export type RecommendationAnalystMode = "deterministic" | "ai-assisted";
@@ -826,6 +839,90 @@ const createHostTriageClient = (manager: PiManagerContract, providerRegistry?: (
 	},
 });
 
+const BOSS_SYSTEM_PROMPT = [
+	"You are the PMO Boss / Orchestrator for one canonical Mission.",
+	"You are a goal-oriented planner and evaluator, not an implementation worker.",
+	"Use the same Mission across cycles. Do not claim completion unless the goal, acceptance criteria, durable task execution, and M7 verification evidence are all satisfied.",
+	"Recoverable worker failures, rejected verification, weak evidence, and recoverable provider failures require a repair or replan when one is possible.",
+	"Return exactly one JSON object and no markdown.",
+	"Schema: {action:'dispatch'|'replan'|'complete'|'blocked'|'awaiting_user',summary:string,acceptanceSatisfied?:boolean,requiredFixes?:string[],tasks:[{taskId?:string,roleId:string,executionClass:'investigation'|'implementation'|'verification',poolId?:'investigation'|'implementation'|'verification',objective:string,acceptanceCriteria?:string[]}]}",
+	"Use blocked only for a genuine unresolved external dependency. Use awaiting_user only when a required decision or permission cannot safely be inferred.",
+].join("\n");
+
+const bossInferencePrompt = (request: BossInferenceRequest): string => {
+	const bounded = (value: unknown, max: number): string => {
+		try { return JSON.stringify(value).slice(0, max); } catch { return "{}"; }
+	};
+	return [
+		`Mission goal: ${request.mission.goal.slice(0, 8_000)}`,
+		`Acceptance criteria: ${bounded(request.mission.acceptanceCriteria, 8_000)}`,
+		`Phase: ${request.phase}`,
+		`Cycle: ${request.cycle}`,
+		`Pinned Boss route: ${request.assignment.remoteModelId ?? request.assignment.routeId}`,
+		`Durable mission status: ${request.mission.status}`,
+		`Durable mission plan metadata: ${bounded(request.mission.plan, 8_000)}`,
+		`Prior feedback/evidence: ${bounded(request.feedback, 12_000)}`,
+		`Task outcomes: ${bounded(request.taskOutcomes ?? [], 8_000)}`,
+		"Decide the next bounded Mission action. If work is needed, dispatch only concrete tasks with acceptance criteria. If verification rejected work, plan a repair task or re-run the same repairable task.",
+	].join("\n");
+};
+
+const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>): BossDecision => {
+	if (response.stopReason !== "stop") throw new BossInfrastructureError("Boss provider did not complete the orchestration response");
+	const usage = extractWorkerUsage(response);
+	const tokenUsage = usage === undefined ? undefined : {
+		...(usage.input === undefined ? {} : { inputTokens: usage.input }),
+		...(usage.output === undefined ? {} : { outputTokens: usage.output }),
+		...(usage.cacheRead === undefined ? {} : { cacheReadTokens: usage.cacheRead }),
+		...(usage.cacheWrite === undefined ? {} : { cacheWriteTokens: usage.cacheWrite }),
+		...(usage.reasoning === undefined ? {} : { reasoningTokens: usage.reasoning }),
+		...(usage.totalTokens === undefined ? {} : { totalTokens: usage.totalTokens }),
+		provenance: "observed" as const,
+	};
+	const withUsage = (value: BossDecision): BossDecision => tokenUsage === undefined ? value : { ...value, tokenUsage };
+	const raw = response.content.filter((block): block is { readonly type: "text"; readonly text: string } => block.type === "text").map((block) => block.text).join("").trim();
+	if (!raw) throw new BossProtocolError("Boss provider returned no decision");
+	const candidates = [raw, raw.replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "")];
+	for (const candidate of candidates) {
+		try {
+			const parsed: unknown = JSON.parse(candidate);
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return withUsage(parsed as BossDecision);
+		} catch { /* try the bounded object slice below */ }
+	}
+	const start = raw.indexOf("{");
+	const end = raw.lastIndexOf("}");
+	if (start >= 0 && end > start) {
+		try {
+			const parsed: unknown = JSON.parse(raw.slice(start, end + 1));
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return withUsage(parsed as BossDecision);
+		} catch { /* protocol error below */ }
+	}
+	throw new BossProtocolError("Boss provider returned malformed JSON");
+};
+
+const invokeBossInference = async (manager: PiManagerContract, providerRegistry: PiProviderRegistry | undefined, request: BossInferenceRequest): Promise<BossDecision> => {
+	let route: ResolvedWorkerRoute;
+	try { route = await resolveHostRoute(manager, request.assignment.routeId, providerRegistry); }
+	catch { throw new BossInfrastructureError("Pinned Boss route is unavailable"); }
+	const model = route.model as unknown as { readonly reasoning?: boolean; readonly thinkingLevelMap?: ThinkingLevelMap };
+	const thinkingLevelMap = model.thinkingLevelMap;
+	const thinkingMetadata = { ...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }), ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }) };
+	if (!isSupportedThinkingEffort(thinkingMetadata, request.assignment.thinkingEffort)) throw new BossInfrastructureError("Pinned Boss thinking effort is unavailable");
+	try {
+		const response = await route.modelRuntime.completeSimple(route.model, {
+			systemPrompt: BOSS_SYSTEM_PROMPT,
+			messages: [{ role: "user", content: bossInferencePrompt(request), timestamp: Date.now() }],
+		}, {
+			...(request.assignment.thinkingEffort === "auto" ? {} : { reasoning: request.assignment.thinkingEffort }),
+			...(request.signal === undefined ? {} : { signal: request.signal }),
+		});
+		return parseBossInferenceResponse(response);
+	} catch (error) {
+		if (error instanceof BossProtocolError || error instanceof BossInfrastructureError) throw error;
+		throw new BossInfrastructureError("Pinned Boss provider request failed");
+	}
+};
+
 /** Build the M5 adapter from the already-authoritative M3/M4 stores. */
 async function createHostSubagentExecutor(
 	manager: PiManagerContract,
@@ -1129,6 +1226,27 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		await syncPiProviderCatalog();
 		const raw = await manager.list(filter);
 		return raw.map(normalizeModelEntry).filter((entry): entry is ModelManagerEntry => entry !== undefined);
+	};
+
+	const bossProfileEntries = (profile: BossProfileV1): readonly BossRouteV1[] => profile.entries ?? profile.routeIds.map((routeId) => ({ routeId, enabled: true, thinkingEffort: "max", weight: 1 }));
+	const bossRouteCandidates = async (config: ReturnType<typeof createDefaultConfig>, profile: BossProfileV1): Promise<{ readonly configured: readonly BossRouteV1[]; readonly eligible: readonly BossRouteCandidate[]; readonly available: readonly BossRouteCandidate[]; readonly labels: readonly CanonicalModelOption[]; }> => {
+		const configured = bossProfileEntries(profile);
+		const catalog = await modelEntries();
+		const byRoute = new Map(catalog.flatMap((entry) => entry.routeId === undefined ? [] : [[entry.routeId, entry] as const]));
+		const candidateFor = (routeId: StableId, entry?: BossRouteV1): BossRouteCandidate | undefined => {
+			const route = config.routes[routeId];
+			const model = byRoute.get(routeId);
+			if (!route || !route.enabled || !model || model.enabled !== true || model.available === false || model.missing === true || model.stale === true || model.capability === "non-chat") return undefined;
+			const thinkingEffort = entry?.thinkingEffort ?? "auto";
+			const thinkingLevelMap = model.thinkingLevelMap ?? route.metadata?.thinkingLevelMap;
+			const metadata = { ...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }), ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }) };
+			if (!isSupportedThinkingEffort(metadata, thinkingEffort)) return undefined;
+			return { routeId, enabled: profile.enabled && (entry?.enabled ?? true), thinkingEffort, weight: entry?.weight ?? 1, remoteModelId: model.remoteModelId, ...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }), ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }) };
+		};
+		const eligible = configured.flatMap((entry) => { const candidate = candidateFor(entry.routeId, entry); return candidate === undefined ? [] : [candidate]; });
+		const available = Object.keys(config.routes).map((routeId) => candidateFor(routeId as StableId, configured.find((entry) => entry.routeId === routeId))).filter((entry): entry is BossRouteCandidate => entry !== undefined);
+		const labels = canonicalModelOptions(available.map((entry) => ({ value: entry.routeId, remoteModelId: entry.remoteModelId, displayName: config.routes[entry.routeId]?.displayName })));
+		return { configured, eligible, available, labels };
 	};
 
 	const toggleEntry = async (ctx: ExtensionCommandContext, entry: ModelManagerEntry): Promise<void> => {
@@ -1511,6 +1629,34 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		} catch (error) { notifyError(ctx, "Weight recommendation failed", error); }
 	};
 
+	const showBossWeightRecommendation = async (ctx: ExtensionContext | ExtensionCommandContext): Promise<void> => {
+		if (!analytics || !analyticsStore || !configStore || !poolManager.getBossProfile) { ctx.ui.notify("Boss weight recommendations are unavailable until Boss configuration and analytics are configured", "warning"); return; }
+		try {
+			const config = (await configStore.load()).snapshot?.config;
+			const profileId = config?.activeBossProfileId;
+			if (!profileId) { ctx.ui.notify("No active Boss profile is configured", "warning"); return; }
+			const profile = await poolManager.getBossProfile(profileId);
+			const currentWeights = Object.fromEntries(profile.entries.map((entry) => [entry.routeId, entry.weight ?? 1]));
+			const existing = analytics.recommendations().find((item) => item.status === "proposed" && item.recommendationKind === "boss-weight-rebalance" && item.bossProfileId === profileId && sameWeightSnapshot(item.proposedDiff.baselineWeights, currentWeights));
+			const recommendation = existing ?? new RecommendationEngine().generateBossWeightRebalance(analytics.overview(), profileId, currentWeights);
+			if (!recommendation) { ctx.ui.notify(`Insufficient comparable Boss analytics for ${profileId} (minimum 10 observed attempts per route)`, "warning"); return; }
+			if (!existing) analyticsStore.saveRecommendation(recommendation);
+			if (ctx.mode !== "tui" && !ctx.hasUI) {
+				ctx.ui.notify([`recommendation=${recommendation.recommendationId}`, `profile=${profileId}`, `current=${JSON.stringify(recommendation.proposedDiff.baselineWeights)}`, `suggested=${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}`, "status=proposed (no configuration changed)"].join("\n"), "info");
+				return;
+			}
+			const action = await ctx.ui.select(`Boss Weight Recommendation — ${profileId}`, ["Apply", "Ignore", "Details", "Back"]);
+			if (action === "Apply") {
+				const result = recommendationApplication ? await recommendationApplication.apply(recommendation.recommendationId) : "unavailable";
+				ctx.ui.notify(result === "applied" ? "Boss weight recommendation applied" : result === "stale" ? "Boss recommendation is stale; regenerate it" : "Boss recommendation application is unavailable", result === "applied" ? "info" : "warning");
+			} else if (action === "Ignore") {
+				ctx.ui.notify(recommendationApplication?.ignore(recommendation.recommendationId) ? "Boss weight recommendation ignored" : "Boss recommendation status is unavailable", "info");
+			} else if (action === "Details") {
+				ctx.ui.notify([`Profile: ${profileId}`, `Current: ${JSON.stringify(recommendation.proposedDiff.baselineWeights)}`, `Suggested: ${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}`, `Evidence: ${recommendation.evidence.join("; ")}`, `Limitations: ${recommendation.limitations.join("; ")}`, `Status: ${recommendation.status}`].join("\n"), "info");
+			}
+		} catch (error) { notifyError(ctx, "Boss weight recommendation failed", error); }
+	};
+
 	const openPoolEditor = async (ctx: ExtensionCommandContext, poolId: PoolId): Promise<void> => {
 		if (ctx.mode !== "tui" && !ctx.hasUI) {
 			ctx.ui.notify("/pool-models requires TUI or RPC UI mode", "error");
@@ -1739,21 +1885,101 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		try {
 			const loaded = await configStore.load();
 			const config = loaded.snapshot?.config;
-			if (!config) {
-				ctx.ui.notify("Boss / Orchestrator Profiles\nconfiguration unavailable\nBoss runtime not implemented yet", "warning");
-				return;
+			if (!config) { ctx.ui.notify("Boss / Orchestrator Profiles\nconfiguration unavailable", "warning"); return; }
+			const profiles = Object.values(config.bossProfiles);
+			if (profiles.length === 0) { ctx.ui.notify("Boss / Orchestrator Profiles\nNo profiles configured", "warning"); return; }
+			const activeProfile = config.bossProfiles[config.activeBossProfileId] ?? profiles[0];
+			if (!activeProfile) return;
+			let profile: BossProfileV1 = activeProfile;
+			if (profiles.length > 1) {
+				const labels = profiles.map((candidate) => candidate.displayName);
+				const selected = await ctx.ui.select("Boss / Orchestrator Profiles", [...labels, "Back"]);
+				if (!selected || selected === "Back") return;
+				profile = profiles[labels.indexOf(selected)] ?? profile;
 			}
-			const active = config.bossProfiles[config.activeBossProfileId];
-			const profiles = Object.values(config.bossProfiles).map((profile) => `${profile.id}: ${profile.displayName}`);
-			ctx.ui.notify([
-				"Boss / Orchestrator Profiles",
-				`active profile: ${active?.displayName ?? config.activeBossProfileId}`,
-				`profiles: ${profiles.join(", ") || "EMPTY"}`,
-				"Boss runtime not implemented yet",
-				"profile data is configuration only; no autonomous planning or scheduling",
-			].join("\n"), "info");
+			let selectedRouteId: StableId | undefined;
+			const saveProfile = async (profileId: StableId, mutator: (draft: BossProfileV1) => void): Promise<void> => {
+				if (!requireIdle(ctx, "Boss profile")) return;
+				await configStore.update((draft) => {
+					const target = draft.bossProfiles[profileId];
+					if (!target) throw new Error("Boss profile is unavailable");
+					const next = structuredClone(target);
+					mutator(next);
+					const entries = [...bossProfileEntries(next)];
+					next.entries = entries;
+					next.routeIds = entries.map((entry) => entry.routeId);
+					next.schedulingPolicy = "weighted";
+					draft.bossProfiles[profileId] = next;
+				});
+			};
+			while (true) {
+				const latest = (await configStore.load()).snapshot?.config;
+				const current: BossProfileV1 = latest?.bossProfiles[profile.id] ?? profile;
+				profile = current;
+				const routeState = await bossRouteCandidates(latest ?? config, current);
+				const configured = bossProfileEntries(current);
+				const configuredPresentation = canonicalModelOptions(configured.map((entry) => ({ value: entry.routeId, remoteModelId: latest?.routes[entry.routeId]?.remoteModelId, displayName: latest?.routes[entry.routeId]?.displayName })));
+				const positiveTotal = configured.reduce((sum, entry) => sum + Math.max(0, entry.weight ?? 1), 0);
+				const routeLines = configured.map((entry, index) => `${configuredPresentation[index]?.label ?? "Unknown model"} — ${thinkingEffortLabel(entry.thinkingEffort ?? "auto")} — weight ${entry.weight ?? 1} — share ${positiveTotal > 0 ? Math.round(((entry.weight ?? 1) / positiveTotal) * 1000) / 10 : 0}%${entry.enabled ? "" : " [disabled]"}${routeState.eligible.some((candidate) => candidate.routeId === entry.routeId) ? "" : " [unavailable]"}`);
+				const selectedEntry = configured.find((entry) => entry.routeId === selectedRouteId) ?? configured[0];
+				if (selectedEntry) selectedRouteId = selectedEntry.routeId;
+				const summary = [
+					"Boss / Orchestrator Profile",
+					`profile: ${current.displayName}`,
+					`model: ${configuredPresentation.find((entry) => entry.value === selectedRouteId)?.label ?? (configured.length > 1 ? "Multiple configured" : "Unconfigured")}`,
+					`thinking: ${selectedEntry ? thinkingEffortLabel(selectedEntry.thinkingEffort ?? "auto") : "Unknown"}`,
+					`status: ${current.enabled ? "Enabled" : "Disabled"}${configured.length === 0 ? " / Unconfigured" : routeState.eligible.length === 0 ? " / Unavailable" : ""}`,
+					...(routeLines.length > 0 ? ["routes:", ...routeLines] : ["routes: none"]),
+				].join("\n");
+				const action = await ctx.ui.select(summary, ["Select Model", "Thinking Effort", current.enabled ? "Disable" : "Enable", "Set Weight", "Inspect", "Back"]);
+				if (!action || action === "Back") return;
+				if (action === "Select Model") {
+					const selected = await ctx.ui.select("Select Boss route", [...routeState.labels.map((entry) => entry.label), "Back"]);
+					if (!selected || selected === "Back") continue;
+					const index = routeState.labels.findIndex((entry) => entry.label === selected);
+					const candidate = index >= 0 ? routeState.available[index] : undefined;
+					if (!candidate) continue;
+					selectedRouteId = candidate.routeId;
+					await saveProfile(current.id, (draft) => {
+						const entries = [...bossProfileEntries(draft)];
+						const existing = entries.find((entry) => entry.routeId === candidate.routeId);
+						if (existing) existing.enabled = true;
+						else entries.push({ routeId: candidate.routeId, enabled: true, thinkingEffort: candidate.thinkingEffort ?? "max", weight: 1 });
+						draft.entries = entries;
+					});
+					continue;
+				}
+				if (action === "Thinking Effort") {
+					if (!selectedEntry) { ctx.ui.notify("Select a Boss model first", "warning"); continue; }
+					const model = routeState.available.find((entry) => entry.routeId === selectedEntry.routeId);
+					const thinkingMetadata = { ...(model?.reasoning === undefined ? {} : { reasoning: model.reasoning }), ...(model?.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: model.thinkingLevelMap }) };
+					const supported = model ? ["Auto", ...supportedThinkingEfforts(thinkingMetadata)] : ["Auto"];
+					const selectedEffort = await ctx.ui.select("Thinking Effort", supported);
+					if (!selectedEffort) continue;
+					const effort = selectedEffort === "Auto" ? "auto" : selectedEffort.toLocaleLowerCase() as ThinkingEffort;
+					if (!isSupportedThinkingEffort(thinkingMetadata, effort)) { ctx.ui.notify("That thinking effort is not confirmed for this route", "warning"); continue; }
+					await saveProfile(current.id, (draft) => { const entries = [...bossProfileEntries(draft)]; const entry = entries.find((candidate) => candidate.routeId === selectedEntry.routeId); if (entry) entry.thinkingEffort = effort; draft.entries = entries; });
+					continue;
+				}
+				if (action === "Enable" || action === "Disable") {
+					if (action === "Enable" && configured.length === 0) { ctx.ui.notify("Configure at least one Boss route before enabling the profile", "warning"); continue; }
+					await saveProfile(current.id, (draft) => { draft.enabled = action === "Enable"; });
+					continue;
+				}
+				if (action === "Set Weight") {
+					if (!selectedEntry) { ctx.ui.notify("Select a Boss model first", "warning"); continue; }
+					const raw = await ctx.ui.input("Boss route weight", String(selectedEntry.weight ?? 1));
+					const weight = Number.parseInt(raw?.trim() ?? "", 10);
+					if (!Number.isSafeInteger(weight) || weight < 0 || weight > MAX_POOL_ENTRY_WEIGHT) { ctx.ui.notify(`Weight must be an integer from 0 to ${MAX_POOL_ENTRY_WEIGHT}`, "error"); continue; }
+					await saveProfile(current.id, (draft) => { const entries = [...bossProfileEntries(draft)]; const entry = entries.find((candidate) => candidate.routeId === selectedEntry.routeId); if (entry) entry.weight = weight; draft.entries = entries; });
+					continue;
+				}
+				if (action === "Inspect") {
+					ctx.ui.notify([summary, `profile id: ${current.id}`, ...configured.map((entry) => `route id: ${entry.routeId}`)].join("\n"), "info");
+				}
+			}
 		} catch (error) {
-			notifyError(ctx, "Boss profile status failed", error);
+			notifyError(ctx, "Boss profile editor failed", error);
 		}
 	};
 
@@ -2524,7 +2750,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		return lines.join("\n");
 	};
 
-	const executeReviewer = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, targetRunId: string, excludedRouteIds: readonly StableId[] = [], implementationRouteId?: StableId): Promise<{ readonly result: SubagentRunResult; readonly criteria: readonly string[] }> => {
+	const executeReviewer = async (ctx: ExtensionContext | ExtensionCommandContext, missionId: string, taskId: string, targetRunId: string, excludedRouteIds: readonly StableId[] = [], implementationRouteId?: StableId): Promise<{ readonly result: SubagentRunResult; readonly criteria: readonly string[] }> => {
 		if (!qualityExecutor) throw new Error("Reviewer execution is unavailable");
 		const task = options.missionStore?.getTask(taskId);
 		const criteria = task?.acceptanceCriteria ?? [];
@@ -2539,6 +2765,69 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const recordReviewerRun = (verificationId: string, result: SubagentRunResult): void => {
 		const run = qualityStore?.getVerificationRun(verificationId);
 		if (run) qualityStore?.updateVerificationRun(verificationId, { reviewerRunId: result.runId, ...(result.finalRouteId === undefined ? {} : { reviewerRouteId: result.finalRouteId }), ...(result.finalRemoteModelId === undefined ? {} : { reviewerRemoteModelId: result.finalRemoteModelId }) });
+	};
+
+	const runCanonicalMission = async (ctx: ExtensionContext | ExtensionCommandContext, mission: MissionRecord): Promise<MissionRecord> => {
+		const store = options.missionStore;
+		const loaded = configStore ? await configStore.load() : undefined;
+		const config = loaded?.snapshot?.config ?? createDefaultConfig();
+		const profile = config.bossProfiles[config.activeBossProfileId];
+		if (!store || !profile || !subagentExecutor || !options.contextBroker || !qualityService || !qualityExecutor) {
+			ctx.ui.notify("Mission created, but the canonical Boss runtime is unavailable; no worker or completion claim was made.", "warning");
+			return mission;
+		}
+		const executor = subagentExecutor;
+		const broker = options.contextBroker;
+		const service = qualityService;
+		try {
+			const routes = await bossRouteCandidates(config, profile);
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: routes.eligible,
+				profileId: profile.id,
+				...(analyticsStore ? { analytics: analyticsStore } : {}),
+				...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
+				invoke: (request) => invokeBossInference(manager, providerRegistry, request),
+				dispatch: async (task): Promise<BossTaskOutcome> => {
+					if (task.executionClass === "implementation" && options.trustStore && !options.trustStore.isTrusted(ctx.cwd)) return { taskId: String(task.taskId), status: "blocked", summary: "TRUST REQUIRED — mutating Mission execution is disabled for this project" };
+					try {
+						const executed = await executeMissionTask({ store, contextBroker: broker, executor, missionId: mission.missionId, taskId: task.taskId, cwd: ctx.cwd, ...(analyticsStore ? { analytics: analyticsStore } : {}), ...(ctx.signal === undefined ? {} : { signal: ctx.signal }), ...(task.status === "execution_completed" ? { allowQualityRepair: true } : {}) });
+						const updated = store.getTask(task.taskId) ?? executed.task;
+						return { taskId: String(task.taskId), status: executed.run.terminalStatus === "completed" && updated.status === "execution_completed" ? "succeeded" : "failed", summary: executed.run.summary.slice(0, 2_000) };
+					} catch (error) {
+						return { taskId: String(task.taskId), status: "failed", summary: error instanceof Error ? error.message.slice(0, 240) : "Worker execution failed" };
+					}
+				},
+				verify: async (task, outcome): Promise<BossVerificationOutcome> => {
+					if (outcome.status !== "succeeded") return { taskId: String(task.taskId), verdict: "blocked", summary: "M7 verification cannot start because the worker did not complete" };
+					const targetRunId = task.lastRunId;
+					if (!targetRunId) return { taskId: String(task.taskId), verdict: "blocked", summary: "M7 verification target is missing" };
+					const targetAttempt = store.getAttempt(targetRunId);
+					const verification = service.startVerification({ missionId: mission.missionId, taskId: task.taskId, targetRunId, round: taskQualityStatus(String(task.taskId))?.qualityRound ?? 0, ...(targetAttempt?.routeId === undefined ? {} : { implementationRouteId: targetAttempt.routeId }) });
+					try {
+						const executed = await executeReviewer(ctx, String(mission.missionId), String(task.taskId), targetRunId, [], targetAttempt?.routeId);
+						recordReviewerRun(verification.verificationId, executed.result);
+						if (executed.result.terminalStatus !== "completed") {
+							service.failVerification(verification.verificationId, executed.result.potentialMutationObserved ? "interrupted" : "blocked", executed.result.summary);
+							return { taskId: String(task.taskId), verdict: "blocked", summary: executed.result.summary.slice(0, 2_000) };
+						}
+						const completed = service.completeVerification(verification.verificationId, executed.result.protocolResult ?? executed.result.structuredResult, task.acceptanceCriteria);
+						recordAnalytics({ eventId: `quality-${completed.decision.decisionId}`, occurredAt: completed.decision.createdAt, eventType: "quality", missionId: String(mission.missionId), taskId: String(task.taskId), runId: targetRunId, verificationId: verification.verificationId, qualityRound: completed.run.round, poolId: "verification", ...(completed.run.reviewerRouteId === undefined ? {} : { routeId: completed.run.reviewerRouteId }), outcome: completed.decision.verdict, qualityOutcome: completed.decision.verdict, firstPass: completed.decision.verdict === "pass" && completed.run.round === 0, repairRound: completed.run.round });
+						return { taskId: String(task.taskId), verdict: completed.decision.verdict, summary: completed.decision.reviewerSummary, requiredFixes: completed.decision.requiredFixes };
+					} catch (error) {
+						try { service.failVerification(verification.verificationId, "blocked", "M7 reviewer protocol or infrastructure was unavailable"); } catch { /* preserve the original bounded outcome */ }
+						return { taskId: String(task.taskId), verdict: "blocked", summary: error instanceof Error ? error.message.slice(0, 240) : "M7 verification failed" };
+					}
+				},
+			});
+			appendMissionPointer(result.mission);
+			ctx.ui.notify(`Mission ${result.mission.missionId}: ${result.status} after ${result.cycles} Boss cycle${result.cycles === 1 ? "" : "s"}`, result.status === "completed" ? "info" : "warning");
+			return result.mission;
+		} catch (error) {
+			ctx.ui.notify(`Mission Boss runtime stopped without a completion claim: ${error instanceof Error ? error.message.slice(0, 240) : "runtime error"}`, "warning");
+			return store.getMission(mission.missionId) ?? mission;
+		}
 	};
 
 	const runReviewer = async (ctx: ExtensionCommandContext, missionId: string, taskId: string, verificationId: string, targetRunId: string, implementationRouteId?: StableId): Promise<void> => {
@@ -2943,6 +3232,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			return;
 		}
 		if (!requireIdle(ctx, "mission state")) return;
+		if (configStore && (action === "Start mission" || action === "Resume mission")) {
+			await runCanonicalMission(ctx, mission);
+			return;
+		}
 		const target: MissionStatus | undefined = action === "Start mission" || action === "Resume mission"
 			? "running"
 			: action === "Pause mission"
@@ -2992,7 +3285,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
-	const createInputMission = (ctx: ExtensionContext, goal: string): MissionRecord | undefined => {
+	const createInputMission = async (ctx: ExtensionContext, goal: string): Promise<MissionRecord | undefined> => {
 		if (!options.missionStore) {
 			missionStoreUnavailable(ctx);
 			return undefined;
@@ -3001,7 +3294,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const mission = createCanonicalMission(options.missionStore, goal, { repositoryCwd: ctx.cwd });
 			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission), "info");
-			return mission;
+			return configStore ? await runCanonicalMission(ctx, mission) : mission;
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
 			return undefined;
@@ -3140,7 +3433,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			if (inputCancelled() || decision.triage?.failureClass === "cancelled") return { action: "continue" };
 			if (decision.mode === "AUTO_MISSION") {
 				if (inputCancelled()) return { action: "continue" };
-				const mission = createInputMission(ctx, event.text);
+				const mission = await createInputMission(ctx, event.text);
 				if (!mission) {
 					recordRoutingDecision(decision, "failed", decision.memory);
 					return { action: "continue" };
@@ -3169,7 +3462,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			}
 			if (action === "Run as Mission") {
 				if (inputCancelled()) return { action: "continue" };
-				const mission = createInputMission(ctx, event.text);
+				const mission = await createInputMission(ctx, event.text);
 				if (!mission) {
 					recordRoutingDecision(decision, "failed", decision.memory);
 					return { action: "continue" };
@@ -3227,7 +3520,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					return { action: "continue" };
 				}
 					if (inputCancelled()) return { action: "continue" };
-					const mission = createInputMission(ctx, event.text);
+					const mission = await createInputMission(ctx, event.text);
 					if (!mission) {
 						recordRoutingDecision(decision, "failed", decision.memory);
 						return { action: "continue" };
@@ -3284,6 +3577,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const mission = createCanonicalMission(store, invocation.goal, { repositoryCwd: ctx.cwd });
 			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission), "info");
+			if (configStore) await runCanonicalMission(ctx, mission);
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
 			return requeueOriginal();
@@ -3599,7 +3893,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				const recommendations = analytics.recommendations();
 				lines.push(`saved recommendations=${recommendations.length}`);
 				if (recommendations.length === 0) lines.push("recommendations: UNKNOWN (none saved)");
-					else for (const recommendation of recommendations) lines.push(`${recommendation.recommendationId}: ${recommendation.recommendationKind === "weight-rebalance" ? "kind=weight-rebalance " : ""}pool=${recommendation.poolId} route=${recommendation.proposedRouteId} sample=${recommendation.sampleSize} score=${recommendation.score} formula=${recommendation.formulaVersion} status=${recommendation.status}`, ...(recommendation.recommendationKind === "weight-rebalance" ? [`  current=${JSON.stringify(recommendation.proposedDiff.baselineWeights)}`, `  suggested=${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}`] : []), `  evidence=${recommendation.evidence.join("; ") || "UNKNOWN"}`, `  limitations=${recommendation.limitations.join("; ") || "UNKNOWN"}`, `  actions: details/apply/ignore ${recommendation.recommendationId}`);
+					else for (const recommendation of recommendations) lines.push(`${recommendation.recommendationId}: ${recommendation.recommendationKind ? `kind=${recommendation.recommendationKind} ` : ""}pool=${recommendation.poolId} route=${recommendation.proposedRouteId} profile=${recommendation.bossProfileId ?? "-"} sample=${recommendation.sampleSize} score=${recommendation.score} formula=${recommendation.formulaVersion} status=${recommendation.status}`, ...(recommendation.recommendationKind === "weight-rebalance" || recommendation.recommendationKind === "boss-weight-rebalance" ? [`  current=${JSON.stringify(recommendation.proposedDiff.baselineWeights)}`, `  suggested=${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}`] : []), `  evidence=${recommendation.evidence.join("; ") || "UNKNOWN"}`, `  limitations=${recommendation.limitations.join("; ") || "UNKNOWN"}`, `  actions: details/apply/ignore ${recommendation.recommendationId}`);
 			}
 			ctx.ui.notify(lines.join("\n"), "info");
 		} catch (error) { notifyError(ctx, "Analytics failed", error); }
@@ -3624,13 +3918,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					const recommendation = saved.find((item) => item.recommendationId === id);
 					if (!recommendation) { ctx.ui.notify(`Recommendation ${id} not found`, "warning"); return; }
 					if (recommendation.status !== "proposed") { ctx.ui.notify(`Recommendation ${id} is already ${recommendation.status}`, "warning"); return; }
-					const prompt = recommendation.recommendationKind === "weight-rebalance" ? `${recommendation.poolId}: apply suggested weights ${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}` : `${recommendation.poolId}: move ${recommendation.proposedRouteId} to first priority`;
+					const prompt = recommendation.recommendationKind === "weight-rebalance" || recommendation.recommendationKind === "boss-weight-rebalance" ? `${recommendation.poolId}: apply suggested weights ${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}` : `${recommendation.poolId}: move ${recommendation.proposedRouteId} to first priority`;
 					if ((ctx.mode === "tui" || ctx.hasUI) && !(await ctx.ui.confirm("Apply recommendation?", prompt))) return;
-					if (!isPoolId(recommendation.poolId) || !recommendationApplication) { ctx.ui.notify("Recommendation has an invalid pool", "warning"); return; }
+					if ((recommendation.poolId !== "boss" && !isPoolId(recommendation.poolId)) || !recommendationApplication) { ctx.ui.notify("Recommendation has an invalid pool", "warning"); return; }
 					const applied = await recommendationApplication.apply(id);
 					ctx.ui.notify(applied === "applied" ? `Recommendation ${id} applied` : applied === "stale" ? `Recommendation ${id} is stale; regenerate it` : `Recommendation ${id} is unavailable`, applied === "applied" ? "info" : "warning");
 					return;
 				}
+				if (input === "boss") { await showBossWeightRecommendation(ctx); return; }
 				const poolId = input || "implementation";
 				if (!isPoolId(poolId)) { ctx.ui.notify(`Unknown pool: ${poolId}`, "warning"); return; }
 				const currentPool = await poolManager.getPool(poolId);

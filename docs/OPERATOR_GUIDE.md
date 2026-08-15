@@ -1,7 +1,8 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC24 is the public
-`next`-tagged prerelease, not a stable or production release. Local validation
+This guide describes the Control Center in Pi `0.84.1`. RC25 is the current
+release candidate; RC24 remains the public `next`-tagged prerelease until RC25
+closure. Neither is a stable or production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
 
@@ -66,9 +67,16 @@ message where applicable.
   Verification Pool is shared route configuration: Direct Verification Workers
   are standalone, while canonical Mission reviewers use it for M7. Use
   `/subagent-run` for the former and `/verify-task` for the latter.
-- **Boss / Orchestrator Profiles** shows accepted profile configuration and
-  explicitly says `Boss runtime not implemented yet`; profiles do not imply
-  autonomous planning or scheduling.
+- **Boss / Orchestrator Profiles** edits the active Boss profile. Select
+  multiple available chat routes, set each route's Thinking Effort and integer
+  weight, and enable/disable the profile. Normal rows show canonical remote
+  model labels; exact route IDs are available only through Inspect. Shares are
+  calculated from positive weights. A Mission selects one eligible Boss route
+  once using deterministic weighted assignment and persists that pin across
+  planning, worker-task evaluation, repair/replan cycles, M7 interpretation,
+  and the terminal decision. Infrastructure failure may use one explicit
+  unused fallback and records the original/replacement route and reason;
+  quality rejection never rotates the Boss.
 - **Routing & Fallback** is a non-executing preview of policy, eligibility,
   diversity, cooldown, and no-route reasons. Its settings also contain Smart
   Routing. Smart Routing is ON by default: clear explanations/questions and
@@ -119,7 +127,9 @@ message where applicable.
 Deterministic M8 recommendations remain authoritative. Details, Ignore, and
 Apply are explicit actions; Apply revalidates staleness and uses
 RecommendationApplicationService → PoolManager → ConfigStore. There is no
-automatic priority or weight mutation. Weighted recommendations are
+automatic priority or weight mutation. `/recommendations boss` creates a
+sample-gated Boss weight proposal for the active profile; it remains proposed
+until the user explicitly Applies it. Weighted recommendations are
 deterministic heuristics over reliability, quality decisions, latency, and
 repair rate; they preserve the current positive-weight total and record their
 baseline/suggested maps. Insufficient or origin-unknown evidence returns no
@@ -137,7 +147,32 @@ deterministic recommendation usable.
 The direct M2–M8.5 commands remain available, including `/9router-models`,
 `/pool-models`, `/pool-status`, `/routing-status`, `/route-health`,
 `/routing-settings`, `/subagent-run`, `/missions`, `/quality-status`, `/verify-task`,
-`/analytics`, `/recommendations`, and `/recommendation-analyst`.
+`/analytics`, `/recommendations [pool|boss]`, and `/recommendation-analyst`.
+
+## RC25 Boss Mission and analytics safety
+
+Boss route weights are independent from Investigation, Implementation, and
+Verification Pool weights. Configure at least one enabled route in **Boss /
+Orchestrator Profiles**; three routes can use weights such as 5/3/2, shown as
+50%/30%/20% shares. Weighted Boss selection happens once when a Mission starts,
+then the assignment is persisted in the Mission's orchestration plan. It does
+not rotate between normal Boss inferences or repair cycles.
+
+Both `@orchestrator <goal>` and Smart Routing → Run as Mission/AUTO_MISSION use
+the same canonical loop. The Boss plans, dispatches existing worker pools,
+consumes bounded results, invokes M7 Verification, and evaluates the goal and
+acceptance criteria. Rejection or recoverable failure causes bounded
+replan/repair/reverification. A safety bound ends in explicit
+`AWAITING_USER`/review evidence rather than a false completion. Only a genuine
+Boss infrastructure failure can select an unused configured fallback; the
+replacement remains pinned and the original/replacement/reason is recorded.
+
+Boss assignment, terminal state, cycles, repair cycles, quality outcomes,
+fallback edges, duration, and authoritative token usage are metadata-only
+analytics keyed by Mission. Use `/analytics` to inspect the evidence and
+`/recommendations boss` to create a manual-only weight proposal. A suggestion
+never changes configuration until the user explicitly Applies it, and Apply
+stale-checks the active Boss profile first.
 
 ## RC24 catalog, scheduling, effort, and refresh safety
 
@@ -151,9 +186,12 @@ is based on the gateway, exact remote model ID, and available resource/source
 identity; genuine duplicate configured identities remain ambiguous and are not
 guessed.
 
-`@orchestrator <goal>` is the explicit one-step Mission entry from Pi's normal
-input surface. It creates a canonical draft Mission and shows the Goal, Status,
-and next action. Ordinary prompts remain ordinary Pi prompts; the marker must be
+`@orchestrator <goal>` is the explicit Mission entry from Pi's normal input
+surface. With a configured Boss profile it enters the same canonical goal loop
+as Smart Routing → Run as Mission/AUTO_MISSION: plan/decompose, dispatch
+Investigation/Implementation tasks through their existing pools, run M7
+Verification, evaluate acceptance, and repair/replan/reverify while bounded
+budgets remain. Ordinary prompts remain ordinary Pi prompts; the marker must be
 at the beginning (surrounding whitespace is allowed), and an empty marker asks
 for a goal.
 
@@ -174,9 +212,9 @@ require review. Implementation mutations require explicit local project trust;
 revoke trust immediately blocks future mutating runs. Config mutations use a
 cross-process lock, MissionStore leases require owner tokens, and analytics
 corruption degrades to diagnostics. These controls are not an OS/kernel
-sandbox. M10 does not add background workers, automatic Apply, autonomous Boss
-planning, parallel worktrees, or live-provider access. The M12 RC16 local
-candidate is installed only into isolated temporary Pi settings; it is not a
-public release. If the extension fails, remove or disable the candidate and
+sandbox. RC25 does not add background workers or parallel worktrees; Boss
+execution and Boss weight Apply remain explicit and bounded. The RC25 candidate
+is installed only into isolated temporary Pi settings until publication
+closure. If the extension fails, remove or disable the candidate and
 restore the prior pinned package, or use an external Codex/harness to inspect
 the repository without importing the extension.

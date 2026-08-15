@@ -378,3 +378,26 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   PMO gateway configuration exists; the cache binds to the upstream base URL
   until explicit PMO enablement creates route state. Periodic sync and runtime
   execution of newly discovered external models remain outside this repair.
+
+## ADR-042 — RC25 pins a weighted Boss per Mission
+
+- **Decision:** Represent Boss profiles as multiple validated route entries with
+  numeric weights and optional thinking policy. Select one eligible Boss once at
+  Mission start, persist the assignment before inference, and reuse it for all
+  normal planning, dispatch evaluation, repair/replan, verification
+  interpretation, and final goal decisions. A genuine infrastructure failure
+  may invoke an explicit fallback, which records the original and replacement
+  route and pins the replacement for the remainder of the Mission. Quality
+  rejection never rotates the Boss.
+- **Decision:** Use one bounded canonical goal loop for explicit
+  `@orchestrator` and Smart Routing Mission/AUTO_MISSION entries. Completion
+  requires the Boss acceptance decision plus execution and M7 Verification
+  evidence; recoverable failures replan/repair/reverify, while exhausted bounds
+  produce explicit blocked/review evidence. Boss analytics and weight
+  recommendations use the existing safe Recommendation architecture, and
+  recommendations require explicit user Apply.
+- **Rationale:** Mission continuity and attribution require one accountable Boss
+  across ordinary cycles. Separating infrastructure fallback from quality
+  escalation prevents silent model roulette, while bounded goal looping prevents
+  a finished child task or one-shot planner response from being mistaken for
+  Mission completion.

@@ -110,12 +110,23 @@ export interface RoleConfigV1 {
   resultSchemaId: StableId;
 }
 
+/** Boss-specific route policy; unlike worker pools it is pinned per Mission. */
+export interface BossRouteV1 {
+	routeId: StableId;
+	enabled: boolean;
+	thinkingEffort?: ThinkingEffort;
+	weight?: number;
+}
+
 export interface BossProfileV1 {
-  id: StableId;
-  displayName: string;
-  enabled: boolean;
-  routeIds: StableId[];
-  description?: string;
+	id: StableId;
+	displayName: string;
+	enabled: boolean;
+	routeIds: StableId[];
+	/** Additive RC25 shape; RC24 readers continue to use routeIds. */
+	entries?: BossRouteV1[];
+	schedulingPolicy?: PoolSchedulingPolicy;
+	description?: string;
 }
 
 export interface OperationalProfileV1 {

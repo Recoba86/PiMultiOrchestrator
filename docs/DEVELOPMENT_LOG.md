@@ -4,6 +4,26 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC25 — Operational Boss / Orchestrator
+
+- **Date/status:** 2026-08-15; `IMPLEMENTED / RELEASE CANDIDATE`, with RC24
+  remaining the prior public prerelease until the RC25 closure gates pass.
+- **Implementation:** Boss profiles now support multiple eligible routes with
+  bounded integer weights and per-route Thinking Effort. One weighted Boss is
+  selected and persisted per Mission, retained across all normal goal-loop
+  cycles, and replaced only by an explicit unused infrastructure fallback.
+  Explicit `@orchestrator` and Smart Routing Mission entry use the same
+  plan→dispatch→M7→evaluate→repair/replan loop with bounded terminal states.
+- **Analytics/recommendations:** assignment, fallback, terminal state, cycle,
+  repair, quality, duration, and authoritative usage metadata are persisted as
+  safe Mission analytics. Boss weight proposals use the existing
+  RecommendationApplicationService and remain manual-only/stale-checked.
+- **Coverage:** focused RC25 suites pass for migration, weighted distribution,
+  multi-cycle reject→repair→pass, pinned fallback, UI weighted presentation,
+  analytics persistence, and manual-only Boss recommendations. Full check,
+  exact artifact, public registry, GitHub prerelease, and isolated public Pi
+  runtime gates remain pending.
+
 ## RC24 — Model Router enablement hotfix
 
 - **Date/status:** 2026-08-15; `IMPLEMENTED / RELEASE CANDIDATE`, preserving the

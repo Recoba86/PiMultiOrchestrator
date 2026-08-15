@@ -148,6 +148,34 @@ test("scores and recommendations require evidence and do not mutate config", asy
 	const sink = new NoopAnalyticsSink(); sink.record(event("ignored"));
 });
 
+test("Boss weight recommendations are persisted as manual-only profile changes", async () => {
+	const events: AnalyticsEventV1[] = [];
+	for (const routeId of ["boss-a", "boss-b"] as const) {
+		for (let index = 0; index < 10; index += 1) events.push(event(`${routeId}-${index}`, { eventType: "attempt", missionId: `mission-${index}`, poolId: "boss", routeId, selectionKind: "scheduled", configuredWeight: routeId === "boss-a" ? 5 : 3, outcome: routeId === "boss-a" ? "completed" : "failed", durationMs: routeId === "boss-a" ? 10 : 100 }));
+	}
+	const summary = summarize(events);
+	const recommendation = new RecommendationEngine().generateBossWeightRebalance(summary, "boss-profile", { "boss-a": 5, "boss-b": 3 });
+	assert.ok(recommendation);
+	assert.equal(recommendation?.recommendationKind, "boss-weight-rebalance");
+	assert.equal(recommendation?.bossProfileId, "boss-profile");
+	const root = mkdtempSync(join(tmpdir(), "pmo-boss-recommendation-"));
+	const store = new SQLiteAnalyticsStore({ root, enabled: true });
+	store.saveRecommendation(recommendation!);
+	let updates = 0;
+	let appliedWeights: Readonly<Record<string, number>> | undefined;
+	const application = new RecommendationApplicationService(store, {
+		getPool: () => ({ poolId: "boss", entries: [] }),
+		moveRoute: async () => undefined,
+		getBossProfile: () => ({ profileId: "boss-profile", entries: [{ routeId: "boss-a", index: 0, weight: 5 }, { routeId: "boss-b", index: 1, weight: 3 }] }),
+		updateBossWeights: async (_profileId, weights) => { updates += 1; appliedWeights = weights; },
+	});
+	assert.equal(updates, 0);
+	assert.equal(await application.apply(recommendation!.recommendationId), "applied");
+	assert.equal(updates, 1);
+	assert.deepEqual(appliedWeights, recommendation?.proposedDiff.suggestedWeights);
+	store.close();
+});
+
 test("route buckets use one physical attempt when run and attempt events both exist", () => {
 	const summary = summarize([
 		event("run-1", { runId: "run-1", routeId: "route-b" }),

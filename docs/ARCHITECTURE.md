@@ -462,6 +462,31 @@ Boss infrastructure failure before side effects may route to the next Boss route
 
 The Boss may decide direct execution is cheaper/safer for a tiny task. Delegation is policy-driven, not mandatory ceremony.
 
+### 11.1 RC25 canonical goal loop and Boss assignment
+
+RC25 persists a weighted Boss profile as route entries with route capability and
+thinking policy. At Mission start the router selects one eligible Boss entry by
+weight, records the assignment before the first Boss inference, and reuses it for
+planning, task evaluation, replanning, repair, M7 result interpretation, and the
+final goal decision. Normal Mission cycles never reselect the Boss.
+
+The host owns the worker-pool and M7 execution boundaries; the Boss runtime owns
+the loop around them:
+
+```text
+goal -> plan -> dispatch Investigation/Implementation -> consume evidence
+     -> dispatch M7 Verification -> evaluate acceptance
+     -> pass: terminal decision
+     -> reject/failure: diagnose -> repair/replan -> verify again (bounded)
+```
+
+Only a genuine infrastructure failure may invoke Boss fallback. The fallback
+event records the original route, replacement route, failure class, and safe
+reason, then pins the replacement for the remaining Mission. Quality rejection
+does not rotate the Boss. The loop persists bounded cycle/repair dimensions and
+terminal analytics; it cannot mark completion from a single finished task or a
+Boss completion claim without execution and verification evidence.
+
 ## 12. Worker lifecycle
 
 ```text

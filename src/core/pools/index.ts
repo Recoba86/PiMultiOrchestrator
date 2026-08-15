@@ -1,6 +1,6 @@
 import { createDefaultConfig } from "../config/defaults.js";
 import { ConfigStore, type ConfigMutationResult } from "../config/store.js";
-import { MAX_POOL_ENTRY_WEIGHT, type ConfigV1, type PoolRouteV1, type PoolSchedulingPolicy, type RouteConfigV1, type StableId } from "../config/types.js";
+import { MAX_POOL_ENTRY_WEIGHT, type BossRouteV1, type ConfigV1, type PoolRouteV1, type PoolSchedulingPolicy, type RouteConfigV1, type StableId } from "../config/types.js";
 import { isSupportedThinkingEffort, isThinkingEffort, normalizeThinkingEffort, supportedThinkingEfforts, thinkingSupport, type ExplicitThinkingEffort, type ThinkingEffort, type ThinkingSupport } from "../thinking.js";
 import { CatalogCacheStore } from "../ninerouter/cache.js";
 import { normalizeNineRouterBaseUrl } from "../ninerouter/connection.js";
@@ -93,6 +93,11 @@ export interface PoolMutationResult extends ConfigMutationResult {
 export interface PoolWeightsMutationResult extends ConfigMutationResult {
 	readonly poolId: PoolId;
 	readonly weights: Readonly<Record<string, number>>;
+}
+
+export interface BossProfileView {
+	readonly profileId: string;
+	readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[];
 }
 
 export type PoolManagerErrorCode =
@@ -296,6 +301,33 @@ export class PoolManager {
 				entry.weight = weight;
 			}
 		}).then((result) => ({ ...result, poolId, weights: Object.fromEntries(Object.entries(weights).sort(([a], [b]) => a.localeCompare(b))) }));
+	}
+
+	async getBossProfile(profileId: string): Promise<BossProfileView> {
+		const context = await this.loadContext();
+		const profile = context.config.bossProfiles[profileId];
+		if (!profile) throw new PoolManagerError("configuration-unavailable", `Boss profile does not exist: ${profileId}`);
+		const entries = profile.entries ?? profile.routeIds.map((routeId): BossRouteV1 => ({ routeId, enabled: true, thinkingEffort: "max", weight: 1 }));
+		return { profileId, entries: entries.map((entry, index) => ({ routeId: entry.routeId, index, weight: entry.weight ?? 1 })) };
+	}
+
+	updateBossWeights(profileId: string, weights: Readonly<Record<string, number>>): Promise<ConfigMutationResult> {
+		return this.configStore.update((draft) => {
+			const profile = draft.bossProfiles[profileId];
+			if (!profile) throw new PoolManagerError("configuration-unavailable", `Boss profile does not exist: ${profileId}`);
+			const entries = profile.entries ?? profile.routeIds.map((routeId): BossRouteV1 => ({ routeId, enabled: true, thinkingEffort: "max", weight: 1 }));
+			const expected = new Set(entries.map((entry) => entry.routeId));
+			const supplied = Object.keys(weights);
+			if (supplied.length !== expected.size || supplied.some((routeId) => !expected.has(routeId as StableId))) throw new PoolManagerError("route-not-in-pool", `Weight update does not match Boss profile membership`, { routeId: profileId });
+			for (const entry of entries) {
+				const weight = weights[entry.routeId];
+				if (weight === undefined || !Number.isSafeInteger(weight) || weight < 0 || weight > MAX_POOL_ENTRY_WEIGHT) throw new PoolManagerError("invalid-weight", `Weight must be an integer from 0 to ${MAX_POOL_ENTRY_WEIGHT}`, { routeId: entry.routeId });
+				entry.weight = weight;
+			}
+			profile.entries = entries;
+			profile.routeIds = entries.map((entry) => entry.routeId);
+			profile.schedulingPolicy = "weighted";
+		});
 	}
 
 	private reorder(poolId: PoolId, routeId: StableId, target: number | "up" | "down"): Promise<PoolMutationResult> {

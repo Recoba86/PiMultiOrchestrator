@@ -620,7 +620,7 @@ M8 acceptance note: STATE-8 records `134/134 PASS` and the actual Pi/fake-gatewa
 
 - **Level:** U/P, fixture-v1
 - **Action:** open `/orchestrator` through Pi native TUI/RPC selectors and inspect the dashboard, each top-level section, deferred boundaries, state labels, and Back/Esc behavior.
-- **Pass:** exactly twelve required sections appear in order; dashboard metadata is safe and textual; accepted domain views remain reachable; Boss/deferred engines say `Not implemented yet` or `Planned`; empty/stale/error/busy states are explicit; direct commands and explicit recommendation actions remain compatible; no automatic Apply or priority mutation occurs.
+- **Pass:** exactly twelve required sections appear in order; dashboard metadata is safe and textual; accepted domain views remain reachable; unavailable runtime dependencies use truthful `Not implemented yet`/`Planned` state while configured RC25 Boss profiles expose their editor; empty/stale/error/busy states are explicit; direct commands and explicit recommendation actions remain compatible; no automatic Apply or priority mutation occurs.
 
 ### OBS-01 — Active mission visibility
 
@@ -1216,3 +1216,50 @@ requirements and remain future work.
   full `npm run check`, detached release verification, exact artifact binding,
   `next`-only publication, unchanged `latest`, GitHub prerelease, and public
   install/dogfood all pass.
+
+## RC25 — Operational Boss profiles and goal-oriented Mission loop
+
+### RC25-01 — Weighted Boss profile and independent Pool scheduling
+
+- **Level:** U/I
+- **Setup:** configure three eligible Boss routes with weights `5`, `3`, and
+  `2`, plus independent Investigation, Implementation, and Verification Pools.
+- **Action:** launch multiple Missions and inspect assignment and worker routing.
+- **Pass:** Boss assignments distribute according to the configured weighted
+  policy with zero-weight routes excluded; each Mission has one persisted Boss
+  assignment; worker Pool weighted scheduling remains independent and unchanged.
+
+### RC25-02 — Multi-cycle goal loop and shared Mission entry
+
+- **Level:** I/P, fake Pi runtime
+- **Setup:** a Mission requires implementation and M7 Verification; the first
+  implementation is incomplete and the first verification rejects it.
+- **Action:** launch once through `@orchestrator <goal>` and once through Smart
+  Routing → Run as Mission/AUTO_MISSION.
+- **Pass:** both entries use the same canonical lifecycle: plan, dispatch,
+  consume evidence, verify, diagnose/replan, repair, reverify, and only then
+  complete after goal and acceptance criteria pass. A completed task or Boss
+  completion claim alone never completes the Mission.
+
+### RC25-03 — Boss pinning, infrastructure fallback, and terminal bounds
+
+- **Level:** I
+- **Setup:** run one Mission through multiple reject/repair cycles, then inject
+  a genuine infrastructure failure for its assigned Boss route.
+- **Action:** continue orchestration and inspect canonical state and analytics.
+- **Pass:** the original Boss route remains stable across normal cycles; fallback
+  records original, replacement, failure class, and reason, then pins the
+  replacement without random re-rotation. Recoverable failures continue through
+  bounded repair/retry/replan paths; only `COMPLETED`, `BLOCKED`,
+  `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP` is terminal, and a bound hit is
+  explicit blocked/review evidence rather than false completion.
+
+### RC25-04 — Persisted Boss analytics and manual recommendations
+
+- **Level:** I/U
+- **Action:** reopen the analytics store after Missions with assignment,
+  fallback, verification, repair-cycle, terminal, elapsed-time, and authoritative
+  usage metadata; generate a Boss weight recommendation and inspect Apply flow.
+- **Pass:** bounded safe dimensions and outcome analytics persist by Mission;
+  recommendation evidence uses the canonical architecture; generation/viewing
+  does not mutate weights, and only explicit Apply changes the Boss profile.

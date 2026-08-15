@@ -12,16 +12,17 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.24` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.24` prerelease |
-| Development manifest version | `0.1.0-rc.24` — RC24 Model Router enablement hotfix |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.24` — npm `next` until RC25 closure; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.25` prerelease candidate |
+| Development manifest version | `0.1.0-rc.25` — RC25 Operational Boss / Orchestrator |
+| RC25 release line | Weighted multi-route Boss profiles, one pinned Boss per Mission, bounded goal-loop repair/replan, explicit infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations |
 | RC24 release line | Model Router rows show `[x]` for enabled PMO routes and `[ ]` for discovered-but-disabled routes; Enter opens the existing action menu and persistence path |
 | RC22 local candidate | Canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`; artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; not published |
 | RC20 release | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; published prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC21 published and publicly dogfooded as a prerelease; not stable/production-ready |
+| Local technical release readiness | RC25 implementation and focused acceptance PASS; exact release artifact, public registry, GitHub, and public Pi evidence pending |
 | Release tag | `v0.1.0-rc.21` → `68c0c0f82c5c82d7944512ea64aadd05a2e4569e` |
 | Release commit | `68c0c0f82c5c82d7944512ea64aadd05a2e4569e` |
 | GitHub release | [v0.1.0-rc.21](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.21) — prerelease |
@@ -31,6 +32,36 @@ This file records releasable product state. It does not promote development prog
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC25 Operational Boss / Orchestrator candidate
+
+RC25 is the current implementation candidate. RC24 remains the public npm
+prerelease under `next` until the exact RC25 artifact is frozen and the
+publication gates pass.
+
+- **Configuration:** Boss profiles retain `routeIds` import compatibility and
+  add multiple enabled route entries with Thinking Effort, integer weights, and
+  weighted policy. The Control Center displays canonical model labels and
+  keeps stable route IDs in Inspect/configuration.
+- **Canonical lifecycle:** explicit `@orchestrator <goal>` and Smart Routing
+  Run as Mission/AUTO_MISSION call the same bounded Boss goal loop. It selects
+  one weighted Boss per Mission, persists the assignment, dispatches existing
+  Investigation/Implementation work, consumes M7 Verification, and replans or
+  repairs after rejection/failure. Completion requires acceptance plus durable
+  task execution and M7 pass evidence; bounds end in explicit review/user or
+  blocked state.
+- **Fallback/analytics:** only genuine Boss infrastructure failure may select
+  an unused configured fallback, which remains pinned and records the original,
+  replacement, and reason. Mission analytics persist assignment, fallback,
+  terminal state, cycles, repair cycles, quality outcomes, elapsed time, and
+  observed Boss usage without prompts or secrets.
+- **Recommendations:** the existing recommendation architecture can generate
+  sample-gated Boss weight proposals. No proposal auto-applies; the user must
+  explicitly Apply, and the active profile is stale-checked first.
+- **Focused evidence:** RC25 Boss runtime, weighted profile UI, analytics, and
+  recommendation tests pass. The clean repository check, exact package
+  artifact, npm/GitHub publication, public registry verification, and isolated
+  public Pi install/upgrade evidence remain release gates.
 
 ## RC22 local candidate — Canonical model selector presentation
 

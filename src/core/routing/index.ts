@@ -336,14 +336,20 @@ function weightedSelection(
 	request: RoutingRequest,
 ): { readonly candidate: RoutingCandidate; readonly evaluation: CandidateEvaluation } | undefined {
 	const key = request.schedulingKey ?? `${request.poolId}:${toIso(request.now)}`;
-	let selected: { candidate: RoutingCandidate; evaluation: CandidateEvaluation; score: number } | undefined;
-	for (const item of eligible) {
-		const weight = item.candidate.weight ?? 1;
+	const selected = selectWeightedRoute(eligible.map((item) => item.candidate), key);
+	return selected === undefined ? undefined : eligible.find((item) => item.candidate.routeId === selected.routeId);
+}
+
+/** Deterministic weighted rendezvous selection for non-worker callers. */
+export function selectWeightedRoute<T extends { readonly routeId: StableId; readonly weight?: number }>(candidates: readonly T[], schedulingKey: string): T | undefined {
+	let selected: { readonly candidate: T; readonly score: number; readonly index: number } | undefined;
+	for (const [index, candidate] of candidates.entries()) {
+		const weight = candidate.weight ?? 1;
 		if (!Number.isSafeInteger(weight) || weight <= 0) continue;
-		const score = rendezvousScore(`${key}:${item.candidate.routeId}`, weight);
-		if (!selected || score < selected.score || (score === selected.score && item.candidate.poolPosition < selected.candidate.poolPosition)) selected = { ...item, score };
+		const score = rendezvousScore(`${schedulingKey}:${candidate.routeId}`, weight);
+		if (!selected || score < selected.score || (score === selected.score && index < selected.index)) selected = { candidate, score, index };
 	}
-	return selected;
+	return selected?.candidate;
 }
 
 /** Weighted rendezvous sampling keeps selection deterministic without a persisted cursor. */

@@ -201,7 +201,8 @@ export interface AnalyticsRecommendation {
   readonly recommendationId: string;
   readonly poolId: string;
   readonly proposedRouteId: string;
-  readonly recommendationKind?: "priority" | "weight-rebalance";
+	readonly recommendationKind?: "priority" | "weight-rebalance" | "boss-weight-rebalance";
+	readonly bossProfileId?: string;
   readonly baselineRouteId?: string;
   readonly sampleSize: number;
   readonly from?: string;
@@ -231,18 +232,30 @@ export interface AnalyticsStoreAdapter {
 export type AnalyticsStore = AnalyticsStoreAdapter;
 
 export interface RecommendationPoolManager {
-  getPool(poolId: string): Promise<{ readonly poolId: string; readonly schedulingPolicy?: PoolSchedulingPolicy; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] }> | { readonly poolId: string; readonly schedulingPolicy?: PoolSchedulingPolicy; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] };
-  moveRoute(poolId: string, routeId: string, targetIndex: number): Promise<unknown> | unknown;
-  updatePoolWeights?(poolId: string, weights: Readonly<Record<string, number>>): Promise<unknown> | unknown;
+	getPool(poolId: string): Promise<{ readonly poolId: string; readonly schedulingPolicy?: PoolSchedulingPolicy; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] }> | { readonly poolId: string; readonly schedulingPolicy?: PoolSchedulingPolicy; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] };
+	moveRoute(poolId: string, routeId: string, targetIndex: number): Promise<unknown> | unknown;
+	updatePoolWeights?(poolId: string, weights: Readonly<Record<string, number>>): Promise<unknown> | unknown;
+	getBossProfile?(profileId: string): Promise<{ readonly profileId: string; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] }> | { readonly profileId: string; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] };
+	updateBossWeights?(profileId: string, weights: Readonly<Record<string, number>>): Promise<unknown> | unknown;
 }
 
 export class RecommendationApplicationService {
   constructor(private readonly store: AnalyticsStoreAdapter, private readonly pools: RecommendationPoolManager) {}
 
-  async apply(recommendationId: string): Promise<"applied" | "stale" | "unavailable"> {
-    const recommendation = this.store.listRecommendations().find((item) => item.recommendationId === recommendationId);
-    if (!recommendation || recommendation.status !== "proposed") return "unavailable";
-    const pool = await this.pools.getPool(recommendation.poolId);
+	async apply(recommendationId: string): Promise<"applied" | "stale" | "unavailable"> {
+		const recommendation = this.store.listRecommendations().find((item) => item.recommendationId === recommendationId);
+		if (!recommendation || recommendation.status !== "proposed") return "unavailable";
+		if (recommendation.recommendationKind === "boss-weight-rebalance") {
+			const profileId = recommendation.bossProfileId ?? (typeof recommendation.proposedDiff.bossProfileId === "string" ? recommendation.proposedDiff.bossProfileId : undefined);
+			const baselineWeights = safeWeightMap(recommendation.proposedDiff.baselineWeights);
+			const suggestedWeights = safeWeightMap(recommendation.proposedDiff.suggestedWeights);
+			if (!profileId || !baselineWeights || !suggestedWeights || !this.pools.getBossProfile || !this.pools.updateBossWeights || !this.store.updateRecommendationStatus) return "unavailable";
+			const profile = await this.pools.getBossProfile(profileId);
+			if (!sameWeightMap(profile.entries, baselineWeights) || !sameEntrySet(profile.entries, suggestedWeights)) return "stale";
+			await this.pools.updateBossWeights(profileId, suggestedWeights);
+			return this.store.updateRecommendationStatus(recommendationId, "applied") ? "applied" : "unavailable";
+		}
+		const pool = await this.pools.getPool(recommendation.poolId);
     const baselineWeights = safeWeightMap(recommendation.proposedDiff.baselineWeights);
     const suggestedWeights = safeWeightMap(recommendation.proposedDiff.suggestedWeights);
     if (recommendation.recommendationKind === "weight-rebalance" || suggestedWeights !== undefined) {
@@ -354,10 +367,24 @@ const safeDimensions = (dimensions: AnalyticsEventV1["dimensions"]): AnalyticsEv
 	const fixture = boolValue(dimensions.fixture);
 	const fallbackCount = numberValue(dimensions.fallbackCount);
 	const reviewerRouteId = safeMetadataText(dimensions.reviewerRouteId, 64);
-	return fixture === undefined && fallbackCount === undefined && reviewerRouteId === undefined ? undefined : {
+	const bossAssigned = boolValue(dimensions.bossAssigned);
+	const bossFallback = boolValue(dimensions.bossFallback);
+	const bossCycle = numberValue(dimensions.bossCycle);
+	const bossRepairCycles = numberValue(dimensions.bossRepairCycles);
+	const bossProfileId = safeMetadataText(dimensions.bossProfileId, 64);
+	const bossTerminalState = dimensions.bossTerminalState === "COMPLETED" || dimensions.bossTerminalState === "BLOCKED" || dimensions.bossTerminalState === "AWAITING_USER" ? dimensions.bossTerminalState : undefined;
+	const bossVerificationOutcome = dimensions.bossVerificationOutcome === "pass" || dimensions.bossVerificationOutcome === "reject" || dimensions.bossVerificationOutcome === "blocked" ? dimensions.bossVerificationOutcome : undefined;
+	return fixture === undefined && fallbackCount === undefined && reviewerRouteId === undefined && bossAssigned === undefined && bossFallback === undefined && bossCycle === undefined && bossRepairCycles === undefined && bossProfileId === undefined && bossTerminalState === undefined && bossVerificationOutcome === undefined ? undefined : {
 		...(fixture === undefined ? {} : { fixture }),
 		...(fallbackCount === undefined ? {} : { fallbackCount }),
 		...(reviewerRouteId === undefined ? {} : { reviewerRouteId }),
+		...(bossAssigned === undefined ? {} : { bossAssigned }),
+		...(bossFallback === undefined ? {} : { bossFallback }),
+		...(bossCycle === undefined ? {} : { bossCycle }),
+		...(bossRepairCycles === undefined ? {} : { bossRepairCycles }),
+		...(bossProfileId === undefined ? {} : { bossProfileId }),
+		...(bossTerminalState === undefined ? {} : { bossTerminalState }),
+		...(bossVerificationOutcome === undefined ? {} : { bossVerificationOutcome }),
 	};
 };
 
@@ -424,7 +451,7 @@ const safeRecommendation = (recommendation: AnalyticsRecommendation): AnalyticsR
   const list = (value: unknown, max: number): readonly string[] => Array.isArray(value) ? value.slice(0, 16).map((item) => safeMetadataText(item, max)).filter((item): item is string => item !== undefined) : [];
   const proposedDiff: Record<string, unknown> = {};
   const diff = isRecord(recommendation.proposedDiff) ? recommendation.proposedDiff : {};
-  for (const key of ["poolId", "routeId"] as const) {
+	for (const key of ["poolId", "routeId", "bossProfileId"] as const) {
     const value = safeMetadataText(diff[key], 64);
     if (value !== undefined) proposedDiff[key] = value;
   }
@@ -441,12 +468,14 @@ const safeRecommendation = (recommendation: AnalyticsRecommendation): AnalyticsR
   const baselineRouteId = safeMetadataText(recommendation.baselineRouteId, 64);
   const from = safeMetadataText(recommendation.from, 64);
   const to = safeMetadataText(recommendation.to, 64);
-  const recommendationKind = recommendation.recommendationKind === "priority" || recommendation.recommendationKind === "weight-rebalance" ? recommendation.recommendationKind : undefined;
-  return {
-    recommendationId, poolId, proposedRouteId, sampleSize, score, formulaVersion, status,
-    ...(recommendationKind === undefined ? {} : { recommendationKind }),
+	const recommendationKind = recommendation.recommendationKind === "priority" || recommendation.recommendationKind === "weight-rebalance" || recommendation.recommendationKind === "boss-weight-rebalance" ? recommendation.recommendationKind : undefined;
+	const bossProfileId = safeMetadataText(recommendation.bossProfileId, 64);
+	return {
+		recommendationId, poolId, proposedRouteId, sampleSize, score, formulaVersion, status,
+		...(recommendationKind === undefined ? {} : { recommendationKind }),
+		...(bossProfileId === undefined ? {} : { bossProfileId }),
     ...(baselineRouteId === undefined ? {} : { baselineRouteId }),
-    ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }),
+		...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }),
     evidence: list(recommendation.evidence, 256), limitations: list(recommendation.limitations, 256), proposedDiff,
   };
 };
@@ -639,6 +668,21 @@ export class RecommendationEngine {
     const normalizedSuggested = Object.fromEntries(Object.entries(suggestedWeights).sort(([a], [b]) => a.localeCompare(b)));
     const recommendationId = `rec-${createHash("sha256").update(`${poolId}:weight-rebalance:${JSON.stringify(baselineWeights)}:${JSON.stringify(normalizedSuggested)}:${from ?? ""}:${to ?? ""}`).digest("hex").slice(0, 16)}`;
     return { recommendationId, poolId, proposedRouteId: top.route.routeId, recommendationKind: "weight-rebalance", sampleSize: Math.min(...routes.map((route) => route.runs)), ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }), score: top.score, formulaVersion: "weight-rebalance-v1", evidence: ["comparable routes each have at least 10 observed attempts", ...scored.map((item) => `${item.route.routeId}: reliability ${Math.round(item.reliability * 100)}%, quality ${Math.round(item.qualityRatio * 100)}%, repair ${Math.round(item.repairRate * 100)}%, latency ${Math.round(item.latencyMs)}ms`)], limitations: ["weights are a conservative heuristic, not an autonomous policy", "quality evidence is unavailable when no durable quality decisions exist", "recommendation does not inspect billing, subscriptions, or live quota"], proposedDiff: { poolId, routeId: top.route.routeId, baselineWeights, suggestedWeights: normalizedSuggested }, status: "proposed" };
+  }
+
+  generateBossWeightRebalance(summary: AnalyticsSummary, profileId: string, currentWeights: Readonly<Record<string, number>>, options: { readonly range?: AnalyticsRange } = {}): AnalyticsRecommendation | undefined {
+	const base = this.generateWeightRebalance(summary, "boss", currentWeights, options);
+	if (!base) return undefined;
+	const bossProfileId = profileId.trim();
+	if (!bossProfileId) return undefined;
+	const recommendationId = `rec-${createHash("sha256").update(`boss:${bossProfileId}:${base.recommendationId}`).digest("hex").slice(0, 16)}`;
+	return {
+		...base,
+		recommendationId,
+		recommendationKind: "boss-weight-rebalance",
+		bossProfileId,
+		proposedDiff: { ...base.proposedDiff, poolId: "boss", bossProfileId },
+	};
   }
 }
 
