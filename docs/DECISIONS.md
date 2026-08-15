@@ -405,3 +405,27 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   Implementation, and Verification retain independent per-task/run scheduling;
   route identity remains exact internally; and contextual/central
   recommendations share canonical, sample/stale-safe state with explicit Apply.
+
+## ADR-043 — RC26 records CANCELLED and SAFETY_STOP without a new MissionStatus
+
+- **Decision:** Keep the RC25 canonical goal loop and once-per-Mission pinned
+  Boss. Add first-class orchestration terminals `CANCELLED` and `SAFETY_STOP`
+  beside `COMPLETED`, `BLOCKED`, and `AWAITING_USER`. Persist cancellation as
+  MissionStatus `cancelled`. Persist safety-stop as MissionStatus `blocked`
+  plus explicit `plan.orchestration.terminal = "SAFETY_STOP"` and a bounded
+  sanitized provenance from the existing M10 trust/path/command safety errors.
+  Do not add a new persistent MissionStatus for safety-stop.
+- **Decision:** Cancellation and safety-stop are never infrastructure fallback
+  reasons, never quality escalation, never false `COMPLETED`, and never
+  continue repair/replan. Analytics retain `bossTerminalState` including
+  `CANCELLED` and `SAFETY_STOP`.
+- **Decision:** Runtime package metadata is derived from the nearest
+  `pi-multi-orchestrator` package.json. The development-line title is keyed by
+  that version; unknown versions fail closed as `stale-development-line:*`.
+  `latestAcceptedMilestone` remains M10 and `productionReady` remains false.
+- **Rationale:** Operators and diagnostics need truthful terminal classification
+  without a schema migration or a second safety system. Package metadata must
+  not silently advertise an older development line after the manifest advances.
+- **Boundary:** RC26 prepares `0.1.0-rc.26` in source only. Publication, tags,
+  npm dist-tags, and GitHub Releases remain a separate operator-owned step.
+  RC25 remains the public prerelease until that step occurs.

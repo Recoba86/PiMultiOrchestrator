@@ -432,6 +432,35 @@ release verification (`20/20` integrity attacks), and isolated public Pi
 `0.84.1` fresh-install/RC24→RC25 upgrade gates all pass. The release remains
 a prerelease and is not a production-readiness claim.
 
+## RC26 — Goal Terminal Semantics & Runtime Metadata Correctness
+
+Status: IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or
+production-ready. RC25 remains the current public prerelease.
+
+Deliverables:
+
+- first-class Boss-loop terminals for `CANCELLED` and `SAFETY_STOP` alongside
+  existing `COMPLETED`, `BLOCKED`, and `AWAITING_USER`, without redesigning the
+  RC25 goal loop or weighted once-per-Mission Boss pinning;
+- cancellation as a real terminal path during planning, worker progression,
+  verification, and evaluation: durable MissionStatus `cancelled`, no false
+  completion, no ordinary BLOCKED, no infrastructure fallback, no quality
+  escalation, and no repair/replan continuation;
+- `SAFETY_STOP` distinguished from business BLOCKED via orchestration
+  `terminal: "SAFETY_STOP"` metadata while preserving MissionStatus `blocked`
+  (no new persistent MissionStatus); uses the existing trust/path/command
+  safety boundary;
+- truthful runtime package metadata keyed by `package.json` version `0.1.0-rc.26`,
+  with `latestAcceptedMilestone` remaining M10 and `productionReady` remaining
+  false; unknown versions fail closed as `stale-development-line:*`;
+- retained entrypoint convergence for `@orchestrator` and Smart Routing
+  Run as Mission/AUTO_MISSION into the same canonical Boss loop.
+
+Exit evidence: focused Boss terminal, package-info, and entrypoint suites plus
+the repository `npm run check` gate. Publication, tagging, npm dist-tags, and
+GitHub Release remain operator-owned and are not part of this source
+preparation.
+
 ## Historical RC24 — Model Router enablement hotfix
 
 Status: IMPLEMENTED / RELEASE CANDIDATE; preserves RC23 weighted scheduling and

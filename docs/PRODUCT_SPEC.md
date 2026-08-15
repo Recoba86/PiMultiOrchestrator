@@ -364,7 +364,13 @@ state. Boss performance recommendations use observed Mission evidence with
 sample and staleness safeguards and never auto-apply.
 
 The loop MUST use bounded repair/retry/cycle controls and MUST stop only as
-`COMPLETED`, `BLOCKED`, `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP`. A failed
+`COMPLETED`, `BLOCKED`, `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP`.
+Cancellation MUST persist MissionStatus `cancelled` and MUST NOT complete,
+become ordinary `BLOCKED`, trigger infrastructure fallback, escalate quality,
+or continue repair/replan. `SAFETY_STOP` MUST remain distinguishable from a
+business `BLOCKED` through persisted Boss orchestration `terminal: "SAFETY_STOP"`
+metadata; it MAY reuse MissionStatus `blocked` for compatibility and MUST NOT
+add a new persistent MissionStatus unless the Mission schema requires one. A failed
 worker, rejected verification, incomplete implementation, malformed evidence, or
 recoverable provider failure MUST continue through a valid repair path when one
 exists and MUST never be treated as completion.

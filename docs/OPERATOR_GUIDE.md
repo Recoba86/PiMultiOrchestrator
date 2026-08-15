@@ -1,8 +1,10 @@
 # Pi Multi-Orchestrator operator guide
 
 This guide describes the Control Center in Pi `0.84.1`. RC25 is the current
-public `next`-tagged prerelease; RC24 is superseded. Neither is a stable or
-production release. Local validation
+public `next`-tagged prerelease; RC24 is superseded. Source currently also
+prepares RC26 (`0.1.0-rc.26`) as implemented / pre-release ready; that
+candidate is not public until the operator publishes it. None of these are a
+stable or production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
 
@@ -163,7 +165,11 @@ the same canonical loop. The Boss plans, dispatches existing worker pools,
 consumes bounded results, invokes M7 Verification, and evaluates the goal and
 acceptance criteria. Rejection or recoverable failure causes bounded
 replan/repair/reverification. A safety bound ends in explicit
-`AWAITING_USER`/review evidence rather than a false completion. Only a genuine
+`AWAITING_USER`/review evidence rather than a false completion. User or
+AbortSignal cancellation ends as `cancelled` and does not complete, fall back,
+or continue repair. A trust/path/command safety stop keeps the Mission
+`blocked` but records a distinct `SAFETY_STOP` orchestration terminal so it is
+not mistaken for a business dependency block. Only a genuine
 Boss infrastructure failure can select an unused configured fallback; the
 replacement remains pinned and the original/replacement/reason is recorded.
 

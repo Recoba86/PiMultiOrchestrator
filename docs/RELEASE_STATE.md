@@ -14,7 +14,8 @@ This file records releasable product state. It does not promote development prog
 | Public stable release | NONE |
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.25` — npm `next`; `latest` remains `0.1.0-rc.17` |
 | Product version | `0.1.0-rc.25` public prerelease |
-| Development manifest version | `0.1.0-rc.25` — RC25 Operational Boss / Orchestrator |
+| Development manifest version | `0.1.0-rc.26` — RC26 Goal Terminal Semantics & Runtime Metadata Correctness; not public |
+| RC26 local candidate | Goal terminal CANCELLED/SAFETY_STOP plus truthful runtime package metadata; implemented / pre-release ready; not published |
 | RC25 release line | Weighted multi-route Boss profiles, one pinned Boss per Mission, bounded goal-loop repair/replan, explicit infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations |
 | RC24 release line | Model Router rows show `[x]` for enabled PMO routes and `[ ]` for discovered-but-disabled routes; Enter opens the existing action menu and persistence path |
 | RC22 local candidate | Canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`; artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; not published |
@@ -22,7 +23,7 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC25 release closure PASS; public artifact, registry, GitHub, and isolated public Pi evidence verified |
+| Local technical release readiness | RC26 IMPLEMENTED / PRE-RELEASE READY in source; RC25 remains the verified public prerelease |
 | Release tag | `v0.1.0-rc.25` → `52b665f6ace6eec078cbe8a28c35cce36a9cb045` |
 | Release commit | `52b665f6ace6eec078cbe8a28c35cce36a9cb045` |
 | Release artifact | `pi-multi-orchestrator-0.1.0-rc.25.tgz`; SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5` |
@@ -75,6 +76,27 @@ production-ready; `latest` remains `0.1.0-rc.17`.
   sections, Diagnostics, candidate identity, and untrusted-by-default state
   passed through offline RPC. No live Pi configuration or provider/model call
   was used.
+
+## RC26 Goal Terminal Semantics & Runtime Metadata Correctness — pre-release ready
+
+RC26 is implemented in source and prepared as `0.1.0-rc.26`. It is **not**
+public, tagged, npm-published, or a GitHub Release. RC25 remains the current
+public prerelease until the operator performs publication from a later explicit
+procedure.
+
+- **Terminals:** `runMissionGoalLoop` now returns a first-class `terminal` of
+  `COMPLETED`, `BLOCKED`, `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP`.
+  Cancellation persists MissionStatus `cancelled`. `SAFETY_STOP` preserves
+  MissionStatus `blocked` and records orchestration `terminal: "SAFETY_STOP"`
+  with a bounded sanitized provenance from the existing trust/path/command
+  safety boundary. Cancellation and safety-stop never complete, never fall
+  back, and never continue repair/replan or quality escalation.
+- **Metadata:** runtime `package-info` walks to the authoritative
+  `pi-multi-orchestrator` package.json. The RC26 development line is keyed by
+  `0.1.0-rc.26`; unknown versions fail closed as `stale-development-line:*`.
+  `latestAcceptedMilestone` remains M10; `productionReady` remains false.
+- **Publication:** none. No `v0.1.0-rc.26` tag, npm dist-tag, or GitHub Release
+  exists for this candidate at handoff.
 
 ## Historical RC22 local candidate — Canonical model selector presentation
 
@@ -248,7 +270,7 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
 - Broader autonomous mission decomposition/scheduling beyond the bounded RC25 loop, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and stable production release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
 - RC25 public Pi evidence passed in isolated offline Pi `0.84.1` RPC, including the dashboard, all twelve Control Center sections, Diagnostics, package identity, and untrusted-by-default behavior. This is prerelease evidence, not a stable or production-ready claim.
-- The MissionStore supports `cancelled`, but the current Boss loop result path only returns completed, blocked, or awaiting-review; a distinct Boss-loop `CANCELLED`/`SAFETY_STOP` path is not evidenced in RC25 and remains an explicit runtime follow-up. This documentation mission does not change runtime code.
+- RC25 public evidence did not include a distinct Boss-loop `CANCELLED`/`SAFETY_STOP` path. RC26 source now implements those terminals and truthful runtime package metadata; RC26 is pre-release ready and not public. The published RC25 package is unchanged.
 - Historical M11 RC.8 Computer-Use dogfood and canonical M7 real-route verification passed; final human sanity smoke, live metadata limits, and Planner acceptance remain open validation. RC15 is historical; RC16 detached verification passed.
 - M12.1 RC.9 changes are historical local evidence. RC17 was the public prerelease for the combined M12 final acceptance; RC25 is the current public prerelease. M12.2 RC.11 and M12.3 RC.12 remain historical local candidates, and M10 remains the latest accepted development milestone.
 - M12.2 and M12 final live-route triage were executed only through the secure auth bridge and disposable roots. The user Pi configuration, provider account, Keychain, credential values, and source checkout were not modified. The M12 final routing gate passed locally on RC13; RC16 carries the follow-on M12.1/M7/recovery repairs. Stable production release remains separate.

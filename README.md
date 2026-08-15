@@ -5,7 +5,9 @@ Pi Multi-Orchestrator is a Pi extension for coordinating a bounded Boss Mission 
 ## Status
 
 RC25 (`0.1.0-rc.25`) is the current public prerelease on npm with `next`; RC24
-is superseded. `latest` remains `0.1.0-rc.17`. RC25 adds weighted,
+is superseded. `latest` remains `0.1.0-rc.17`. Source currently prepares RC26
+(`0.1.0-rc.26`) as implemented / pre-release ready; it is not published, tagged,
+or a GitHub Release. RC25 adds weighted,
 per-Mission Boss assignment and a
 bounded goal loop while retaining RC23's independent per-Pool Priority or
 Weighted Rotation scheduling, deterministic weighted route selection,
@@ -127,7 +129,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC25 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
+M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC25 is a public prerelease, not a stable or production release. RC26 is implemented / pre-release ready in source only. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 

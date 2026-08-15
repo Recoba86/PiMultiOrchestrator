@@ -1,4 +1,6 @@
-import { createRequire } from "node:module";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 interface PackageJson {
 	name?: unknown;
@@ -6,24 +8,43 @@ interface PackageJson {
 	engines?: { node?: unknown };
 }
 
-const requirePackage = createRequire(import.meta.url);
-
-function readPackageJson(): PackageJson {
-	try {
-		return requirePackage("../../package.json") as PackageJson;
-	} catch {
-		return {};
+function readNearestPackageJson(startDir: string): PackageJson {
+	let dir = startDir;
+	for (let depth = 0; depth < 8; depth += 1) {
+		const candidate = join(dir, "package.json");
+		if (existsSync(candidate)) {
+			try {
+				const parsed = JSON.parse(readFileSync(candidate, "utf8")) as PackageJson;
+				if (parsed.name === "pi-multi-orchestrator") return parsed;
+			} catch {
+				/* keep walking toward the package root */
+			}
+		}
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
 	}
+	return {};
 }
 
-const packageJson = readPackageJson();
+const packageJson = readNearestPackageJson(dirname(fileURLToPath(import.meta.url)));
+const packageVersion = typeof packageJson.version === "string" ? packageJson.version : "unknown";
+
+/** Development-line titles keyed by the authoritative package version. */
+const DEVELOPMENT_LINE_BY_VERSION: Readonly<Record<string, string>> = Object.freeze({
+	"0.1.0-rc.26": "RC26 — Goal Terminal Semantics & Runtime Metadata Correctness",
+});
+
+export function developmentLineForVersion(version: string): string {
+	return DEVELOPMENT_LINE_BY_VERSION[version] ?? `stale-development-line:${version}`;
+}
 
 export const PACKAGE_INFO = Object.freeze({
 	name: typeof packageJson.name === "string" ? packageJson.name : "pi-multi-orchestrator",
-	version: typeof packageJson.version === "string" ? packageJson.version : "unknown",
+	version: packageVersion,
 	releaseStatus: "candidate" as const,
 	latestAcceptedMilestone: "M10 — Safety and hardening",
-	developmentMilestone: "RC23 — Weighted Pool Scheduling and Data-Driven Weight Recommendations",
+	developmentMilestone: developmentLineForVersion(packageVersion),
 	developmentStatus: "implemented-but-not-accepted" as const,
 	productionReady: false,
 	piCompatibility: "0.84.1",

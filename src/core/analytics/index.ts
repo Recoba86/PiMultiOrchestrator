@@ -372,7 +372,7 @@ const safeDimensions = (dimensions: AnalyticsEventV1["dimensions"]): AnalyticsEv
 	const bossCycle = numberValue(dimensions.bossCycle);
 	const bossRepairCycles = numberValue(dimensions.bossRepairCycles);
 	const bossProfileId = safeMetadataText(dimensions.bossProfileId, 64);
-	const bossTerminalState = dimensions.bossTerminalState === "COMPLETED" || dimensions.bossTerminalState === "BLOCKED" || dimensions.bossTerminalState === "AWAITING_USER" ? dimensions.bossTerminalState : undefined;
+	const bossTerminalState = dimensions.bossTerminalState === "COMPLETED" || dimensions.bossTerminalState === "BLOCKED" || dimensions.bossTerminalState === "AWAITING_USER" || dimensions.bossTerminalState === "CANCELLED" || dimensions.bossTerminalState === "SAFETY_STOP" ? dimensions.bossTerminalState : undefined;
 	const bossVerificationOutcome = dimensions.bossVerificationOutcome === "pass" || dimensions.bossVerificationOutcome === "reject" || dimensions.bossVerificationOutcome === "blocked" ? dimensions.bossVerificationOutcome : undefined;
 	return fixture === undefined && fallbackCount === undefined && reviewerRouteId === undefined && bossAssigned === undefined && bossFallback === undefined && bossCycle === undefined && bossRepairCycles === undefined && bossProfileId === undefined && bossTerminalState === undefined && bossVerificationOutcome === undefined ? undefined : {
 		...(fixture === undefined ? {} : { fixture }),

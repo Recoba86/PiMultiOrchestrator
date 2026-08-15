@@ -4,6 +4,30 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC26 — Goal Terminal Semantics & Runtime Metadata Correctness
+
+- **Date/status:** 2026-08-15; `IMPLEMENTED / PRE-RELEASE READY`. Source is
+  prepared as `0.1.0-rc.26`. Not public, tagged, npm-published, accepted, or
+  production-ready. RC25 remains the public prerelease.
+- **Implementation:** the canonical Boss goal loop now records first-class
+  `CANCELLED` and `SAFETY_STOP` terminals. Cancellation persists MissionStatus
+  `cancelled` and stops dispatch, fallback, repair/replan, and quality
+  escalation. `SAFETY_STOP` keeps MissionStatus `blocked` with orchestration
+  `terminal: "SAFETY_STOP"` and bounded sanitized provenance from the existing
+  M10 trust/path/command safety boundary. Weighted once-per-Mission Boss
+  pinning, reject→repair→M7 pass, and infrastructure-only fallback are
+  unchanged. Runtime `package-info` now reports the RC26 development line from
+  package.json; `latestAcceptedMilestone` remains M10; `productionReady`
+  remains false.
+- **Coverage:** focused RC26 suites cover cancellation during planning, after
+  progress, during worker and verification progression, no-fallback/no-repair
+  cancellation, persisted cancelled status and terminal metadata, truthful
+  analytics, SAFETY_STOP vs BLOCKED, pinned Boss, infrastructure fallback,
+  pool scheduling independence, entrypoint convergence, and stale RC23
+  metadata rejection.
+- **Publication:** none. No `v0.1.0-rc.26` tag, npm dist-tag change, GitHub
+  Release, or live Pi installation change was performed.
+
 ## PMO canonical project-memory hardening
 
 - **Date/status:** 2026-08-15; documentation/project-memory mission, runtime

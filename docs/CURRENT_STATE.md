@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC25 is the public Operational Boss prerelease, and it is not stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC25 is the public Operational Boss prerelease; RC26 is implemented / pre-release ready in source and is not public; none of these are stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -33,6 +33,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
+| RC26 local candidate | `0.1.0-rc.26` — Goal Terminal Semantics & Runtime Metadata Correctness; implemented / pre-release ready in source; not tagged or published |
 | RC24 release line | `0.1.0-rc.24` — Model Router enablement status checkboxes layered over canonical rows; superseded public prerelease |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
@@ -72,6 +73,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
+| RC26 — Goal Terminal Semantics & Runtime Metadata Correctness | IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or production-ready |
 | RC25 — Operational Boss / Orchestrator | PUBLIC PRERELEASE / RELEASE CLOSURE PASS; not stable or production-ready |
 | RC24 — Model Router enablement hotfix | IMPLEMENTED / PRIOR PUBLIC PRERELEASE; superseded by the RC25 public prerelease |
 
@@ -95,6 +97,26 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   were used.
 - **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
   is a non-draft prerelease carrying the exact artifact and checksum.
+
+## RC26 implemented / pre-release ready
+
+- **Status:** `IMPLEMENTED / PRE-RELEASE READY`. Source is prepared as
+  `pi-multi-orchestrator@0.1.0-rc.26`. This is not a public prerelease, npm
+  publication, GitHub Release, or accepted development milestone.
+- **Runtime:** the canonical Boss goal loop now terminates as `COMPLETED`,
+  `BLOCKED`, `AWAITING_USER`, `CANCELLED`, or `SAFETY_STOP`. Cancellation
+  persists MissionStatus `cancelled` and never completes, blocks ordinarily,
+  falls back, or continues repair/replan. `SAFETY_STOP` keeps MissionStatus
+  `blocked` plus explicit orchestration `terminal: "SAFETY_STOP"` metadata so
+  UI/diagnostics/analytics can distinguish it from a business `BLOCKED`.
+- **Metadata:** `package-info` derives version from the nearest
+  `pi-multi-orchestrator` package.json and reports development line
+  `RC26 — Goal Terminal Semantics & Runtime Metadata Correctness`.
+  `latestAcceptedMilestone` remains `M10 — Safety and hardening`;
+  `productionReady` remains `false`.
+- **Publication boundary:** RC25 remains the current public prerelease.
+  `v0.1.0-rc.26` is not tagged, npm was not published, and the live Pi
+  installation was not modified.
 
 ## Historical RC18 real-world Pi/9Router compatibility repair
 
@@ -671,13 +693,12 @@ The live probe was skipped because credentials were not present in the Codex env
 
 Fake-gateway metadata behavior is not proof of live 9Router metadata.
 
-### RC25 cancellation and safety-stop boundary
+### RC25 public package versus RC26 source terminals
 
-The MissionStore supports `cancelled`, but the current `runMissionGoalLoop`
-implementation returns only `completed`, `blocked`, or `awaiting-review` and
-its focused RC25 evidence does not exercise a distinct Boss-loop
-`CANCELLED`/`SAFETY_STOP` result. This is a source/evidence gap, not a docs-only
-acceptance claim; this mission records it without changing runtime behavior.
+The published RC25 package still returns only completed/blocked/awaiting-review
+from its original Boss-loop evidence. RC26 source on `main` closes that gap
+with first-class `CANCELLED` and `SAFETY_STOP` terminals plus truthful runtime
+package metadata. RC26 is implemented / pre-release ready and is not public.
 
 ### MissionStore runtime compatibility
 

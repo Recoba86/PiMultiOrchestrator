@@ -478,13 +478,17 @@ goal -> plan -> dispatch Investigation/Implementation -> consume evidence
      -> dispatch M7 Verification -> evaluate acceptance
      -> pass: terminal decision
      -> reject/failure: diagnose -> repair/replan -> verify again (bounded)
+     -> user/AbortSignal cancellation: CANCELLED (MissionStatus cancelled)
+     -> existing trust/path/command safety stop: SAFETY_STOP
+       (MissionStatus blocked + orchestration.terminal = SAFETY_STOP)
 ```
 
 Only a genuine infrastructure failure may invoke Boss fallback. The fallback
 event records the original route, replacement route, failure class, and safe
-reason, then pins the replacement for the remaining Mission. Quality rejection
-does not rotate the Boss. The loop persists bounded cycle/repair dimensions and
-terminal analytics; it cannot mark completion from a single finished task or a
+reason, then pins the replacement for the remaining Mission. Quality rejection,
+cancellation, and safety-stop do not rotate the Boss. The loop persists bounded
+cycle/repair dimensions and terminal analytics, including `CANCELLED` and
+`SAFETY_STOP`; it cannot mark completion from a single finished task or a
 Boss completion claim without execution and verification evidence.
 
 The Boss is not an Implementation Worker. The Boss owns Mission-level
@@ -852,8 +856,13 @@ M11 packages the compiled host entrypoint through Pi's supported `pi-package`
 manifest. The release candidate uses a strict allowlist (`dist` JavaScript and
 declarations plus README), declares Pi `0.84.x` as a peer, and has no runtime
 npm dependencies or lifecycle hooks. `package-info` exposes version, release
-status, Pi compatibility, and schema versions from package metadata so an
-installed artifact does not shell out to Git.
+status, the current development line keyed by that package version, the latest
+accepted development milestone, Pi compatibility, and schema versions from
+package metadata so an installed artifact does not shell out to Git. A package
+version without a mapped development line fails closed as
+`stale-development-line:<version>` rather than silently retaining an older RC
+title. Public prerelease identity and accepted development milestone remain
+distinct; `productionReady` stays false until an authorized production release.
 
 The release workflow writes its immutable tarball, checksum, manifest,
 artifact-derived extracted directory, machine-readable upgrade/rollback

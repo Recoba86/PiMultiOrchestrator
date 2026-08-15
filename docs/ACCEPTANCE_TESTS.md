@@ -1256,6 +1256,41 @@ requirements and remain future work.
   rejection is recorded as quality escalation and does not emit or masquerade
   as infrastructure fallback.
 
+### RC26-01 — Cancellation is a truthful terminal path
+
+- **Level:** U
+- **Setup:** run the canonical Boss goal loop and inject AbortError/AbortSignal
+  during planning, after the Mission has started, during worker progression, and
+  during verification.
+- **Pass:** MissionStatus becomes `cancelled`; orchestration `terminal` is
+  `CANCELLED`; the result is not `completed`, ordinary `blocked`, or
+  infrastructure fallback; no further dispatch, Boss fallback, or repair/replan
+  occurs; bounded terminal reason is persisted; analytics outcome is `cancelled`
+  with `bossTerminalState=CANCELLED` when analytics is enabled.
+
+### RC26-02 — SAFETY_STOP is distinguishable from business BLOCKED
+
+- **Level:** U
+- **Setup:** one Mission returns Boss `blocked` for an external dependency;
+  another hits `ProjectTrustRequiredError` or `PathSafetyError` during worker
+  progression.
+- **Pass:** the business case terminals as `BLOCKED`. The safety case keeps
+  MissionStatus `blocked` but persists `terminal: "SAFETY_STOP"` and a bounded
+  provenance such as `PROJECT_TRUST_REQUIRED` or `CREDENTIAL_PATH`. No further
+  dispatch, fallback, replan, or success claim occurs. Analytics outcome is
+  `safety_stop` with `bossTerminalState=SAFETY_STOP`.
+
+### RC26-03 — Runtime package metadata stays bound to the current RC line
+
+- **Level:** U
+- **Setup:** load `PACKAGE_INFO` from compiled `dist`/`dist-test` output.
+- **Pass:** version equals `package.json` (`0.1.0-rc.26`); development line is
+  `RC26 — Goal Terminal Semantics & Runtime Metadata Correctness`; RC23 titles
+  are absent; `latestAcceptedMilestone` is M10; `productionReady` is false;
+  an unmapped version would report `stale-development-line:<version>` rather
+  than an older RC title. `@orchestrator` and Smart Routing Run as Mission
+  still enter the same canonical Boss loop.
+
 ### RC25-04 — Persisted Boss analytics and manual recommendations
 
 - **Level:** I/U

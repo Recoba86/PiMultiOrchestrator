@@ -828,7 +828,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /RC23 .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /RC26 .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);
@@ -1734,6 +1734,55 @@ describe("Pi 9Router host adapter", () => {
 			assert.equal((await healthStore.get("route-a" as StableId))?.circuit, "healthy");
 			assert.equal((await configStore.load()).snapshot?.generation, before.snapshot?.generation);
 		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][RC26] @orchestrator and Smart Routing Run as Mission enter the same canonical Boss loop", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-rc26-entry-"));
+		const store = createMissionStore({ root: join(root, "missions"), id: () => `rc26-${Date.now()}-${Math.random().toString(16).slice(2)}` });
+		const smartRoutingStore = new SmartRoutingSettingsStore({ root: join(root, "routing") });
+		const routingMemoryStore = new RoutingMemoryStore({ root: join(root, "memory"), id: (() => { let id = 0; return () => `rc26-rule-${++id}`; })(), now: () => "2026-08-15T00:00:00.000Z" });
+		const configStore = new ConfigStore({ root: join(root, "config") });
+		try {
+			await configStore.initialize(createDefaultConfig());
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store, smartRoutingStore, routingMemoryStore, configStore });
+			host.registerCommands();
+			const notifications: string[] = [];
+			const selections = ["Run as Mission", "Always orchestrate similar tasks"];
+			const ctx = {
+				cwd: "/private/tmp/pi-rc26-entry",
+				mode: "tui",
+				hasUI: true,
+				isIdle: () => true,
+				ui: {
+					select: async () => selections.shift(),
+					notify: (message: string) => notifications.push(message),
+				},
+			} as unknown as ExtensionContext;
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+
+			assert.deepEqual(await handleInput({ type: "input", text: "@orchestrator prove shared goal loop", source: "interactive" }, ctx), { action: "handled" });
+			const explicit = store.listMissions()[0];
+			assert.ok(explicit);
+			assert.equal(explicit.goal, "prove shared goal loop");
+			assert.notEqual(explicit.status, "completed");
+
+			const complexPrompt = "Fix the bug in src/auth.ts and add tests, then verify independently";
+			assert.deepEqual(await handleInput({ type: "input", text: complexPrompt, source: "interactive" }, ctx), { action: "handled" });
+			const similar = "Please repair the login bug in src/auth.ts, add regression tests, then verify independently";
+			assert.deepEqual(await handleInput({ type: "input", text: similar, source: "interactive" }, ctx), { action: "handled" });
+			assert.deepEqual(await handleInput({ type: "input", text: similar, source: "interactive" }, ctx), { action: "handled" });
+			assert.equal(store.listMissions().length, 4);
+			assert.ok(notifications.some((message) => message.includes("saved rule") || message.includes("learned preference") || /Routed to Mission/u.test(message)));
+			const runtimeNotices = notifications.filter((message) => /canonical Boss runtime is unavailable/u.test(message));
+			assert.equal(runtimeNotices.length, 4);
+			assert.equal(new Set(runtimeNotices).size, 1);
+			assert.equal(store.listMissions().every((mission) => mission.status !== "completed"), true);
+		} finally {
+			store.close();
 			await rm(root, { recursive: true, force: true });
 		}
 	});

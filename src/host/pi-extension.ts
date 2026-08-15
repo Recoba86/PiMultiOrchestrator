@@ -77,6 +77,8 @@ import { executeMissionTask } from "../core/mission/index.js";
 import {
 	BossInfrastructureError,
 	BossProtocolError,
+	isBossCancellationCause,
+	isBossSafetyStopCause,
 	runMissionGoalLoop,
 	type BossDecision,
 	type BossInferenceRequest,
@@ -101,7 +103,7 @@ import {
 	type AnalyticsRange,
 	type AnalyticsStoreAdapter,
 } from "../core/analytics/index.js";
-import { TrustStore, PathSafetyPolicy, SecretSanitizer, getCapabilityMatrix } from "../core/security/index.js";
+import { TrustStore, PathSafetyPolicy, ProjectTrustRequiredError, SecretSanitizer, getCapabilityMatrix } from "../core/security/index.js";
 import { PACKAGE_INFO } from "../core/package-info.js";
 import {
 	SmartRouter,
@@ -867,7 +869,12 @@ const bossInferencePrompt = (request: BossInferenceRequest): string => {
 	].join("\n");
 };
 
-const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>): BossDecision => {
+const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>, signal?: AbortSignal): BossDecision => {
+	if (signal?.aborted || response.stopReason === "aborted") {
+		const error = new Error("Boss inference was cancelled");
+		error.name = "AbortError";
+		throw error;
+	}
 	if (response.stopReason !== "stop") throw new BossInfrastructureError("Boss provider did not complete the orchestration response");
 	const usage = extractWorkerUsage(response);
 	const tokenUsage = usage === undefined ? undefined : {
@@ -916,9 +923,16 @@ const invokeBossInference = async (manager: PiManagerContract, providerRegistry:
 			...(request.assignment.thinkingEffort === "auto" ? {} : { reasoning: request.assignment.thinkingEffort }),
 			...(request.signal === undefined ? {} : { signal: request.signal }),
 		});
-		return parseBossInferenceResponse(response);
+		return parseBossInferenceResponse(response, request.signal);
 	} catch (error) {
-		if (error instanceof BossProtocolError || error instanceof BossInfrastructureError) throw error;
+		if (error instanceof BossProtocolError) throw error;
+		if (isBossCancellationCause(error, request.signal) || request.signal?.aborted) {
+			const cancelled = new Error("Boss inference was cancelled");
+			cancelled.name = "AbortError";
+			throw cancelled;
+		}
+		if (isBossSafetyStopCause(error)) throw error;
+		if (error instanceof BossInfrastructureError) throw error;
 		throw new BossInfrastructureError("Pinned Boss provider request failed");
 	}
 };
@@ -2790,16 +2804,28 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
 				invoke: (request) => invokeBossInference(manager, providerRegistry, request),
 				dispatch: async (task): Promise<BossTaskOutcome> => {
-					if (task.executionClass === "implementation" && options.trustStore && !options.trustStore.isTrusted(ctx.cwd)) return { taskId: String(task.taskId), status: "blocked", summary: "TRUST REQUIRED — mutating Mission execution is disabled for this project" };
+					if (ctx.signal?.aborted) {
+						const cancelled = new Error("Mission worker dispatch was cancelled");
+						cancelled.name = "AbortError";
+						throw cancelled;
+					}
+					if (task.executionClass === "implementation" && options.trustStore && !options.trustStore.isTrusted(ctx.cwd)) throw new ProjectTrustRequiredError();
 					try {
 						const executed = await executeMissionTask({ store, contextBroker: broker, executor, missionId: mission.missionId, taskId: task.taskId, cwd: ctx.cwd, ...(analyticsStore ? { analytics: analyticsStore } : {}), ...(ctx.signal === undefined ? {} : { signal: ctx.signal }), ...(task.status === "execution_completed" ? { allowQualityRepair: true } : {}) });
 						const updated = store.getTask(task.taskId) ?? executed.task;
+						if (executed.run.terminalStatus === "cancelled" || ctx.signal?.aborted) return { taskId: String(task.taskId), status: "cancelled", summary: executed.run.summary.slice(0, 2_000) };
 						return { taskId: String(task.taskId), status: executed.run.terminalStatus === "completed" && updated.status === "execution_completed" ? "succeeded" : "failed", summary: executed.run.summary.slice(0, 2_000) };
 					} catch (error) {
+						if (isBossCancellationCause(error, ctx.signal) || isBossSafetyStopCause(error)) throw error;
 						return { taskId: String(task.taskId), status: "failed", summary: error instanceof Error ? error.message.slice(0, 240) : "Worker execution failed" };
 					}
 				},
 				verify: async (task, outcome): Promise<BossVerificationOutcome> => {
+					if (ctx.signal?.aborted || outcome.status === "cancelled") {
+						const cancelled = new Error("Mission verification was cancelled");
+						cancelled.name = "AbortError";
+						throw cancelled;
+					}
 					if (outcome.status !== "succeeded") return { taskId: String(task.taskId), verdict: "blocked", summary: "M7 verification cannot start because the worker did not complete" };
 					const targetRunId = task.lastRunId;
 					if (!targetRunId) return { taskId: String(task.taskId), verdict: "blocked", summary: "M7 verification target is missing" };
@@ -2808,6 +2834,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					try {
 						const executed = await executeReviewer(ctx, String(mission.missionId), String(task.taskId), targetRunId, [], targetAttempt?.routeId);
 						recordReviewerRun(verification.verificationId, executed.result);
+						if (executed.result.terminalStatus === "cancelled" || ctx.signal?.aborted) {
+							service.failVerification(verification.verificationId, "interrupted", executed.result.summary);
+							const cancelled = new Error("Mission verification was cancelled");
+							cancelled.name = "AbortError";
+							throw cancelled;
+						}
 						if (executed.result.terminalStatus !== "completed") {
 							service.failVerification(verification.verificationId, executed.result.potentialMutationObserved ? "interrupted" : "blocked", executed.result.summary);
 							return { taskId: String(task.taskId), verdict: "blocked", summary: executed.result.summary.slice(0, 2_000) };
@@ -2816,13 +2848,15 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 						recordAnalytics({ eventId: `quality-${completed.decision.decisionId}`, occurredAt: completed.decision.createdAt, eventType: "quality", missionId: String(mission.missionId), taskId: String(task.taskId), runId: targetRunId, verificationId: verification.verificationId, qualityRound: completed.run.round, poolId: "verification", ...(completed.run.reviewerRouteId === undefined ? {} : { routeId: completed.run.reviewerRouteId }), outcome: completed.decision.verdict, qualityOutcome: completed.decision.verdict, firstPass: completed.decision.verdict === "pass" && completed.run.round === 0, repairRound: completed.run.round });
 						return { taskId: String(task.taskId), verdict: completed.decision.verdict, summary: completed.decision.reviewerSummary, requiredFixes: completed.decision.requiredFixes };
 					} catch (error) {
+						if (isBossCancellationCause(error, ctx.signal) || isBossSafetyStopCause(error)) throw error;
 						try { service.failVerification(verification.verificationId, "blocked", "M7 reviewer protocol or infrastructure was unavailable"); } catch { /* preserve the original bounded outcome */ }
 						return { taskId: String(task.taskId), verdict: "blocked", summary: error instanceof Error ? error.message.slice(0, 240) : "M7 verification failed" };
 					}
 				},
 			});
 			appendMissionPointer(result.mission);
-			ctx.ui.notify(`Mission ${result.mission.missionId}: ${result.status} after ${result.cycles} Boss cycle${result.cycles === 1 ? "" : "s"}`, result.status === "completed" ? "info" : "warning");
+			const statusLabel = result.terminal === "SAFETY_STOP" ? "blocked (safety stop)" : result.status;
+			ctx.ui.notify(`Mission ${result.mission.missionId}: ${statusLabel} after ${result.cycles} Boss cycle${result.cycles === 1 ? "" : "s"}`, result.status === "completed" ? "info" : "warning");
 			return result.mission;
 		} catch (error) {
 			ctx.ui.notify(`Mission Boss runtime stopped without a completion claim: ${error instanceof Error ? error.message.slice(0, 240) : "runtime error"}`, "warning");
