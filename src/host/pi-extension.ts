@@ -706,6 +706,9 @@ const normalizeModelEntry = (value: unknown): ModelManagerEntry | undefined => {
 	};
 };
 
+const modelRouterOptionLabel = (option: CanonicalModelOption, enabled: boolean): string =>
+	`${enabled ? "[x]" : "[ ]"} ${option.label}`;
+
 const parseCredentialReference = (value: string): SecretRefV1 | undefined => {
 	const match = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(value.trim());
 	return match ? { store: "env", key: match[1]! } : undefined;
@@ -1203,7 +1206,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				remoteModelId: entry.remoteModelId,
 				displayName: entry.displayName,
 			})));
-			const modelOptions = ["Refresh Models", "────────────", ...modelPresentation.map((option) => option.label), "Back"];
+			const modelRouterLabels = modelPresentation.map((option, index) => modelRouterOptionLabel(option, entries[index]?.enabled === true));
+			const modelOptions = ["Refresh Models", "────────────", ...modelRouterLabels, "Back"];
 			const selected = await ctx.ui.select("9Router Models — select a model", modelOptions);
 			if (!selected || selected === "Back") return;
 			if (selected === "────────────") continue;
@@ -1212,7 +1216,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				try { entries = await modelEntries(filter); } catch (error) { notifyError(ctx, "9Router model list failed", error); return; }
 				continue;
 			}
-			const index = modelPresentation.findIndex((option) => option.label === selected);
+			const index = modelRouterLabels.findIndex((label) => label === selected);
 			const entry = index >= 0 ? entries[index] : undefined;
 			if (!entry) return;
 			const action = await ctx.ui.select(`9Router model: ${entry.remoteModelId}`, ["Inspect", entry.enabled ? "Disable" : "Enable", "Back"]);

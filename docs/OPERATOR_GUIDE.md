@@ -1,6 +1,6 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC23 is the public
+This guide describes the Control Center in Pi `0.84.1`. RC24 is the public
 `next`-tagged prerelease, not a stable or production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
@@ -44,7 +44,10 @@ message where applicable.
   in the masked TUI prompt, and confirm **Test & Save**. The catalog is tested
   first; Pi auth stores the key and PMO stores only a `pi-auth` reference.
   Credential values are never displayed. Normal model rows hide internal local
-  route IDs; **Inspect** and Diagnostics retain exact route IDs for support.
+  route IDs; **Inspect** and Diagnostics retain exact route IDs for support. The
+  Model Router prefixes enabled rows with `[x]` and discovered-but-disabled
+  rows with `[ ]`; Enter opens Inspect plus the existing Enable/Disable action,
+  rather than toggling the checkbox directly.
   RPC setup fails closed because Pi `0.84.1` has no masked secret-input field.
 - **Investigation Pool**, **Implementation Pool**, and **Verification Pool**
   share the same ordered editor. Add, inspect, remove, enable/disable, and
@@ -136,7 +139,7 @@ The direct M2–M8.5 commands remain available, including `/9router-models`,
 `/routing-settings`, `/subagent-run`, `/missions`, `/quality-status`, `/verify-task`,
 `/analytics`, `/recommendations`, and `/recommendation-analyst`.
 
-## RC23 catalog, scheduling, effort, and refresh safety
+## RC24 catalog, scheduling, effort, and refresh safety
 
 Discovery is separate from PMO enablement, and enablement is separate from
 Pool membership. A newly discovered route is disabled until explicitly enabled;

@@ -389,6 +389,22 @@ provenance, last-known-good state, stale indicators, safe user overrides, and
 the distinction between provider-advertised and empirically observed
 capabilities. This is explicitly outside RC18.
 
+## RC24 — Model Router enablement hotfix
+
+Status: IMPLEMENTED / RELEASE CANDIDATE; preserves RC23 weighted scheduling and
+Pool behavior.
+
+RC24 restores the Model Router's visible enablement state without changing the
+canonical presentation helper or provider/catalog state. Enabled PMO routes
+show `[x]`, discovered-but-disabled routes show `[ ]`, Enter opens the existing
+Inspect plus Enable/Disable action menu, and Refresh Models preserves the
+authoritative persisted state. Duplicate labels remain deterministically
+disambiguated and internal route IDs remain hidden from normal rows.
+
+Exit evidence: focused TUI/RPC acceptance, full repository check, independent
+release verification, frozen-artifact registry comparison, GitHub prerelease,
+and isolated public npm Pi runtime verification.
+
 ## RC22 — Canonical model selector presentation
 
 Status: IMPLEMENTED / LOCAL CANDIDATE; not accepted, public, stable, or

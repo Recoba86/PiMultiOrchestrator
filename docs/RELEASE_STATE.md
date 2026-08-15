@@ -12,9 +12,10 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.21` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.22` — RC22 local candidate; exact detached verification PASS |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.24` — npm `next`; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.24` prerelease |
+| Development manifest version | `0.1.0-rc.24` — RC24 Model Router enablement hotfix |
+| RC24 release line | Model Router rows show `[x]` for enabled PMO routes and `[ ]` for discovered-but-disabled routes; Enter opens the existing action menu and persistence path |
 | RC22 local candidate | Canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`; artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; not published |
 | RC20 release | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; published prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |

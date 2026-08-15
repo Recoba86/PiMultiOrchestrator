@@ -83,7 +83,7 @@ function managerFixture(initial: ProviderProjection): PiManagerContract & {
 	const setEnabledCalls: Array<{ id: string; enabled: boolean; activeRemoteModelId?: string }> = [];
 	const fixture = {
 		projection: initial,
-		entries: [{ remoteModelId: "remote-a", displayName: "Remote A", routeId: "route-a", sourceLabel: "fixture", capability: "chat", enabled: true }],
+		entries: [{ remoteModelId: "remote-a", displayName: "Remote A", routeId: "route-a", sourceLabel: "fixture", capability: "chat", enabled: true } as ModelManagerEntry],
 		setEnabledCalls,
 		async list(): Promise<readonly ModelManagerEntry[]> {
 			return fixture.entries;
@@ -95,6 +95,8 @@ function managerFixture(initial: ProviderProjection): PiManagerContract & {
 		async configure(): Promise<void> {},
 		async setEnabled(id: string, enabled: boolean, options?: { activeRemoteModelId?: string }): Promise<void> {
 			fixture.setEnabledCalls.push({ id, enabled, ...(options?.activeRemoteModelId ? { activeRemoteModelId: options.activeRemoteModelId } : {}) });
+			const index = fixture.entries.findIndex((candidate) => candidate.remoteModelId === id);
+			if (index >= 0) fixture.entries[index] = { ...fixture.entries[index]!, enabled };
 		},
 		async providerProjection(): Promise<ProviderProjection | undefined> {
 			return fixture.projection;
@@ -513,9 +515,9 @@ describe("Pi 9Router host adapter", () => {
 		const notifications: string[] = [];
 		let prompts = 0;
 		const selections: Array<string | undefined> = [
-			"remote-a",
+			"[x] remote-a",
 			"Inspect",
-			"remote-a",
+			"[x] remote-a",
 			"Disable",
 			undefined,
 		];
@@ -570,7 +572,7 @@ describe("Pi 9Router host adapter", () => {
 		assert.equal(fixture.entries.find((entry) => entry.remoteModelId === "remote-new")?.enabled, false);
 	});
 
-	it("[RC21][U/TUI][fixture-pi-0.84.1] preserves nested catalog metadata, hides route IDs, and retains them in inspection", async () => {
+	it("[RC24][U/TUI][fixture-pi-0.84.1] shows enablement checkboxes while preserving canonical duplicate labels and inspection privacy", async () => {
 		const richRow = {
 			entry: {
 				remoteId: "remote-rich",
@@ -595,9 +597,19 @@ describe("Pi 9Router host adapter", () => {
 			sourceLabel: "Pi 9Router",
 			status: "present",
 		} as unknown as ModelManagerEntry;
+		const duplicateRichRow = {
+			remoteModelId: "remote-rich",
+			displayName: "Rich",
+			routeId: "second-internal-route-id",
+			enabled: false,
+			available: true,
+			sourceLabel: "Pi 9Router",
+			status: "present",
+		} as unknown as ModelManagerEntry;
 		const fixture = managerFixture(projection());
 		fixture.entries = [
 			richRow,
+			duplicateRichRow,
 			{ remoteModelId: "remote-false", displayName: "False", reasoning: false, enabled: false, available: true },
 			{ remoteModelId: "remote-unknown", displayName: "Unknown", enabled: false, available: true },
 		];
@@ -616,9 +628,9 @@ describe("Pi 9Router host adapter", () => {
 						modelMenuCalls += 1;
 						assert.equal(choices[0], "Refresh Models");
 						assert.equal(choices[1], "────────────");
-						assert.deepEqual(choices.slice(2, -1), ["remote-rich", "remote-false", "remote-unknown"]);
+						assert.deepEqual(choices.slice(2, -1), ["[x] remote-rich #1", "[ ] remote-rich #2", "[ ] remote-false", "[ ] remote-unknown"]);
 						assert.ok(choices.slice(2, -1).every((choice) => !/ACTIVE|Thinking|r9-ninerouter/iu.test(choice)));
-						const rich = choices.find((choice) => choice.includes("remote-rich"))!;
+						const rich = choices.find((choice) => choice === "[x] remote-rich #1")!;
 						assert.doesNotMatch(rich, /internal-route-id/u);
 						return modelMenuCalls === 1 ? rich : "Back";
 					}
@@ -629,6 +641,101 @@ describe("Pi 9Router host adapter", () => {
 		} as unknown as ExtensionCommandContext);
 		assert.ok(notifications.some((message) => /remote: remote-rich/u.test(message)));
 		assert.ok(notifications.some((message) => /reasoning: supported/u.test(message) && /thinking levels: low, medium, high, xhigh, max/u.test(message) && /vision: true/u.test(message) && /context: 200000/u.test(message) && /max output: 16000/u.test(message) && /local route: internal-route-id/u.test(message)));
+	});
+
+	it("[RC24][U/TUI][fixture-pi-0.84.1] opens model actions and redraws enablement immediately and after refresh", async () => {
+		const fixture = managerFixture(projection());
+		fixture.entries = [
+			{ remoteModelId: "ag/gemini-3.7-flash-high", displayName: "ag/gemini-3.7-flash-high", routeId: "route-gemini", enabled: false, available: true },
+			{ remoteModelId: "ag/claude-opus-4-6-thinking", displayName: "ag/claude-opus-4-6-thinking", routeId: "route-claude", enabled: true, available: true },
+			{ remoteModelId: "cu/composer-2.5", displayName: "cu/composer-2.5", routeId: "route-composer", enabled: false, available: true },
+			{ remoteModelId: "cx/gpt-5.6-luna", displayName: "cx/gpt-5.6-luna", routeId: "route-luna", enabled: true, available: true },
+		];
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: fixture });
+		host.registerCommands();
+		let menuCalls = 0;
+		let confirmations = 0;
+		await pi.commands.get("9router-models")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (title: string, choices: readonly string[]) => {
+					if (title === "9Router Models — select a model") {
+						menuCalls += 1;
+						if (menuCalls === 2) assert.equal(fixture.entries.find((entry) => entry.remoteModelId === "cu/composer-2.5")?.enabled, true);
+						assert.equal(choices[0], "Refresh Models");
+						assert.equal(choices[1], "────────────");
+						assert.deepEqual(choices.slice(2, -1), [
+							"[ ] ag/gemini-3.7-flash-high",
+							"[x] ag/claude-opus-4-6-thinking",
+							menuCalls === 2 ? "[x] cu/composer-2.5" : "[ ] cu/composer-2.5",
+							"[x] cx/gpt-5.6-luna",
+						]);
+						assert.ok(
+							choices.slice(2, -1).every(
+								(choice) =>
+									!["route-gemini", "route-claude", "route-composer", "route-luna"].some((routeId) =>
+										choice.includes(routeId),
+									) && !/(?:^|\s)(?:ACTIVE|Thinking)(?:\s|$)/u.test(choice),
+							),
+						);
+						if (menuCalls === 1) assert.equal(pi.registerCalls.length, 0, "displaying rows must not reconcile the Pi provider");
+						if (menuCalls === 1) return "[ ] cu/composer-2.5";
+						if (menuCalls === 2) return "[x] cu/composer-2.5";
+						if (menuCalls === 3) {
+							assert.equal(fixture.entries.find((entry) => entry.remoteModelId === "cu/composer-2.5")?.enabled, false);
+							return "Refresh Models";
+						}
+						assert.equal(menuCalls, 4);
+						return "Back";
+					}
+					assert.equal(title, "9Router model: cu/composer-2.5");
+					const action = confirmations === 0 ? "Enable" : "Disable";
+					assert.deepEqual(choices, ["Inspect", action, "Back"]);
+					return action;
+				},
+				confirm: async (title: string) => {
+					confirmations += 1;
+					assert.equal(title, confirmations === 1 ? "Enable 9Router model?" : "Disable 9Router model?");
+					return true;
+				},
+				notify: () => {},
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.equal(menuCalls, 4);
+		assert.equal(confirmations, 2);
+		assert.deepEqual(fixture.setEnabledCalls.map(({ id, enabled }) => ({ id, enabled })), [
+			{ id: "cu/composer-2.5", enabled: true },
+			{ id: "cu/composer-2.5", enabled: false },
+		]);
+	});
+
+	it("[RC24][U/RPC][fixture-pi-0.84.1] renders authoritative enablement without toggling or provider mutation", async () => {
+		const fixture = managerFixture(projection());
+		fixture.entries = [
+			{ remoteModelId: "rpc-disabled", displayName: "rpc-disabled", routeId: "rpc-route-disabled", enabled: false, available: true },
+			{ remoteModelId: "rpc-enabled", displayName: "rpc-enabled", routeId: "rpc-route-enabled", enabled: true, available: true },
+		];
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: fixture });
+		host.registerCommands();
+		await pi.commands.get("9router-models")!.handler("", {
+			mode: "rpc",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (title: string, choices: readonly string[]) => {
+					assert.equal(title, "9Router Models — select a model");
+					assert.deepEqual(choices.slice(2, -1), ["[ ] rpc-disabled", "[x] rpc-enabled"]);
+					return "Back";
+				},
+				notify: () => {},
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.deepEqual(fixture.setEnabledCalls, []);
+		assert.deepEqual(pi.registerCalls, []);
 	});
 
 	it("[RC21][U/TUI][fixture-pi-0.84.1] refreshes a static Pi provider upstream without mutating it and reports LKG failure", async () => {

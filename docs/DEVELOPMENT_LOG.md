@@ -4,6 +4,20 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC24 — Model Router enablement hotfix
+
+- **Date/status:** 2026-08-15; `IMPLEMENTED / RELEASE CANDIDATE`, preserving the
+  RC23 weighted scheduling and Pool behavior.
+- **Implementation:** the Model Router now prefixes canonical rows with `[x]`
+  when PMO enablement is true and `[ ]` when a route is discovered but disabled.
+  Enter still opens Inspect plus the existing Enable/Disable action, and
+  Refresh Models re-reads the persisted state. Canonical remote IDs, duplicate
+  suffixes, and hidden internal route IDs remain unchanged.
+- **Coverage:** focused Pi `0.84.1` TUI/RPC acceptance covers the four RC24
+  routes, duplicate disambiguation, action-menu selection, immediate redraw,
+  refresh persistence, and display-only non-mutation. Full release evidence is
+  bound to the final RC24 source commit and frozen artifact.
+
 ## RC22 — Canonical model selector presentation local candidate
 
 - **Date/status:** 2026-08-15; `IMPLEMENTED / LOCAL CANDIDATE`, not accepted or

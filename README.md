@@ -4,16 +4,17 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The public release line is RC23 (`0.1.0-rc.23`), a prerelease on npm with
-`next`; `latest` remains `0.1.0-rc.17`. RC23 adds per-Pool Priority or Weighted
-Rotation scheduling, deterministic weighted route selection, scheduler-origin
-analytics, and evidence-gated data-driven weight recommendations. It retains
-RC22's canonical model/route presentation and is not a stable or production
+The public release line is RC24 (`0.1.0-rc.24`), a prerelease on npm with
+`next`; `latest` remains `0.1.0-rc.17`. RC24 restores the Model Router's
+enablement status checkboxes while retaining RC23's per-Pool Priority or
+Weighted Rotation scheduling, deterministic weighted route selection,
+scheduler-origin analytics, evidence-gated data-driven weight recommendations,
+and canonical model/route presentation. It is not a stable or production
 release.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. RC13, RC15, and RC16 are historical; RC17 is the successor candidate after the final RC16 live M7 reviewer handoff blocked before structured submission. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority or weight changes. M10 safety policies are application-level and do not claim an OS sandbox. RC23 never replaces an external Pi provider, shrinks its catalog, silently maps Auto to Off, silently downgrades stale explicit effort, fabricates thinking capabilities, auto-assigns pools, or persists a raw API key; RPC raw-key setup fails closed. Periodic automatic catalog sync and Benchmark Lab remain future work. A quality PASS is not by itself mission completion, canonical evidence admission, or public release readiness.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority or weight changes. M10 safety policies are application-level and do not claim an OS sandbox. RC24 never replaces an external Pi provider, shrinks its catalog, silently maps Auto to Off, silently downgrades stale explicit effort, fabricates thinking capabilities, auto-assigns pools, or persists a raw API key; RPC raw-key setup fails closed. Periodic automatic catalog sync and Benchmark Lab remain future work. A quality PASS is not by itself mission completion, canonical evidence admission, or public release readiness.
 
 The implementation contract is split across the repository files
 `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`,
@@ -44,7 +45,7 @@ Evidence and proof-of-concept boundaries are recorded in `docs/ARCHITECTURE.md`.
 
 Requires Node.js `>=22.19.0` and npm.
 
-## RC23 public prerelease install
+## RC24 public prerelease install
 
 The `.tgz` is the immutable release artifact. Pi `0.84.1` does not unpack a
 local tarball passed directly to `pi install`; verify its checksum, extract it
@@ -53,13 +54,13 @@ isolated Pi settings. The source checkout is never the installed package. For
 the public prerelease, use Pi's npm package source:
 
 ```sh
-pi install npm:pi-multi-orchestrator@0.1.0-rc.23
+pi install npm:pi-multi-orchestrator@0.1.0-rc.24
 ```
 
-Exact RC22 → RC23 upgrade pin:
+Exact RC23 → RC24 upgrade pin:
 
 ```sh
-pi install npm:pi-multi-orchestrator@0.1.0-rc.23
+pi install npm:pi-multi-orchestrator@0.1.0-rc.24
 ```
 
 This is an early prerelease, not a stable or production release. After loading,
@@ -72,9 +73,9 @@ use integer weights from 0 to 1000000, with zero excluding a route only in
 Weighted Rotation. Recommendations require comparable origin-tagged samples,
 show their baseline and suggested maps, and Apply/Ignore remain explicit.
 
-The published artifact is bound to the RC23 source commit, tag
-`v0.1.0-rc.23`, and its independently verified artifact checksum; the exact
-values are recorded in `docs/RELEASE_STATE.md` after publication.
+The published artifact is bound to the RC24 source commit, tag
+`v0.1.0-rc.24`, and its independently verified artifact checksum; the exact
+values are recorded in the final release evidence.
 
 For the accepted RC17 publication, use the exact npm pin:
 
@@ -97,10 +98,10 @@ Tests use Node's built-in runner, temporary directories, and a random loopback f
 Development loading is explicit; the extension is not installed into the live Pi directory:
 
 ```sh
-RC23_ROOT="$(mktemp -d)"
-mkdir -p "$RC23_ROOT/pmo" "$RC23_ROOT/sessions"
-PI_MULTI_ORCH_CONFIG_ROOT="$RC23_ROOT/pmo" \
-PI_CODING_AGENT_SESSION_DIR="$RC23_ROOT/sessions" \
+RC24_ROOT="$(mktemp -d)"
+mkdir -p "$RC24_ROOT/pmo" "$RC24_ROOT/sessions"
+PI_MULTI_ORCH_CONFIG_ROOT="$RC24_ROOT/pmo" \
+PI_CODING_AGENT_SESSION_DIR="$RC24_ROOT/sessions" \
 PI_OFFLINE=1 \
   pi --no-extensions -e "$PWD/dist/host/pi-extension.js" \
   --no-session --no-context-files
@@ -123,7 +124,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC23 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
+M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC24 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 
