@@ -1188,3 +1188,31 @@ capability distinction remain planned.
 
 Periodic automatic synchronization and Benchmark Lab are not RC20 acceptance
 requirements and remain future work.
+
+## RC21 — Model Router dogfood repair
+
+### RC21-01 — Nested metadata and conservative thinking semantics
+
+- **Level:** U/I, Pi `0.84.1` fixture
+- **Pass:** a real `CatalogRow.entry` preserves reasoning, thinking-level map,
+  vision, context, and max-output metadata through host normalization; true,
+  false, and absent reasoning render as supported, not-supported, and unknown;
+  Pool choices use the same authoritative metadata without fabricated values.
+
+### RC21-02 — Static external upstream refresh
+
+- **Level:** U/I/P, Pi `0.84.1` fixture and bounded gateway
+- **Pass:** a populated picker places Refresh Models first; static external
+  refresh performs a fresh `GET /v1/models` with the existing Pi auth result,
+  reports added/removed/changed/no-change results, preserves PMO routes/Pools
+  and LKG on failure, does not re-prompt or persist/print the key, and leaves
+  the external provider model list and registration untouched.
+
+### RC21-03 — Picker privacy and release boundary
+
+- **Level:** U/TUI/security/release
+- **Pass:** normal model rows omit internal route IDs while Inspect retains the
+  exact ID; refresh start/success/failure feedback is visible and sanitized;
+  full `npm run check`, detached release verification, exact artifact binding,
+  `next`-only publication, unchanged `latest`, GitHub prerelease, and public
+  install/dogfood all pass.

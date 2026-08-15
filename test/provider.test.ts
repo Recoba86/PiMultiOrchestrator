@@ -486,9 +486,9 @@ describe("Pi 9Router host adapter", () => {
 		const notifications: string[] = [];
 		let prompts = 0;
 		const selections: Array<string | undefined> = [
-			"[x] remote-a — Remote A (route-a)",
+			"[x] remote-a — Remote A",
 			"Inspect",
-			"[x] remote-a — Remote A (route-a)",
+			"[x] remote-a — Remote A",
 			"Disable",
 			undefined,
 		];
@@ -541,6 +541,143 @@ describe("Pi 9Router host adapter", () => {
 		} as unknown as ExtensionCommandContext);
 		assert.ok(notifications.some((message) => /\+1 added/u.test(message)));
 		assert.equal(fixture.entries.find((entry) => entry.remoteModelId === "remote-new")?.enabled, false);
+	});
+
+	it("[RC21][U/TUI][fixture-pi-0.84.1] preserves nested catalog metadata, hides route IDs, and retains them in inspection", async () => {
+		const richRow = {
+			entry: {
+				remoteId: "remote-rich",
+				displayName: "Rich",
+				owner: "Pi 9Router",
+				resourceClass: "subscription",
+				capabilities: ["chat"],
+				input: ["text", "image"],
+				reasoning: true,
+				thinkingLevelMap: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" },
+				vision: true,
+				contextWindow: 200_000,
+				maxTokens: 16_000,
+				capability: "chat",
+				provenance: { remoteId: "remote", displayName: "remote", resourceClass: "remote", capabilities: "remote", input: "remote", reasoning: "remote", thinkingLevelMap: "remote", vision: "remote", contextWindow: "remote", maxTokens: "remote", capability: "remote" },
+			},
+			remoteModelId: "remote-rich",
+			displayName: "Rich",
+			routeId: "internal-route-id",
+			enabled: true,
+			available: true,
+			sourceLabel: "Pi 9Router",
+			status: "present",
+		} as unknown as ModelManagerEntry;
+		const fixture = managerFixture(projection());
+		fixture.entries = [
+			richRow,
+			{ remoteModelId: "remote-false", displayName: "False", reasoning: false, enabled: false, available: true },
+			{ remoteModelId: "remote-unknown", displayName: "Unknown", enabled: false, available: true },
+		];
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: fixture });
+		host.registerCommands();
+		const notifications: string[] = [];
+		let modelMenuCalls = 0;
+		await pi.commands.get("9router-models")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (title: string, choices: readonly string[]) => {
+					if (title === "9Router Models — select a model") {
+						modelMenuCalls += 1;
+						assert.equal(choices[0], "Refresh Models");
+						assert.equal(choices[1], "────────────");
+						const rich = choices.find((choice) => choice.includes("remote-rich"))!;
+						assert.doesNotMatch(rich, /internal-route-id/u);
+						assert.ok(choices.some((choice) => /remote-false.*thinking: not supported/u.test(choice)));
+						assert.ok(choices.some((choice) => /remote-unknown.*thinking: unknown/u.test(choice)));
+						return modelMenuCalls === 1 ? rich : "Back";
+					}
+					return "Inspect";
+				},
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.ok(notifications.some((message) => /remote: remote-rich/u.test(message)));
+		assert.ok(notifications.some((message) => /reasoning: supported/u.test(message) && /thinking levels: low, medium, high, xhigh, max/u.test(message) && /vision: true/u.test(message) && /context: 200000/u.test(message) && /max output: 16000/u.test(message) && /local route: internal-route-id/u.test(message)));
+	});
+
+	it("[RC21][U/TUI][fixture-pi-0.84.1] refreshes a static Pi provider upstream without mutating it and reports LKG failure", async () => {
+		const fixture = managerFixture(projection());
+		const externalProvider = { baseUrl: "http://127.0.0.1:4300/v1", models: [{ id: "remote-a" }] };
+		let refreshCalls = 0;
+		let authCalls = 0;
+		fixture.refreshExternalProviderCatalog = async (_baseUrl, auth) => {
+			authCalls += 1;
+			assert.equal(auth.apiKey, "fixture-secret");
+			refreshCalls += 1;
+			if (refreshCalls > 1) throw new Error("upstream failure");
+			fixture.entries.push({ remoteModelId: "remote-new", displayName: "Remote New", sourceLabel: "fixture", enabled: false, available: true });
+			return { addedRemoteIds: ["remote-new"], removedRemoteIds: [], changedRemoteIds: [] };
+		};
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, {
+			manager: fixture,
+			providerRegistry: {
+				getProvider: () => externalProvider,
+				getProviderAuth: async () => ({ auth: { apiKey: "fixture-secret" } }),
+			},
+		});
+		host.registerCommands();
+		const notifications: string[] = [];
+		let menuCalls = 0;
+		await pi.commands.get("9router-models")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (title: string, choices: readonly string[]) => {
+					if (title !== "9Router Models — select a model") return "Back";
+					menuCalls += 1;
+					if (menuCalls === 1) {
+						assert.equal(choices[0], "Refresh Models");
+						return "Refresh Models";
+					}
+					assert.ok(choices.some((choice) => choice.includes("remote-new")));
+					return menuCalls === 2 ? "Refresh Models" : "Back";
+				},
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.equal(authCalls, 2);
+		assert.equal(externalProvider.models.length, 1);
+		assert.ok(notifications.filter((message) => /Refreshing 9Router models/u.test(message)).length === 2);
+		assert.ok(notifications.some((message) => /\+1 added/u.test(message) && /last refreshed/u.test(message)));
+		assert.ok(notifications.some((message) => /last-known-good catalog/u.test(message)));
+		assert.ok(notifications.every((message) => !message.includes("fixture-secret")));
+	});
+
+	it("[RC21][U/TUI][fixture-pi-0.84.1] reports an explicit no-change refresh", async () => {
+		const fixture = managerFixture(projection());
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: fixture });
+		host.registerCommands();
+		const notifications: string[] = [];
+		let first = true;
+		await pi.commands.get("9router-models")!.handler("", {
+			mode: "tui",
+			hasUI: true,
+			isIdle: () => true,
+			ui: {
+				select: async (_title: string, choices: readonly string[]) => {
+					if (first) {
+						first = false;
+						assert.equal(choices[0], "Refresh Models");
+						return "Refresh Models";
+					}
+					return "Back";
+				},
+				notify: (message: string) => notifications.push(message),
+			},
+		} as unknown as ExtensionCommandContext);
+		assert.ok(notifications.some((message) => /no model changes/u.test(message)));
 	});
 
 	it("[U][fixture-pi-0.84.1][M10] exposes Security & Trust without adding a control-center section", async () => {

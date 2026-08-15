@@ -5,7 +5,7 @@ import type { RouteConfigV1, SecretRefV1, StableId } from "../config/types.js";
 import { CatalogCacheStore } from "./cache.js";
 import { NineRouterError, NineRouterManagerError, safeCatalogErrorMessage, safeCatalogErrorStage } from "./errors.js";
 import { normalizeNineRouterBaseUrl, validateNineRouterGateway } from "./connection.js";
-import { NineRouterClient } from "./client.js";
+import { NineRouterClient, type NineRouterAuth } from "./client.js";
 import { routeIdentityMatches, stableRouteId } from "./identity.js";
 import { InlineSecretResolver, isEnvironmentReference, type SecretResolver } from "./secrets.js";
 import {
@@ -69,7 +69,7 @@ export class NineRouterManager {
     const config = await this.loadConfig();
     const gateway = config.gateways[NINEROUTER_GATEWAY_ID];
     const cacheResult = await this.cacheStore.load();
-    const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl);
+    const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl ?? (this.piCatalog?.authority === "upstream" ? this.piCatalog.baseUrl : undefined));
     const routes = Object.values(config.routes).filter((route) => route.gatewayId === NINEROUTER_GATEWAY_ID && route.enabled);
     const catalogEntries = mergeCatalogEntries(cache?.entries ?? [], this.piCatalog);
     const projection = this.buildProjection(config, cacheResult);
@@ -99,7 +99,7 @@ export class NineRouterManager {
     const config = await this.loadConfig();
     const cacheResult = await this.cacheStore.load();
     const gateway = config.gateways[NINEROUTER_GATEWAY_ID];
-    const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl);
+    const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl ?? (this.piCatalog?.authority === "upstream" ? this.piCatalog.baseUrl : undefined));
     const entries = mergeCatalogEntries(cache?.entries ?? [], this.piCatalog);
     const configured = Object.values(config.routes).filter((route) => route.gatewayId === NINEROUTER_GATEWAY_ID);
     const routeGroups = groupRoutes(configured);
@@ -153,7 +153,24 @@ export class NineRouterManager {
   }
 
   refresh(signal?: AbortSignal): Promise<RefreshResult> {
-    const operation = (): Promise<RefreshResult> => this.refreshUnlocked(signal);
+    return this.enqueueRefresh(() => this.refreshUnlocked(signal));
+  }
+
+  refreshExternalProviderCatalog(baseUrl: string, auth: NineRouterAuth, signal?: AbortSignal): Promise<RefreshResult> {
+    const normalized = normalizeNineRouterBaseUrl(baseUrl);
+    return this.enqueueRefresh(async () => {
+      const result = await this.refreshUnlocked(signal, { baseUrl: normalized, auth });
+      this.piCatalog = {
+        ...(this.piCatalog ?? { providerId: NINEROUTER_PROVIDER_ID, available: true, models: [] }),
+        available: true,
+        baseUrl: normalized,
+        authority: "upstream",
+      };
+      return result;
+    });
+  }
+
+  private enqueueRefresh(operation: () => Promise<RefreshResult>): Promise<RefreshResult> {
     const run = this.refreshQueue.then(operation, operation);
     this.refreshQueue = run.then(
       () => undefined,
@@ -162,20 +179,22 @@ export class NineRouterManager {
     return run;
   }
 
-  private async refreshUnlocked(signal?: AbortSignal): Promise<RefreshResult> {
+  private async refreshUnlocked(signal?: AbortSignal, external?: { readonly baseUrl: string; readonly auth: NineRouterAuth }): Promise<RefreshResult> {
     const config = await this.loadConfig();
     const gateway = config.gateways[NINEROUTER_GATEWAY_ID];
-    if (!gateway) throw new NineRouterManagerError("not-configured", "Configure the 9Router connection first");
-    if (!gateway.enabled) throw new NineRouterManagerError("gateway-disabled", "The 9Router connection is disabled");
+    if (!external) {
+      if (!gateway) throw new NineRouterManagerError("not-configured", "Configure the 9Router connection first");
+      if (!gateway.enabled) throw new NineRouterManagerError("gateway-disabled", "The 9Router connection is disabled");
+    }
     let prior: CatalogCacheV1 | undefined;
     try {
-      const baseUrl = validateNineRouterGateway(gateway);
+      const baseUrl = external?.baseUrl ?? validateNineRouterGateway(gateway);
       prior = cacheForGateway((await this.cacheStore.load()).cache, baseUrl);
       const requestOptions: Parameters<NineRouterClient["listModels"]>[0] = {
         baseUrl,
-        timeoutMs: gateway.timeoutMs,
+        timeoutMs: gateway?.timeoutMs ?? DEFAULT_GATEWAY_TIMEOUT,
         ...(signal ? { signal } : {}),
-        ...(gateway.credentialRef ? { credentialRef: gateway.credentialRef } : {}),
+        ...(external ? { auth: external.auth } : gateway?.credentialRef ? { credentialRef: gateway.credentialRef } : {}),
       };
       const entries = await this.client.listModels(requestOptions);
       if (entries.length === 0) throw new NineRouterError("malformed", "schema", "The 9Router catalog was empty; the last-known-good catalog was preserved");
@@ -253,6 +272,7 @@ export class NineRouterManager {
 		if (catalog.available && catalog.models.length === 0 && this.piCatalog?.available && this.piCatalog.models.length > 0) return;
 		this.piCatalog = {
 			...catalog,
+			authority: "pi",
 			models: catalog.models.filter((model) => typeof model.id === "string" && model.id.length > 0).slice(0, 512),
 		};
 	}
@@ -268,7 +288,7 @@ export class NineRouterManager {
     let entry: RemoteCatalogEntry | undefined;
     if (enabled) {
       const cache = (await this.cacheStore.load()).cache;
-		entry = this.externalEntry(remoteId) ?? cache?.entries.find((candidate) => candidate.remoteId === remoteId);
+      entry = cache?.entries.find((candidate) => candidate.remoteId === remoteId) ?? this.externalEntry(remoteId);
       if (!entry) throw new NineRouterManagerError("model-not-found", "The model is not present in the last successful catalog");
       if (entry.capability === "non-chat") throw new NineRouterManagerError("model-not-found", "The selected catalog entry is not chat-compatible");
     }
@@ -345,7 +365,7 @@ export class NineRouterManager {
 
   private buildProjection(config: import("../config/types.js").ConfigV1, cacheResult: Awaited<ReturnType<CatalogCacheStore["load"]>>): ProviderProjection {
     const gateway = config.gateways[NINEROUTER_GATEWAY_ID];
-    const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl);
+    const cache = cacheForGateway(cacheResult.cache, gateway?.baseUrl ?? (this.piCatalog?.authority === "upstream" ? this.piCatalog.baseUrl : undefined));
     const warnings: string[] = [];
     if (cacheResult.status === "corrupt") warnings.push("Catalog cache is corrupt; refresh is required");
     if (cacheResult.cache && !cache) warnings.push("Catalog cache belongs to a different 9Router endpoint; refresh is required");
@@ -471,6 +491,7 @@ function cacheForGateway(cache: CatalogCacheV1 | undefined, baseUrl: string | un
 }
 
 function mergeCatalogEntries(entries: readonly RemoteCatalogEntry[], catalog: PiProviderCatalog | undefined): RemoteCatalogEntry[] {
+	if (catalog?.authority === "upstream") return [...entries];
 	const external = new Map((catalog?.models ?? []).map((model) => [model.id, piModelToCatalogEntry(model)]));
 	const merged = entries.map((entry) => external.get(entry.remoteId) ?? entry);
 	const seen = new Set(merged.map((entry) => entry.remoteId));

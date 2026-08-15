@@ -870,3 +870,24 @@ an external provider. A stale explicit effort becomes unavailable rather than
 being silently downgraded. Exact remote/resource/source identity is used for
 reconciliation; only actual duplicate configured identities remain ambiguous.
 Automatic periodic refresh and Benchmark Lab are deliberately deferred.
+
+## 23.5 RC21 external refresh and metadata boundary
+
+The host normalizes a domain `CatalogRow` from its nested `entry` first, so
+rich catalog metadata is not lost when compact aliases such as
+`remoteModelId` are also present. The normalization is presence-preserving:
+reasoning, vision, context, max output, and thinking-level maps remain absent
+when the source is absent.
+
+Pi `0.84.1` static providers loaded from `models.json` have no
+`refreshModels` hook. Refresh Models therefore obtains the current provider
+auth result from the bound public Pi registry and passes a bounded, transient
+auth object to the existing `NineRouterClient` for one `/v1/models` request.
+The manager writes only validated catalog/LKG state, marks that runtime view
+upstream-authoritative, and never registers or rewrites the external Pi
+provider. A provider with a native refresh hook keeps Pi's existing path.
+
+The populated picker is presentation-only: internal route IDs are retained in
+the normalized row and Inspect/Diagnostics, but omitted from normal labels.
+Refresh feedback is explicit and sanitized; failures leave the prior catalog
+visible.

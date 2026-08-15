@@ -458,3 +458,22 @@ Product behavior is accepted only through measurable cases in [ACCEPTANCE_TESTS.
 - External Pi provider ownership remains unchanged: PMO MUST NOT replace,
   shrink, or unregister an external provider. Automatic periodic refresh and
   Benchmark Lab remain future work.
+
+## 24. RC21 Model Router dogfood repair
+
+- Host normalization MUST read nested `CatalogRow.entry` metadata before
+  compact host aliases. Absent reasoning, vision, context, max-output, or
+  thinking-level fields MUST remain unknown; true and false values MUST remain
+  distinguishable and no capability may be fabricated.
+- Pool Thinking Effort choices MUST use authoritative catalog/cache metadata.
+  A route with reasoning `true`, `false`, or unknown MUST expose the
+  corresponding supported, not-supported, or unknown state.
+- Refresh Models MUST put the action before populated model rows. For a static
+  external Pi `9router` provider, it MUST issue a fresh authenticated `GET
+  /v1/models` using Pi's existing auth result transiently, without re-entry,
+  persistence, raw-key output, provider registration, or provider shrinkage.
+  Dynamic providers MAY retain Pi's native refresh hook.
+- Refresh MUST reconcile added/removed/changed rows, retain last-known-good
+  data on failure, preserve PMO enablement and Pool state, and report start,
+  success/no-change, and failure/LKG feedback. Normal picker rows MUST hide
+  internal route IDs; Inspect and diagnostics MUST retain exact IDs.

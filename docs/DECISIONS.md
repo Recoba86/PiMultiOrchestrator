@@ -358,3 +358,23 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   own model/provider behavior, while a hardcoded `off` defeats reasoning. Pool
   roles need independent policy, and manual source-aware refresh addresses
   catalog drift without taking ownership of a user's Pi provider.
+
+## ADR-041 — RC21 refreshes static Pi providers through a transient auth bridge
+
+- **Decision:** Normalize nested catalog metadata before compact aliases and
+  preserve absent capabilities as unknown. For an external static Pi provider,
+  use the bound Pi registry's `getProviderAuth()` result transiently with the
+  existing bounded 9Router client; retain Pi's native refresh path when the
+  provider exposes `refreshModels`. Mark the PMO view upstream-authoritative
+  after success so stale static metadata cannot overwrite it. Keep exact route
+  IDs in diagnostics only, not normal picker labels.
+- **Rationale:** Pi `0.84.1`'s static `models.json` providers do not make an
+  upstream request through `ModelRegistry.refresh()`, while PMO already owns
+  safe bounded catalog parsing, LKG persistence, and diffing. The public auth
+  bridge avoids re-entry and PMO credential persistence without taking provider
+  ownership.
+- **Consequences:** Auth exists in memory only for the request and is never
+  logged or stored by PMO. A static external refresh can discover models before
+  PMO gateway configuration exists; the cache binds to the upstream base URL
+  until explicit PMO enablement creates route state. Periodic sync and runtime
+  execution of newly discovered external models remain outside this repair.

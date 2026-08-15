@@ -301,4 +301,58 @@ describe("NineRouterManager", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("[RC21][I][fixture-pi-0.84.1] refreshes an external Pi catalog from upstream with transient auth and preserves PMO state", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-m2-manager-rc21-external-refresh-"));
+    try {
+      let remoteCatalog: FakeModel[] = [
+        { id: "external-a", name: "External A", capabilities: { reasoning: true, vision: true, contextWindow: 128_000, maxOutput: 8_000 } },
+        { id: "external-b", name: "External B", capabilities: ["chat"] },
+        { id: "external-c", name: "External C", capabilities: ["chat"] },
+      ];
+      let failed = false;
+      const requests: Array<{ url: string; authorization: string | null }> = [];
+      const client = new NineRouterClient({
+        fetchImpl: async (input, init) => {
+          requests.push({ url: String(input), authorization: new Headers(init?.headers).get("authorization") });
+          if (failed) throw new Error("synthetic upstream failure");
+          return response(remoteCatalog);
+        },
+      });
+      const configStore = new ConfigStore({ root });
+      const manager = new NineRouterManager({ configStore, cacheStore: new CatalogCacheStore(root), client });
+      const baseUrl = "http://127.0.0.1:4300/v1";
+
+      const first = await manager.refreshExternalProviderCatalog(baseUrl, { apiKey: "fixture-secret" });
+      assert.deepEqual(first.entries.map((entry) => entry.remoteId), ["external-a", "external-b", "external-c"]);
+      assert.deepEqual((await manager.list()).map((row) => row.remoteModelId), ["external-a", "external-b", "external-c"]);
+      await manager.setEnabled("external-a", true);
+      const route = Object.values((await configStore.load()).snapshot!.config.routes).find((candidate) => candidate.remoteModelId === "external-a")!;
+      await configStore.update((draft) => {
+        draft.pools.implementation.entries = [{ routeId: route.id, enabled: true, thinkingEffort: "high" }];
+      });
+      const beforeConfig = (await configStore.load()).snapshot!.config;
+
+      remoteCatalog = [
+        { id: "external-a", name: "External A changed", capabilities: { reasoning: true, thinkingLevelMap: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" }, vision: false } },
+        { id: "external-b", name: "External B", capabilities: ["chat"] },
+        { id: "external-d", name: "External D", capabilities: ["chat"] },
+      ];
+      const changed = await manager.refreshExternalProviderCatalog(baseUrl, { apiKey: "fixture-secret" });
+      assert.deepEqual(changed.addedRemoteIds, ["external-d"]);
+      assert.deepEqual(changed.removedRemoteIds, ["external-c"]);
+      assert.deepEqual(changed.changedRemoteIds, ["external-a"]);
+      assert.deepEqual(requests.at(-1), { url: `${baseUrl}/models`, authorization: "Bearer fixture-secret" });
+      assert.deepEqual((await manager.list()).map((row) => row.remoteModelId), ["external-a", "external-b", "external-d"]);
+      assert.deepEqual((await configStore.load()).snapshot!.config.pools, beforeConfig.pools);
+      assert.equal((await configStore.load()).snapshot!.config.routes[route.id]?.enabled, true);
+
+      failed = true;
+      await assert.rejects(() => manager.refreshExternalProviderCatalog(baseUrl, { apiKey: "fixture-secret" }), /catalog request failed/i);
+      assert.equal((await manager.loadStatus()).cache, "stale");
+      assert.equal((await manager.list()).find((row) => row.remoteModelId === "external-a")?.displayName, "External A changed");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

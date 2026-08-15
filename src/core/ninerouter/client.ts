@@ -21,10 +21,17 @@ export interface NineRouterClientOptions {
   readonly fetchImpl?: typeof fetch;
 }
 
+/** Transient auth material supplied by an already-authenticated host. */
+export interface NineRouterAuth {
+  readonly apiKey?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
 export interface ListModelsOptions {
   readonly signal?: AbortSignal;
   readonly baseUrl?: string;
   readonly credentialRef?: SecretRefV1;
+  readonly auth?: NineRouterAuth;
   readonly timeoutMs?: number;
 }
 
@@ -48,9 +55,12 @@ export class NineRouterClient {
   async listModels(options: ListModelsOptions = {}): Promise<RemoteCatalogEntry[]> {
     const baseUrl = options.baseUrl ? normalizeNineRouterBaseUrl(options.baseUrl) : this.configuredBaseUrl;
     if (!baseUrl) throw new NineRouterError("invalid-url", "connection", "The 9Router base URL is not configured");
-    const credentialRef = options.credentialRef ?? this.configuredCredentialRef;
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (credentialRef) {
+    if (options.auth) {
+      applyTransientAuth(headers, options.auth);
+    } else {
+      const credentialRef = options.credentialRef ?? this.configuredCredentialRef;
+      if (!credentialRef) return this.fetchCatalog(baseUrl, headers, options);
       let secret: string;
       try {
         secret = await this.resolver.resolve(credentialRef, options.signal);
@@ -61,6 +71,11 @@ export class NineRouterClient {
       }
       headers.Authorization = `Bearer ${secret}`;
     }
+
+    return this.fetchCatalog(baseUrl, headers, options);
+  }
+
+  private async fetchCatalog(baseUrl: string, headers: Record<string, string>, options: ListModelsOptions): Promise<RemoteCatalogEntry[]> {
 
     const controller = new AbortController();
     const timeoutMs = options.timeoutMs ?? this.timeoutMs;
@@ -109,6 +124,23 @@ export class NineRouterClient {
       options.signal?.removeEventListener("abort", abortCaller);
     }
   }
+}
+
+function applyTransientAuth(headers: Record<string, string>, auth: NineRouterAuth): void {
+	let apiKey: string | undefined;
+	if (auth.apiKey !== undefined) {
+		if (typeof auth.apiKey !== "string" || auth.apiKey.length === 0 || auth.apiKey.length > 16_384 || /[\r\n\u0000]/u.test(auth.apiKey)) {
+			throw new NineRouterError("secret", "auth", "The 9Router credential is unusable");
+		}
+		apiKey = auth.apiKey;
+	}
+	for (const [key, value] of Object.entries(auth.headers ?? {})) {
+		if (key.length === 0 || key.length > 256 || /[\r\n\u0000]/u.test(key) || typeof value !== "string" || value.length > 16_384 || /[\r\n\u0000]/u.test(value)) {
+			throw new NineRouterError("secret", "auth", "The 9Router credential is unusable");
+		}
+		headers[key] = value;
+	}
+	if (apiKey !== undefined && !Object.keys(headers).some((key) => key.toLowerCase() === "authorization")) headers.Authorization = `Bearer ${apiKey}`;
 }
 
 async function readBoundedBody(response: Response, maxBytes: number, signal?: AbortSignal): Promise<string> {

@@ -4,6 +4,13 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC21 — Model Router dogfood repair candidate
+
+- **Date/status:** 2026-08-15; implementation complete locally, release/publication gates pending.
+- **Fixes:** host normalization now preserves nested catalog reasoning, thinking-level, vision, context, and max-output metadata; Pool effort choices no longer infer support from an unverified configured map; static external Pi providers use transient Pi auth for a bounded upstream `/v1/models` refresh without replacing or shrinking the provider; populated Model Router rows hide internal route IDs while Inspect retains them.
+- **Tests:** focused RC21 manager, Pool, and Pi host regressions pass, including added/removed/changed/LKG refresh, auth-header binding, true/false/unknown thinking semantics, nested metadata, route-ID privacy, no-change feedback, and static-provider non-mutation. Full `npm run check`, release verification, artifact, registry, GitHub, and public-install evidence is pending.
+- **Boundary:** no live Pi configuration, provider catalog, credential store, or source outside this repository was modified.
+
 ## RC20 — Thinking-aware Pool routing and live catalog refresh
 
 - **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE` on npm and GitHub.

@@ -1,6 +1,6 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC20 is the public
+This guide describes the Control Center in Pi `0.84.1`. RC21 is the public
 `next`-tagged prerelease, not a stable or production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
@@ -35,16 +35,17 @@ message where applicable.
 
 ## Section guide
 
-- **Models & 9Router** searches the discovered catalog, shows exact remote and
-  local route IDs, source/resource and projected/actual availability, and has a
+- **Models & 9Router** searches the discovered catalog, shows exact remote IDs,
+  source/resource and projected/actual availability, and has a
   visible **Refresh Models** action that performs a live provider/9Router
   refresh and reports added, removed, and changed entries. An existing Pi-owned 9Router
   provider is browsed in place and is never replaced or unregistered. If no
   provider exists, choose **Set Up 9Router**, enter the base URL, enter the key
   in the masked TUI prompt, and confirm **Test & Save**. The catalog is tested
   first; Pi auth stores the key and PMO stores only a `pi-auth` reference.
-  Credential values are never displayed. RPC setup fails closed because Pi
-  `0.84.1` has no masked secret-input field.
+  Credential values are never displayed. Normal model rows hide internal local
+  route IDs; **Inspect** and Diagnostics retain exact route IDs for support.
+  RPC setup fails closed because Pi `0.84.1` has no masked secret-input field.
 - **Investigation Pool**, **Implementation Pool**, and **Verification Pool**
   share the same ordered editor. Add, inspect, remove, enable/disable, and
   move entries without changing provider registration. Add Model offers only
@@ -123,7 +124,7 @@ The direct M2–M8.5 commands remain available, including `/9router-models`,
 `/routing-settings`, `/subagent-run`, `/missions`, `/quality-status`, `/verify-task`,
 `/analytics`, `/recommendations`, and `/recommendation-analyst`.
 
-## RC20 catalog and effort safety
+## RC21 catalog, effort, and refresh safety
 
 Discovery is separate from PMO enablement, and enablement is separate from
 Pool membership. A newly discovered route is disabled until explicitly enabled;

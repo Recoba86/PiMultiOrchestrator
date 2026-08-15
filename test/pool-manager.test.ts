@@ -123,6 +123,15 @@ describe("PoolManager", () => {
 					thinkingLevelMap: { low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" },
 					capability: "chat",
 					provenance: { remoteId: "remote", displayName: "remote", resourceClass: "remote", capabilities: "remote", input: "remote", capability: "remote" },
+				}, {
+					remoteId: "remote-route-b",
+					displayName: "No thinking",
+					resourceClass: "subscription",
+					capabilities: ["chat"],
+					input: ["text"],
+					reasoning: false,
+					capability: "chat",
+					provenance: { remoteId: "remote", displayName: "remote", resourceClass: "remote", capabilities: "remote", input: "remote", reasoning: "remote", capability: "remote" },
 				}],
 			});
 			await manager.setPoolEntryThinkingEffort("investigation", id("route-a"), "medium");
@@ -134,6 +143,12 @@ describe("PoolManager", () => {
 			assert.equal((await manager.getPool("investigation")).entries[0]?.thinkingEffort, "medium");
 			assert.equal((await manager.getPool("verification")).entries[0]?.thinkingEffort, "max");
 			assert.equal((await manager.getPool("implementation")).entries[0]?.thinkingEffort, "auto");
+			assert.deepEqual((await manager.getPool("investigation")).entries[0]?.supportedThinkingEfforts, ["low", "medium", "high", "xhigh", "max"]);
+			assert.equal((await manager.getPool("investigation")).entries[0]?.thinkingSupport, "supported");
+			assert.deepEqual((await manager.getPool("implementation")).entries.find((entry) => entry.routeId === "route-b")?.supportedThinkingEfforts, []);
+			assert.equal((await manager.getPool("implementation")).entries.find((entry) => entry.routeId === "route-b")?.thinkingSupport, "not-supported");
+			assert.deepEqual((await manager.getPool("implementation")).entries.find((entry) => entry.routeId === "route-c")?.supportedThinkingEfforts, []);
+			assert.equal((await manager.getPool("implementation")).entries.find((entry) => entry.routeId === "route-c")?.thinkingSupport, "unknown");
 			await manager.removeRoute("investigation", id("route-a"));
 			assert.deepEqual((await manager.listMembers("verification")).map((entry) => entry.routeId), ["route-a"]);
 		} finally {

@@ -44,6 +44,7 @@ import {
 	EnvSecretResolver,
 	SecretResolutionError,
 	NINEROUTER_PI_AUTH_REFERENCE,
+	type NineRouterAuth,
 	type CatalogRow,
 	type PiProviderCatalog,
 	type PiProviderCatalogModel,
@@ -214,6 +215,7 @@ export interface PiManagerContract {
 	list(filter?: string): MaybePromise<readonly (CatalogRow | ModelManagerEntry)[]>;
 	loadStatus(): MaybePromise<unknown>;
 	refresh(signal?: AbortSignal): MaybePromise<unknown>;
+	refreshExternalProviderCatalog?(baseUrl: string, auth: NineRouterAuth, signal?: AbortSignal): MaybePromise<unknown>;
 	configure(baseUrl: string, credentialRef?: SecretRefV1 | string): MaybePromise<unknown>;
 	setEnabled(
 		remoteModelId: string,
@@ -257,6 +259,7 @@ export interface PiProviderRegistry {
 	getProvider(providerId: string): unknown;
 	getAvailableModels?(providerId: string): MaybePromise<readonly unknown[]>;
 	refresh?(options?: { readonly providers?: readonly string[]; readonly allowNetwork?: boolean; readonly force?: boolean; readonly signal?: AbortSignal }): MaybePromise<unknown>;
+	getProviderAuth?(providerId: string): MaybePromise<unknown>;
 }
 
 export interface PiCredentialSetup {
@@ -373,10 +376,9 @@ const modelLabel = (entry: ModelManagerEntry): string => {
 	const state = entry.missing ? " ! missing" : entry.stale ? " ! stale" : entry.available === false ? " ! unavailable" : "";
 	const ambiguity = entry.status === "ambiguous" ? " ! ambiguous" : "";
 	const display = entry.displayName && entry.displayName !== entry.remoteModelId ? ` — ${entry.displayName}` : "";
-	const route = entry.routeId ? ` (${entry.routeId})` : "";
 	const source = entry.sourceLabel === "Pi 9Router" ? " [Pi 9Router]" : "";
 	const thinking = entry.reasoning === false ? " [thinking: not supported]" : entry.reasoning === true ? " [thinking: supported]" : " [thinking: unknown]";
-	return `${enabled} ${entry.remoteModelId}${display}${route}${source}${thinking}${state}${ambiguity}`;
+	return `${enabled} ${entry.remoteModelId}${display}${source}${thinking}${state}${ambiguity}`;
 };
 
 const modelCatalogFingerprint = (entry: ModelManagerEntry): string => JSON.stringify({
@@ -441,6 +443,25 @@ const providerBaseUrl = (provider: unknown): string | undefined => {
 	if (!provider || typeof provider !== "object") return undefined;
 	const value = (provider as Record<string, unknown>).baseUrl;
 	return typeof value === "string" && value.length <= 2048 ? value : undefined;
+};
+
+const resolvePiProviderAuth = async (registry: PiProviderRegistry, providerId: string): Promise<NineRouterAuth> => {
+	if (!registry.getProviderAuth) throw new Error("Pi 9Router authentication is unavailable");
+	const result = await registry.getProviderAuth(providerId);
+	if (!result || typeof result !== "object") throw new Error("Pi 9Router authentication is unavailable");
+	const record = result as Record<string, unknown>;
+	const auth = record.auth && typeof record.auth === "object" ? record.auth as Record<string, unknown> : record;
+	const apiKey = typeof auth.apiKey === "string" && auth.apiKey.length > 0 ? auth.apiKey : undefined;
+	const rawHeaders = auth.headers;
+	const headers: Record<string, string> = {};
+	if (rawHeaders && typeof rawHeaders === "object" && !Array.isArray(rawHeaders)) {
+		for (const [key, value] of Object.entries(rawHeaders as Record<string, unknown>)) if (typeof value === "string") headers[key] = value;
+	}
+	if (!apiKey && Object.keys(headers).length === 0) throw new Error("Pi 9Router authentication is unavailable");
+	return {
+		...(apiKey ? { apiKey } : {}),
+		...(Object.keys(headers).length > 0 ? { headers } : {}),
+	};
 };
 
 const providerModels = (provider: unknown): readonly unknown[] => {
@@ -657,34 +678,29 @@ const analyticsQualityLines = (
 const normalizeModelEntry = (value: unknown): ModelManagerEntry | undefined => {
 	if (!value || typeof value !== "object") return undefined;
 	const candidate = value as Record<string, unknown>;
-	if (typeof candidate.remoteModelId === "string") {
-		if (candidate.entry && typeof candidate.entry === "object") {
-			const nested = candidate.entry as Record<string, unknown>;
-			if (typeof candidate.capability !== "string" && typeof nested.capability === "string") {
-				return { ...candidate, capability: nested.capability } as unknown as ModelManagerEntry;
-			}
-		}
-		return candidate as unknown as ModelManagerEntry;
+	const remote = candidate.entry && typeof candidate.entry === "object" ? candidate.entry as Record<string, unknown> : undefined;
+	if (!remote || typeof remote.remoteId !== "string") {
+		return typeof candidate.remoteModelId === "string" ? candidate as unknown as ModelManagerEntry : undefined;
 	}
-	if (!candidate.entry || typeof candidate.entry !== "object") return undefined;
-	const remote = candidate.entry as Record<string, unknown>;
-	if (typeof remote.remoteId !== "string") return undefined;
 	const status = typeof candidate.status === "string" ? candidate.status : undefined;
-	const thinkingLevelMap = sanitizeThinkingLevelMap(remote.thinkingLevelMap);
+	const bounded = (item: unknown): number | undefined => typeof item === "number" && Number.isSafeInteger(item) && item > 0 && item <= 10_000_000 ? item : undefined;
+	const thinkingLevelMap = sanitizeThinkingLevelMap(remote.thinkingLevelMap ?? candidate.thinkingLevelMap);
+	const contextWindow = bounded(remote.contextWindow) ?? bounded(candidate.contextWindow);
+	const maxTokens = bounded(remote.maxTokens) ?? bounded(candidate.maxTokens);
 	return {
 		remoteModelId: remote.remoteId,
 		enabled: candidate.enabled === true,
 		available: typeof candidate.available === "boolean" ? candidate.available : status !== "missing" && status !== "stale",
 		stale: candidate.stale === true || status === "stale",
 		missing: candidate.missing === true || status === "missing",
-		...(typeof remote.displayName === "string" ? { displayName: remote.displayName } : {}),
+		...(typeof candidate.displayName === "string" ? { displayName: candidate.displayName } : typeof remote.displayName === "string" ? { displayName: remote.displayName } : {}),
 		...(typeof candidate.routeId === "string" ? { routeId: candidate.routeId } : {}),
 		...(typeof candidate.sourceLabel === "string" ? { sourceLabel: candidate.sourceLabel } : typeof remote.owner === "string" ? { sourceLabel: remote.owner } : {}),
-		...(typeof remote.capability === "string" ? { capability: remote.capability } : {}),
-		...(typeof remote.reasoning === "boolean" ? { reasoning: remote.reasoning } : {}),
-		...(typeof remote.vision === "boolean" ? { vision: remote.vision } : {}),
-		...(typeof remote.contextWindow === "number" ? { contextWindow: remote.contextWindow } : {}),
-		...(typeof remote.maxTokens === "number" ? { maxTokens: remote.maxTokens } : {}),
+		...(typeof remote.capability === "string" ? { capability: remote.capability } : typeof candidate.capability === "string" ? { capability: candidate.capability } : {}),
+		...(typeof remote.reasoning === "boolean" ? { reasoning: remote.reasoning } : typeof candidate.reasoning === "boolean" ? { reasoning: candidate.reasoning } : {}),
+		...(typeof remote.vision === "boolean" ? { vision: remote.vision } : typeof candidate.vision === "boolean" ? { vision: candidate.vision } : {}),
+		...(contextWindow === undefined ? {} : { contextWindow }),
+		...(maxTokens === undefined ? {} : { maxTokens }),
 		...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
 		...(status ? { status } : {}),
 		...(typeof candidate.warning === "string" ? { warning: candidate.warning } : {}),
@@ -936,12 +952,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	let registeredFingerprint: string | undefined;
 	let ownership: "unknown" | "external" | "owned" = "unknown";
 	let ownedProvider: unknown;
+	let externalCatalogOverride = false;
 	let disposed = false;
 	const lifetime = new AbortController();
 	let routingEventSequence = 0;
 
 	const syncPiProviderCatalog = async (): Promise<void> => {
 		if (!manager.adoptPiProviderCatalog || !providerRegistry) return;
+		if (externalCatalogOverride) return;
 		if (ownership === "owned") {
 			await manager.adoptPiProviderCatalog({ providerId, available: false, models: [] });
 			return;
@@ -1054,6 +1072,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const refreshAndReconcile = async (ctx: ExtensionContext | ExtensionCommandContext): Promise<void> => {
 		if (!requireIdle(ctx)) return;
+		ctx.ui.notify("Refreshing 9Router models...", "info");
 		try {
 			let before: readonly ModelManagerEntry[] = [];
 			try { before = await modelEntries(); } catch { /* refresh remains authoritative */ }
@@ -1061,13 +1080,23 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			try { externalProvider = providerRegistry?.getProvider(providerId); } catch { externalProvider = undefined; }
 			let refreshResult: unknown;
 			if (externalProvider !== undefined) {
-				refreshResult = await providerRegistry?.refresh?.({ providers: [providerId], allowNetwork: true, force: true, ...(ctx.signal ? { signal: ctx.signal } : {}) });
-				if (refreshResult && typeof refreshResult === "object") {
-					if ((refreshResult as { readonly aborted?: unknown }).aborted === true) throw new Error("Pi 9Router catalog refresh was cancelled");
-					const errors = (refreshResult as { readonly errors?: unknown }).errors;
-					if ((errors instanceof Map && errors.size > 0) || (Array.isArray(errors) && errors.length > 0)) throw new Error("Pi 9Router catalog refresh failed");
+				const refreshModels = externalProvider && typeof externalProvider === "object" && typeof (externalProvider as Record<string, unknown>).refreshModels === "function";
+				if (refreshModels) {
+					externalCatalogOverride = false;
+					refreshResult = await providerRegistry?.refresh?.({ providers: [providerId], allowNetwork: true, force: true, ...(ctx.signal ? { signal: ctx.signal } : {}) });
+					if (refreshResult && typeof refreshResult === "object") {
+						if ((refreshResult as { readonly aborted?: unknown }).aborted === true) throw new Error("Pi 9Router catalog refresh was cancelled");
+						const errors = (refreshResult as { readonly errors?: unknown }).errors;
+						if ((errors instanceof Map && errors.size > 0) || (Array.isArray(errors) && errors.length > 0)) throw new Error("Pi 9Router catalog refresh failed");
+					}
+					await syncPiProviderCatalog();
+				} else {
+					const baseUrl = providerBaseUrl(externalProvider);
+					if (!baseUrl || !providerRegistry || !manager.refreshExternalProviderCatalog) throw new Error("Pi 9Router upstream refresh is unavailable");
+					const auth = await resolvePiProviderAuth(providerRegistry, providerId);
+					refreshResult = await manager.refreshExternalProviderCatalog(baseUrl, auth, AbortSignal.any(ctx.signal ? [ctx.signal, lifetime.signal] : [lifetime.signal]));
+					externalCatalogOverride = true;
 				}
-				await syncPiProviderCatalog();
 			} else {
 				refreshResult = await manager.refresh(AbortSignal.any(ctx.signal ? [ctx.signal, lifetime.signal] : [lifetime.signal]));
 			}
@@ -1083,9 +1112,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const added = ids("addedRemoteIds") ?? observed.added;
 			const removed = ids("removedRemoteIds") ?? observed.removed;
 			const changed = ids("changedRemoteIds") ?? observed.changed;
-			ctx.ui.notify(`${externalProvider !== undefined ? "Pi 9Router models refreshed" : "9Router refreshed"} (${after.length} discovered, ${after.filter((entry) => entry.enabled).length} enabled; +${added.length} added, -${removed.length} removed, ~${changed.length} changed)`, "info");
+			const details = added.length === 0 && removed.length === 0 && changed.length === 0
+				? "no model changes"
+				: `+${added.length} added, -${removed.length} removed, ~${changed.length} changed`;
+			ctx.ui.notify(`${externalProvider !== undefined ? "Pi 9Router models refreshed" : "9Router refreshed"} (${after.length} discovered, ${after.filter((entry) => entry.enabled).length} enabled; ${details}; last refreshed ${new Date().toISOString()})`, "info");
 		} catch (error) {
-			notifyError(ctx, "9Router refresh failed", error);
+			ctx.ui.notify(`Refresh failed — showing last-known-good catalog when available: ${sanitizer.sanitizeText(errorMessage(error))}`, "warning");
 		}
 	};
 
@@ -1165,9 +1197,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			} else return;
 		}
 		while (true) {
-			const modelOptions = [...entries.map(modelLabel), "Refresh Models", "Back"];
+			const modelOptions = ["Refresh Models", "────────────", ...entries.map(modelLabel), "Back"];
 			const selected = await ctx.ui.select("9Router Models — select a model", modelOptions);
 			if (!selected || selected === "Back") return;
+			if (selected === "────────────") continue;
 			if (selected === "Refresh Models") {
 				await refreshAndReconcile(ctx);
 				try { entries = await modelEntries(filter); } catch (error) { notifyError(ctx, "9Router model list failed", error); return; }
@@ -3581,6 +3614,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const setProviderRegistry = (registry: PiProviderRegistry): void => {
 		if (!disposed) {
+			externalCatalogOverride = false;
 			providerRegistry = registry;
 			if (options.providerRegistryRef) options.providerRegistryRef.current = registry;
 			void syncPiProviderCatalog();

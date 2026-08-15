@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC20 is the latest source/release line, while npm `next` currently points to the exact RC17 prerelease |
+| Development phase | M10 remains the latest accepted development milestone; RC21 is the current source/release candidate and npm publication is pending |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -30,6 +30,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC18 compatibility repair | Local source repair at `0af7b8e`; package manifest remains `0.1.0-rc.17`; no package rebuild/release or publication is claimed |
 | RC19 release | `0.1.0-rc.19` — public prerelease; commit `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag `v0.1.0-rc.19`, artifact SHA-256 `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e` |
 | RC20 release | `0.1.0-rc.20` — public prerelease; source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag `v0.1.0-rc.20`, artifact SHA-256 `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc`; npm `next` is currently RC17 |
+| RC21 candidate | `0.1.0-rc.21` — Model Router dogfood repair candidate; source and artifact release gates pending |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
@@ -112,6 +113,13 @@ configurable periodic sync, catalog/capability diffing, per-route capability
 views, provenance, last-known-good snapshots, stale indicators, safe user
 overrides, and a clear distinction between provider-advertised capabilities and
 empirically observed capabilities. RC18 does not implement this requirement.
+
+## RC21 — Model Router dogfood repair
+
+- **Status:** implementation complete locally; publication and public dogfood are pending. RC21 preserves nested `CatalogRow.entry` metadata through host normalization, keeps true/false/unknown thinking semantics conservative, and derives Pool choices from authoritative cache metadata.
+- **External refresh:** static external Pi `0.84.1` providers now use Pi's existing auth result transiently for a bounded upstream `GET /v1/models`; dynamic providers retain Pi's native refresh hook. No provider registration, external model list, credential persistence, or raw-key logging is performed.
+- **Picker UX:** populated Model Router menus put Refresh Models first, show start/success/no-change/failure/LKG feedback, hide internal route IDs from normal rows, and retain exact IDs in Inspect/Diagnostics.
+- **Evidence:** focused RC21 manager, Pool, and host tests pass; the full clean release gate and immutable artifact identity remain open until the release checkpoint.
 
 ## RC20 — Thinking-aware Pool routing and live catalog refresh
 

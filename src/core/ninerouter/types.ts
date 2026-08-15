@@ -116,6 +116,8 @@ export interface PiProviderCatalog {
   readonly available: boolean;
   readonly baseUrl?: string;
   readonly models: readonly PiProviderCatalogModel[];
+  /** Runtime-only authority marker; never persisted in Pi or ConfigStore. */
+  readonly authority?: "pi" | "upstream";
 }
 
 export interface NineRouterStatus {

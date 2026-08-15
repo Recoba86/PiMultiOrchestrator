@@ -347,7 +347,7 @@ export class PoolManager {
 		const state = managementState(config, route, catalog, catalogEntry);
 		const effort = normalizeThinkingEffort(entry.thinkingEffort);
 		const thinkingMetadata: { reasoning?: boolean; thinkingLevelMap?: import("../thinking.js").ThinkingLevelMap } = {};
-		if (catalogEntry?.reasoning !== undefined || route.metadata?.thinkingLevelMap !== undefined) thinkingMetadata.reasoning = catalogEntry?.reasoning ?? true;
+		if (catalogEntry?.reasoning !== undefined) thinkingMetadata.reasoning = catalogEntry.reasoning;
 		const thinkingLevelMap = catalogEntry?.thinkingLevelMap ?? route.metadata?.thinkingLevelMap;
 		if (thinkingLevelMap !== undefined) thinkingMetadata.thinkingLevelMap = thinkingLevelMap;
 		const availableThinkingEfforts = supportedThinkingEfforts(thinkingMetadata);

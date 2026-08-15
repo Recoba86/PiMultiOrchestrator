@@ -389,6 +389,24 @@ provenance, last-known-good state, stale indicators, safe user overrides, and
 the distinction between provider-advertised and empirically observed
 capabilities. This is explicitly outside RC18.
 
+## RC21 — Model Router dogfood repair
+
+Status: IMPLEMENTED LOCALLY / RELEASE CANDIDATE; publication and public
+dogfood gates pending.
+
+RC21 repairs the RC20 dogfood boundary: nested `CatalogRow.entry` metadata is
+preserved through host normalization; Pool Thinking Effort remains supported,
+not-supported, or unknown without fabricated capabilities; static external Pi
+`0.84.1` providers refresh their upstream `/v1/models` endpoint through Pi's
+existing auth result using transient in-memory auth; PMO cache/LKG, enabled
+routes, Pool order, and external provider ownership remain intact; and the
+populated Model Router picker puts Refresh Models first with explicit feedback
+while hiding internal route IDs from normal rows.
+
+Focused RC21 manager, Pool, and host regressions pass. Full `npm run check`,
+detached release verification, artifact freeze, registry/GitHub publication,
+and public-package dogfood remain required before calling RC21 published.
+
 ## RC20 — Thinking-aware Pool routing and live catalog refresh
 
 Status: IMPLEMENTED / PUBLIC PRERELEASE; manifest `0.1.0-rc.20` is the

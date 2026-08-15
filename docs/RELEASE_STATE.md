@@ -12,14 +12,14 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.17` — npm `next`; RC20 remains a public GitHub/npm prerelease |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.17` — npm `next`; RC21 publication is pending |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.20` — RC20 public prerelease |
+| Development manifest version | `0.1.0-rc.21` — RC21 release candidate |
 | RC20 release | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; published prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | PUBLISHED PRERELEASE — RC20 full gate, artifact, registry, GitHub, and public Pi dogfood pass; npm `next` currently points to RC17; not stable/production-ready |
+| Local technical release readiness | RC21 implementation and focused gates pass; full release, registry, GitHub, and public Pi dogfood pending; not stable/production-ready |
 | Release tag | `v0.1.0-rc.20` → `8bcb4a61796623ea09bd1ed09c411656bd657138` |
 | Release commit | `8bcb4a61796623ea09bd1ed09c411656bd657138` |
 | GitHub release | [v0.1.0-rc.20](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.20) — prerelease |
@@ -29,6 +29,15 @@ This file records releasable product state. It does not promote development prog
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC21 Model Router dogfood repair candidate
+
+RC21 is the current release candidate. It repairs nested catalog metadata
+normalization, conservative true/false/unknown thinking semantics, static Pi
+provider upstream refresh through Pi's existing auth bridge, LKG preservation,
+picker feedback/order, and normal-row route-ID privacy. The exact Git commit,
+immutable artifact SHA-256, npm `next`/`latest` verification, GitHub prerelease,
+and public Pi dogfood are recorded only after their respective gates pass.
 
 ## RC20 public prerelease publication
 
