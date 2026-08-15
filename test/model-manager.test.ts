@@ -19,7 +19,7 @@ import {
 interface FakeModel {
   readonly id: string;
   readonly name: string;
-  readonly capabilities?: readonly string[];
+  readonly capabilities?: readonly string[] | Record<string, unknown>;
   readonly resource?: { readonly class: "subscription" | "metered-api"; readonly id: string };
   readonly underlying_family?: string;
 }
@@ -36,6 +36,32 @@ const response = (models: readonly FakeModel[]): Response => new Response(JSON.s
 });
 
 describe("NineRouterManager", () => {
+  it("[I][fixture-v1] carries current capability metadata into the Pi projection", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-m2-manager-capabilities-"));
+    try {
+      const models: FakeModel[] = [
+        { id: "ag/gemini-3.7-flash-high", name: "Gemini", capabilities: { vision: true, reasoning: true, contextWindow: 1_048_576, maxOutput: 65_536 } },
+        { id: "cu/gpt-5.6-sol-high", name: "GPT", capabilities: { vision: false, reasoning: true, contextWindow: 400_000, maxOutput: 128_000 } },
+        { id: "gcli/grok-4.6", name: "Grok", capabilities: { vision: false, reasoning: true }, context_length: 256_000, max_completion_tokens: 64_000 } as FakeModel,
+      ];
+      const client = new NineRouterClient({ fetchImpl: async () => response(models) });
+      const configStore = new ConfigStore({ root });
+      const manager = new NineRouterManager({ configStore, cacheStore: new CatalogCacheStore(root), client });
+      await manager.configure("http://127.0.0.1:4100");
+      await manager.refresh();
+      for (const entry of models) await manager.setEnabled(entry.id, true);
+
+      const projected = await manager.providerProjection();
+      assert.deepEqual(projected.models.map((entry) => ({ id: entry.id, reasoning: entry.reasoning, input: entry.input, contextWindow: entry.contextWindow, maxTokens: entry.maxTokens })), [
+        { id: "ag/gemini-3.7-flash-high", reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
+        { id: "cu/gpt-5.6-sol-high", reasoning: true, input: ["text"], contextWindow: 400_000, maxTokens: 128_000 },
+        { id: "gcli/grok-4.6", reasoning: true, input: ["text"], contextWindow: 256_000, maxTokens: 64_000 },
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("[I][fixture-v1] selects 5 of 36 without mutating pools, keeps new models disabled, and handles disappearance/LKG failures", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-m2-manager-"));
     try {

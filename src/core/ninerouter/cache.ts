@@ -9,6 +9,7 @@ import { normalizeNineRouterBaseUrl } from "./connection.js";
 import type {
   CatalogCacheLoadResult,
   CatalogCacheV1,
+  CatalogCapabilityMetadata,
   CatalogErrorKind,
   CatalogErrorSummary,
   CatalogFieldProvenance,
@@ -44,6 +45,9 @@ const PROVENANCE_KEYS = [
   "underlyingVersion",
   "capabilities",
   "input",
+  "reasoning",
+  "vision",
+  "capabilityMetadata",
   "contextWindow",
   "maxTokens",
   "capability",
@@ -180,6 +184,11 @@ function validateEntry(value: unknown): RemoteCatalogEntry {
   const underlyingVersion = optionalString(value.underlyingVersion, MAX_STRING);
   const capabilities = validateTags(value.capabilities);
   const input = validateInput(value.input);
+  const reasoning = optionalBoolean(value.reasoning);
+  const vision = optionalBoolean(value.vision);
+  if (value.reasoning !== undefined && reasoning === undefined) throw new Error("Catalog cache reasoning capability is invalid");
+  if (value.vision !== undefined && vision === undefined) throw new Error("Catalog cache vision capability is invalid");
+  const capabilityMetadata = validateCapabilityMetadata(value.capabilityMetadata);
   const contextWindow = optionalBoundedInteger(value.contextWindow, 1, 10_000_000);
   const maxTokens = optionalBoundedInteger(value.maxTokens, 1, 10_000_000);
   if (value.contextWindow !== undefined && contextWindow === undefined) throw new Error("Catalog cache context window is invalid");
@@ -196,6 +205,9 @@ function validateEntry(value: unknown): RemoteCatalogEntry {
     ...(underlyingVersion === undefined ? {} : { underlyingVersion }),
     capabilities,
     input,
+    ...(reasoning === undefined ? {} : { reasoning }),
+    ...(vision === undefined ? {} : { vision }),
+    ...(capabilityMetadata === undefined ? {} : { capabilityMetadata }),
     ...(contextWindow === undefined ? {} : { contextWindow }),
     ...(maxTokens === undefined ? {} : { maxTokens }),
     capability: value.capability,
@@ -209,6 +221,25 @@ function boundedString(value: unknown, max: number): string | undefined {
 
 function optionalString(value: unknown, max: number): string | undefined {
   return value === undefined ? undefined : boundedString(value, max);
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  return value === undefined ? undefined : typeof value === "boolean" ? value : undefined;
+}
+
+function validateCapabilityMetadata(value: unknown): CatalogCapabilityMetadata | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error("Catalog cache capability metadata is invalid");
+  const result: CatalogCapabilityMetadata = {};
+  for (const key of ["tools", "search", "audioInput", "videoInput", "thinkingCanDisable"] as const) {
+    const item = value[key];
+    if (item !== undefined && typeof item !== "boolean") throw new Error("Catalog cache capability metadata is invalid");
+    if (item !== undefined) (result as Record<string, unknown>)[key] = item;
+  }
+  const thinkingFormat = optionalString(value.thinkingFormat, 64);
+  if (value.thinkingFormat !== undefined && thinkingFormat === undefined) throw new Error("Catalog cache capability metadata is invalid");
+  if (thinkingFormat !== undefined) (result as Record<string, unknown>).thinkingFormat = thinkingFormat;
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function isResourceClass(value: unknown): value is ResourceClass {

@@ -8,6 +8,16 @@ export const NINEROUTER_PROVIDER_ID = "9router" as const;
 export type CatalogCapability = "chat" | "non-chat" | "unknown";
 export type CatalogFieldProvenance = "remote" | "configured" | "conservative-default";
 
+/** Bounded metadata from the current object-shaped 9Router capability schema. */
+export interface CatalogCapabilityMetadata {
+  readonly tools?: boolean;
+  readonly search?: boolean;
+  readonly audioInput?: boolean;
+  readonly videoInput?: boolean;
+  readonly thinkingFormat?: string;
+  readonly thinkingCanDisable?: boolean;
+}
+
 /** Safe, bounded metadata extracted from one gateway catalog row. */
 export interface RemoteCatalogEntry {
   readonly remoteId: string;
@@ -19,6 +29,9 @@ export interface RemoteCatalogEntry {
   readonly underlyingVersion?: string;
   readonly capabilities: readonly string[];
   readonly input: readonly ("text" | "image")[];
+  readonly reasoning?: boolean;
+  readonly vision?: boolean;
+  readonly capabilityMetadata?: CatalogCapabilityMetadata;
   readonly contextWindow?: number;
   readonly maxTokens?: number;
   readonly capability: CatalogCapability;

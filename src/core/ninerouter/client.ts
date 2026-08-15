@@ -1,7 +1,7 @@
 import { EnvSecretResolver } from "./secrets.js";
 import { NineRouterError, safeCatalogErrorMessage, safeCatalogErrorStage } from "./errors.js";
 import { nineRouterModelsUrl, normalizeNineRouterBaseUrl } from "./connection.js";
-import type { CatalogCapability, CatalogFieldProvenance, RemoteCatalogEntry } from "./types.js";
+import type { CatalogCapability, CatalogCapabilityMetadata, CatalogFieldProvenance, RemoteCatalogEntry } from "./types.js";
 import type { ResourceClass, SecretRefV1, StableId } from "../config/types.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -189,11 +189,23 @@ function parseEntry(value: unknown, index: number): RemoteCatalogEntry {
   const owner = optionalString(value.owned_by ?? value.owner ?? value.provider, MAX_STRING);
   const rawResource = value.resource ?? value.account ?? value.subscription;
   const resource = parseResource(rawResource);
+  const parsedCapabilityMetadata = parseCapabilityMetadata(value.capabilities);
+  const capabilityMetadata = toCatalogCapabilityMetadata(parsedCapabilityMetadata);
   const capabilities = parseTags(value.capabilities);
   const rawInput = value.input ?? value.modalities;
-  const input = parseInput(rawInput);
-  const contextWindow = boundedNumber(value.context_window ?? value.contextWindow, 1, 10_000_000);
-  const maxTokens = boundedNumber(value.max_tokens ?? value.maxTokens, 1, 10_000_000);
+  const input: ("text" | "image")[] = parsedCapabilityMetadata?.vision === undefined
+    ? parseInput(rawInput)
+    : parsedCapabilityMetadata.vision ? ["text", "image"] : ["text"];
+  const contextWindow = firstBoundedNumber(
+    [parsedCapabilityMetadata?.contextWindow, value.context_length, value.context_window, value.contextWindow],
+    1,
+    10_000_000,
+  );
+  const maxTokens = firstBoundedNumber(
+    [parsedCapabilityMetadata?.maxOutput, value.max_completion_tokens, value.max_tokens, value.maxTokens],
+    1,
+    10_000_000,
+  );
   const rawCapability = value.type ?? value.model_type ?? value.modelType;
   const capability = parseCapability(rawCapability, capabilities);
   const underlyingFamily = optionalString(value.underlying_family ?? value.underlyingFamily, MAX_STRING);
@@ -202,8 +214,8 @@ function parseEntry(value: unknown, index: number): RemoteCatalogEntry {
     remoteId: "remote",
     displayName: remoteName ? "remote" : "conservative-default",
     resourceClass: resourceClassIsRemote(rawResource) ? "remote" : "conservative-default",
-    capabilities: Array.isArray(value.capabilities) ? "remote" : "conservative-default",
-    input: hasRemoteInput(rawInput) ? "remote" : "conservative-default",
+    capabilities: Array.isArray(value.capabilities) || parsedCapabilityMetadata !== undefined ? "remote" : "conservative-default",
+    input: parsedCapabilityMetadata?.vision !== undefined || hasRemoteInput(rawInput) ? "remote" : "conservative-default",
     capability: hasExplicitCapability(rawCapability, capabilities) ? "remote" : "conservative-default",
   };
   if (owner) provenance.owner = "remote";
@@ -212,6 +224,9 @@ function parseEntry(value: unknown, index: number): RemoteCatalogEntry {
   if (underlyingVersion) provenance.underlyingVersion = "remote";
   if (contextWindow) provenance.contextWindow = "remote";
   if (maxTokens) provenance.maxTokens = "remote";
+  if (parsedCapabilityMetadata?.reasoning !== undefined) provenance.reasoning = "remote";
+  if (parsedCapabilityMetadata?.vision !== undefined) provenance.vision = "remote";
+  if (capabilityMetadata !== undefined) provenance.capabilityMetadata = "remote";
   return {
     remoteId,
     displayName,
@@ -222,6 +237,9 @@ function parseEntry(value: unknown, index: number): RemoteCatalogEntry {
     ...(underlyingVersion ? { underlyingVersion } : {}),
     capabilities,
     input,
+    ...(parsedCapabilityMetadata?.reasoning === undefined ? {} : { reasoning: parsedCapabilityMetadata.reasoning }),
+    ...(parsedCapabilityMetadata?.vision === undefined ? {} : { vision: parsedCapabilityMetadata.vision }),
+    ...(capabilityMetadata === undefined ? {} : { capabilityMetadata }),
     ...(contextWindow ? { contextWindow } : {}),
     ...(maxTokens ? { maxTokens } : {}),
     capability,
@@ -288,8 +306,58 @@ function optionalString(value: unknown, max: number): string | undefined {
   return typeof value === "string" && value.length > 0 && value.length <= max && !/\p{Cc}/u.test(value) ? value : undefined;
 }
 
+function firstBoundedNumber(values: readonly unknown[], min: number, max: number): number | undefined {
+  for (const value of values) {
+    const result = boundedNumber(value, min, max);
+    if (result !== undefined) return result;
+  }
+  return undefined;
+}
+
 function boundedNumber(value: unknown, min: number, max: number): number | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max ? value : undefined;
+}
+
+type ParsedCapabilityMetadata = {
+  tools?: boolean;
+  search?: boolean;
+  audioInput?: boolean;
+  videoInput?: boolean;
+  thinkingFormat?: string;
+  thinkingCanDisable?: boolean;
+  contextWindow?: number;
+  maxOutput?: number;
+  reasoning?: boolean;
+  vision?: boolean;
+};
+
+function parseCapabilityMetadata(value: unknown): ParsedCapabilityMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: ParsedCapabilityMetadata = {};
+  if (typeof value.reasoning === "boolean") result.reasoning = value.reasoning;
+  if (typeof value.vision === "boolean") result.vision = value.vision;
+  const contextWindow = boundedNumber(value.contextWindow, 1, 10_000_000);
+  if (contextWindow !== undefined) result.contextWindow = contextWindow;
+  const maxOutput = boundedNumber(value.maxOutput, 1, 10_000_000);
+  if (maxOutput !== undefined) result.maxOutput = maxOutput;
+  if (typeof value.tools === "boolean") result.tools = value.tools;
+  if (typeof value.search === "boolean") result.search = value.search;
+  if (typeof value.audioInput === "boolean") result.audioInput = value.audioInput;
+  if (typeof value.videoInput === "boolean") result.videoInput = value.videoInput;
+  const thinkingFormat = optionalString(value.thinkingFormat, 64);
+  if (thinkingFormat !== undefined) result.thinkingFormat = thinkingFormat;
+  if (typeof value.thinkingCanDisable === "boolean") result.thinkingCanDisable = value.thinkingCanDisable;
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function toCatalogCapabilityMetadata(value: ParsedCapabilityMetadata | undefined): CatalogCapabilityMetadata | undefined {
+  if (!value) return undefined;
+  const result: CatalogCapabilityMetadata = {};
+  for (const key of ["tools", "search", "audioInput", "videoInput", "thinkingCanDisable", "thinkingFormat"] as const) {
+    const item = value[key];
+    if (item !== undefined) (result as Record<string, unknown>)[key] = item;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

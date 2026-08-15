@@ -97,6 +97,55 @@ describe("9Router domain primitives", () => {
     await assert.rejects(() => timed.listModels(), (error: unknown) => error instanceof NineRouterError && error.kind === "timeout");
   });
 
+  it("[U][fixture-v1] parses current and legacy capability metadata without fabricating caps", async () => {
+    const client = new NineRouterClient({
+      baseUrl: "http://127.0.0.1:3000",
+      fetchImpl: async () => jsonResponse({ data: [
+        {
+          id: "ag/gemini-3.7-flash-high",
+          capabilities: {
+            vision: true,
+            reasoning: true,
+            tools: true,
+            search: true,
+            audioInput: false,
+            videoInput: false,
+            thinkingFormat: "gemini",
+            thinkingCanDisable: true,
+            contextWindow: 1_048_576,
+            maxOutput: 65_536,
+          },
+        },
+        { id: "cu/gpt-5.6-sol-high", capabilities: { vision: false, reasoning: true, contextWindow: 400_000, maxOutput: 128_000 } },
+        { id: "gcli/grok-4.6", capabilities: { vision: false, reasoning: true }, context_length: 256_000, max_completion_tokens: 64_000 },
+        { id: "legacy/chat", capabilities: ["chat"], context_window: 32_000, max_tokens: 8_000 },
+      ] }),
+    });
+
+    const entries = await client.listModels();
+    const gemini = entries.find((entry) => entry.remoteId === "ag/gemini-3.7-flash-high");
+    const gpt = entries.find((entry) => entry.remoteId === "cu/gpt-5.6-sol-high");
+    const grok = entries.find((entry) => entry.remoteId === "gcli/grok-4.6");
+    const legacy = entries.find((entry) => entry.remoteId === "legacy/chat");
+    assert.deepEqual(gemini?.input, ["text", "image"]);
+    assert.equal(gemini?.reasoning, true);
+    assert.equal(gemini?.contextWindow, 1_048_576);
+    assert.equal(gemini?.maxTokens, 65_536);
+    assert.deepEqual(gemini?.capabilityMetadata, { tools: true, search: true, audioInput: false, videoInput: false, thinkingFormat: "gemini", thinkingCanDisable: true });
+    assert.deepEqual(gpt?.input, ["text"]);
+    assert.equal(gpt?.reasoning, true);
+    assert.equal(gpt?.contextWindow, 400_000);
+    assert.equal(gpt?.maxTokens, 128_000);
+    assert.deepEqual(grok?.input, ["text"]);
+    assert.equal(grok?.reasoning, true);
+    assert.equal(grok?.contextWindow, 256_000);
+    assert.equal(grok?.maxTokens, 64_000);
+    assert.equal(legacy?.reasoning, undefined);
+    assert.deepEqual(legacy?.input, ["text"]);
+    assert.equal(legacy?.contextWindow, 32_000);
+    assert.equal(legacy?.maxTokens, 8_000);
+  });
+
   it("[I][fixture-v1] treats corrupt cache as nonfatal and strips unknown entry fields on re-save", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-m2-ninerouter-"));
     try {
@@ -123,6 +172,9 @@ describe("9Router domain primitives", () => {
           resourceClass: "unknown",
           capabilities: ["chat"],
           input: ["text"],
+          reasoning: true,
+          vision: true,
+          capabilityMetadata: { tools: true, search: false, thinkingFormat: "test" },
           capability: "chat",
           provenance: { remoteId: "remote" },
           tampered: "discard-me",
@@ -130,6 +182,11 @@ describe("9Router domain primitives", () => {
       });
       const serialized = await (await import("node:fs/promises")).readFile(path, "utf8");
       assert.doesNotMatch(serialized, /discard-me/u);
+      const loaded = await store.load();
+      assert.equal(loaded.status, "valid");
+      assert.equal(loaded.cache?.entries[0]?.reasoning, true);
+      assert.equal(loaded.cache?.entries[0]?.vision, true);
+      assert.deepEqual(loaded.cache?.entries[0]?.capabilityMetadata, { tools: true, search: false, thinkingFormat: "test" });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

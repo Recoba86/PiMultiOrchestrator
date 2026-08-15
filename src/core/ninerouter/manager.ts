@@ -414,7 +414,7 @@ function toProviderModel(route: RouteConfigV1, entry: RemoteCatalogEntry, warnin
     routeId: route.id,
     id: entry.remoteId,
     name: entry.displayName,
-    reasoning: false,
+    reasoning: entry.reasoning ?? false,
     input: entry.input.length > 0 ? [...entry.input] : ["text"],
     cost: DEFAULT_COST,
     contextWindow: entry.contextWindow ?? DEFAULT_CONTEXT_WINDOW,

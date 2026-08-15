@@ -341,21 +341,41 @@ describe("Pi 9Router host adapter", () => {
 		assert.deepEqual(pi.unregisters, [NINEROUTER_PROVIDER_ID]);
 	});
 
-	it("[U][fixture-pi-0.84.1] clears a provider retained by Pi when a reloaded host starts empty", async () => {
+	it("[U][fixture-pi-0.84.1] does not unregister an unowned provider when a reloaded host starts empty", async () => {
 		const fixture = managerFixture(projection());
 		fixture.projection = undefined;
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: fixture });
 
-		assert.deepEqual(await host.reconcile(), { changed: true, registered: false, modelCount: 0 });
 		assert.deepEqual(await host.reconcile(), { changed: false, registered: false, modelCount: 0 });
-		assert.deepEqual(pi.unregisters, [NINEROUTER_PROVIDER_ID]);
+		assert.deepEqual(await host.reconcile(), { changed: false, registered: false, modelCount: 0 });
+		assert.deepEqual(pi.unregisters, []);
+	});
+
+	it("[U][fixture-pi-0.84.1] preserves an existing 27-model user provider across reconcile, reload, and disposal", async () => {
+		const existingProvider = { models: Array.from({ length: 27 }, (_, index) => ({ id: `user-${index}` })) };
+		const fixture = managerFixture(projection([model("pmo-only-a"), model("pmo-only-b")]));
+		const pi = piFixture();
+		const providerRegistry = { getProvider: (providerId: string) => providerId === NINEROUTER_PROVIDER_ID ? existingProvider : undefined };
+		const host = createPiHost(pi.pi, { manager: fixture, providerRegistry });
+
+		assert.deepEqual(await host.reconcile(), { changed: false, registered: false, modelCount: 2 });
+		fixture.projection = undefined;
+		assert.deepEqual(await host.reconcile(), { changed: false, registered: false, modelCount: 0 });
+		host.dispose();
+		const reloaded = createPiHost(pi.pi, { manager: fixture, providerRegistry });
+		assert.deepEqual(await reloaded.reconcile(), { changed: false, registered: false, modelCount: 0 });
+		reloaded.dispose();
+		assert.equal(existingProvider.models.length, 27);
+		assert.deepEqual(pi.registerCalls, []);
+		assert.deepEqual(pi.unregisters, []);
 	});
 
 	it("[U][fixture-pi-0.84.1] unregisters the owned provider on host disposal", async () => {
 		const pi = piFixture();
 		const host = createPiHost(pi.pi, { manager: managerFixture(projection()) });
 		await host.reconcile();
+		host.dispose();
 		host.dispose();
 		assert.equal(pi.providers.size, 0);
 		assert.deepEqual(pi.unregisters, [NINEROUTER_PROVIDER_ID]);

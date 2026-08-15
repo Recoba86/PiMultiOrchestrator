@@ -213,6 +213,8 @@ export interface PiManagerContract {
 
 export interface PiHostOptions {
 	readonly manager: PiManagerContract;
+	/** Existing Pi provider catalog, when the runtime has bound its model registry. */
+	readonly providerRegistry?: PiProviderRegistry;
 	readonly poolManager?: PoolManagerContract;
 	readonly configStore?: ConfigStore;
 	readonly healthStore?: HealthStore;
@@ -232,6 +234,10 @@ export interface PiHostOptions {
 	readonly triageClient?: TriageClient;
 	/** Local-only project trust state; never part of portable ConfigStore data. */
 	readonly trustStore?: TrustStore;
+}
+
+export interface PiProviderRegistry {
+	getProvider(providerId: string): unknown;
 }
 
 export interface ReconcileResult {
@@ -256,6 +262,7 @@ export interface PiHost {
 	readonly trustStore?: TrustStore;
 	readonly qualityExecutor?: SubagentExecutor;
 	reconcile(): Promise<ReconcileResult>;
+	setProviderRegistry(registry: PiProviderRegistry): void;
 	registerCommands(): void;
 	dispose(): void;
 }
@@ -740,7 +747,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		try { const result = analyticsStore?.append(event); if (result && typeof (result as Promise<unknown>).then === "function") void (result as Promise<unknown>).catch(() => undefined); } catch { /* analytics is non-critical */ }
 	};
 	let registeredFingerprint: string | undefined;
-	let reconciled = false;
+	let providerRegistry = options.providerRegistry;
+	let ownership: "unknown" | "external" | "owned" = "unknown";
+	let disposed = false;
 	const lifetime = new AbortController();
 	let routingEventSequence = 0;
 
@@ -755,16 +764,25 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const reconcile = async (): Promise<ReconcileResult> => {
+		if (disposed) return { changed: false, registered: false, modelCount: 0 };
 		const projection = await manager.providerProjection();
 		const config = projection ? asProviderConfig(projection) : undefined;
+		if (ownership !== "owned" && providerRegistry) {
+			let providerExists = true;
+			try { providerExists = providerRegistry.getProvider(providerId) !== undefined; }
+			catch { /* Fail closed: an uninspectable provider namespace is external. */ }
+			if (providerExists) {
+				ownership = "external";
+				registeredFingerprint = undefined;
+				return { changed: false, registered: false, modelCount: projection?.models.length ?? 0 };
+			}
+			if (ownership === "external") ownership = "unknown";
+		}
 		if (!config || !projection) {
-			// Pi keeps extension provider state across /reload while recreating the
-			// extension factory. Clear our owned namespace on the first empty
-			// projection so a prior run cannot leave stale 9Router models behind.
-			if (!reconciled || registeredFingerprint !== undefined) {
+			if (ownership === "owned") {
 				pi.unregisterProvider(providerId);
 				registeredFingerprint = undefined;
-				reconciled = true;
+				ownership = "unknown";
 				return { changed: true, registered: false, modelCount: 0 };
 			}
 			return { changed: false, registered: false, modelCount: 0 };
@@ -782,7 +800,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			// This also preserves the previous safe registry if validation fails.
 			pi.registerProvider(providerId, config);
 			registeredFingerprint = fingerprint;
-			reconciled = true;
+			ownership = "owned";
 			return { changed: true, registered: true, modelCount: projection.models.length };
 		} catch (error) {
 			registeredFingerprint = previousFingerprint;
@@ -3197,13 +3215,15 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	};
 
 	const dispose = (): void => {
+		if (disposed) return;
+		disposed = true;
 		lifetime.abort();
-		pi.unregisterProvider(providerId);
+		if (ownership === "owned") pi.unregisterProvider(providerId);
 		const close = (options.missionStore as { readonly close?: unknown } | undefined)?.close;
 		if (typeof close === "function") close.call(options.missionStore);
 		try { analyticsStore?.close?.(); } catch { /* analytics is non-critical */ }
 		registeredFingerprint = undefined;
-		reconciled = true;
+		ownership = "unknown";
 	};
 
 	const piOn = (pi as unknown as {
@@ -3211,11 +3231,33 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	}).on;
 	if (piOn) piOn.call(pi, "input", handleInput);
 
-		return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.routingMemoryStore ? { routingMemoryStore: options.routingMemoryStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, registerCommands, dispose };
+	const setProviderRegistry = (registry: PiProviderRegistry): void => {
+		if (!disposed) providerRegistry = registry;
+	};
+
+	return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.routingMemoryStore ? { routingMemoryStore: options.routingMemoryStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, setProviderRegistry, registerCommands, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
 	const runtime = await import("@earendil-works/pi-coding-agent");
+	let providerRegistry: PiProviderRegistry;
+	try {
+		const providerProbe = await RuntimeModelRuntime.create({
+			modelsPath: join(runtime.getAgentDir(), "models.json"),
+			allowModelNetwork: false,
+			refreshOnCreate: false,
+			credentials: {
+				read: async () => undefined,
+				list: async () => [],
+				modify: async (_provider: string, fn: (current: undefined) => Promise<undefined>) => fn(undefined),
+				delete: async () => undefined,
+			} as never,
+		});
+		providerRegistry = { getProvider: (providerId) => providerProbe.getProvider(providerId) };
+	} catch {
+		// Never overwrite an uninspectable provider namespace at factory time.
+		providerRegistry = { getProvider: () => { throw new Error("Pi provider registry is unavailable"); } };
+	}
 	const root = process.env.PI_MULTI_ORCH_CONFIG_ROOT ?? join(runtime.getAgentDir(), "pi-multi-orchestrator");
 	const configStore = new ConfigStore({ root });
 	const smartRoutingStore = new SmartRoutingSettingsStore({ root });
@@ -3292,7 +3334,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 			},
 		});
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, routingMemoryStore, healthStore, trustStore, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, routingMemoryStore, healthStore, trustStore, providerRegistry, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();
@@ -3305,6 +3347,21 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 		pi.events.emit("pi-multi-orchestrator:error", { stage: "provider-reconcile", error: "9Router provider activation unavailable" });
 		host.dispose();
 	}
+	pi.on("session_start", async (_event, ctx) => {
+		host.setProviderRegistry(ctx.modelRegistry);
+		try {
+			await manager.loadStatus();
+			const result = await host.reconcile();
+			if (result.error) {
+				pi.events.emit("pi-multi-orchestrator:error", { stage: "provider-reconcile", error: "9Router provider activation unavailable" });
+			}
+		} catch {
+			// Keep commands available for repair/status even when startup storage or
+			// catalog state is unavailable. No exception text can contain secrets.
+			pi.events.emit("pi-multi-orchestrator:error", { stage: "provider-reconcile", error: "9Router provider activation unavailable" });
+			host.dispose();
+		}
+	});
 	host.registerCommands();
 	pi.on("session_shutdown", () => host.dispose());
 }
