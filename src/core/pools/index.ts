@@ -1,6 +1,6 @@
 import { createDefaultConfig } from "../config/defaults.js";
 import { ConfigStore, type ConfigMutationResult } from "../config/store.js";
-import type { ConfigV1, PoolRouteV1, RouteConfigV1, StableId } from "../config/types.js";
+import { MAX_POOL_ENTRY_WEIGHT, type ConfigV1, type PoolRouteV1, type PoolSchedulingPolicy, type RouteConfigV1, type StableId } from "../config/types.js";
 import { isSupportedThinkingEffort, isThinkingEffort, normalizeThinkingEffort, supportedThinkingEfforts, thinkingSupport, type ExplicitThinkingEffort, type ThinkingEffort, type ThinkingSupport } from "../thinking.js";
 import { CatalogCacheStore } from "../ninerouter/cache.js";
 import { normalizeNineRouterBaseUrl } from "../ninerouter/connection.js";
@@ -50,6 +50,8 @@ export interface PoolEntryView {
 	readonly supportedThinkingEfforts?: readonly ExplicitThinkingEffort[];
 	readonly thinkingSupport?: ThinkingSupport;
 	readonly thinkingEffortValid?: boolean;
+	readonly weight?: number;
+	readonly effectiveShare?: number;
 }
 
 export interface PoolView {
@@ -57,6 +59,7 @@ export interface PoolView {
 	readonly poolId: PoolId;
 	readonly label: string;
 	readonly entries: readonly PoolEntryView[];
+	readonly schedulingPolicy?: PoolSchedulingPolicy;
 }
 
 export interface PoolStatus {
@@ -87,6 +90,11 @@ export interface PoolMutationResult extends ConfigMutationResult {
 	readonly routeId: StableId;
 }
 
+export interface PoolWeightsMutationResult extends ConfigMutationResult {
+	readonly poolId: PoolId;
+	readonly weights: Readonly<Record<string, number>>;
+}
+
 export type PoolManagerErrorCode =
 	| "invalid-pool"
 	| "configuration-unavailable"
@@ -94,7 +102,9 @@ export type PoolManagerErrorCode =
 	| "duplicate-route"
 	| "route-not-in-pool"
 	| "invalid-thinking-effort"
-	| "invalid-target-index";
+	| "invalid-target-index"
+	| "invalid-scheduling-policy"
+	| "invalid-weight";
 
 export class PoolManagerError extends Error {
 	readonly code: PoolManagerErrorCode;
@@ -199,7 +209,7 @@ export class PoolManager {
 			if (pool.entries.some((entry) => entry.routeId === routeId)) {
 				throw new PoolManagerError("duplicate-route", `Route is already assigned to ${poolId}: ${routeId}`, { poolId, routeId });
 			}
-			pool.entries.push({ routeId, enabled: true, thinkingEffort: "auto" });
+			pool.entries.push({ routeId, enabled: true, thinkingEffort: "auto", weight: 1 });
 		});
 	}
 
@@ -257,6 +267,37 @@ export class PoolManager {
 		});
 	}
 
+	setSchedulingPolicy(poolId: PoolId, schedulingPolicy: PoolSchedulingPolicy): Promise<PoolMutationResult> {
+		assertPoolId(poolId);
+		if (schedulingPolicy !== "priority" && schedulingPolicy !== "weighted") throw new PoolManagerError("invalid-scheduling-policy", "Scheduling policy is invalid", { poolId });
+		return this.mutate(poolId, "pool-scheduling" as StableId, (pool) => { pool.schedulingPolicy = schedulingPolicy; });
+	}
+
+	setPoolEntryWeight(poolId: PoolId, routeId: StableId, weight: number): Promise<PoolMutationResult> {
+		assertPoolId(poolId);
+		assertWeight(poolId, routeId, weight);
+		return this.mutate(poolId, routeId, (pool) => {
+			const entry = pool.entries.find((candidate) => candidate.routeId === routeId);
+			if (!entry) throw new PoolManagerError("route-not-in-pool", `Route is not assigned to ${poolId}: ${routeId}`, { poolId, routeId });
+			entry.weight = weight;
+		});
+	}
+
+	updatePoolWeights(poolId: PoolId, weights: Readonly<Record<string, number>>): Promise<PoolWeightsMutationResult> {
+		assertPoolId(poolId);
+		return this.configStore.update((draft) => {
+			const pool = draft.pools[poolId];
+			const expected = new Set(pool.entries.map((entry) => entry.routeId));
+			const supplied = Object.keys(weights);
+			if (supplied.length !== expected.size || supplied.some((routeId) => !expected.has(routeId as StableId))) throw new PoolManagerError("route-not-in-pool", `Weight update does not match ${poolId} membership`, { poolId });
+			for (const entry of pool.entries) {
+				const weight = weights[entry.routeId];
+				assertWeight(poolId, entry.routeId, weight);
+				entry.weight = weight;
+			}
+		}).then((result) => ({ ...result, poolId, weights: Object.fromEntries(Object.entries(weights).sort(([a], [b]) => a.localeCompare(b))) }));
+	}
+
 	private reorder(poolId: PoolId, routeId: StableId, target: number | "up" | "down"): Promise<PoolMutationResult> {
 		return this.mutate(poolId, routeId, (pool) => {
 			const index = pool.entries.findIndex((entry) => entry.routeId === routeId);
@@ -272,7 +313,7 @@ export class PoolManager {
 	private mutate(
 		poolId: PoolId,
 		routeId: StableId,
-		mutator: (pool: { entries: PoolRouteV1[] }, config: ConfigV1) => void,
+		mutator: (pool: ConfigV1["pools"][PoolId], config: ConfigV1) => void,
 	): Promise<PoolMutationResult> {
 		return this.configStore.update((draft) => {
 			mutator(draft.pools[poolId], draft);
@@ -298,11 +339,15 @@ export class PoolManager {
 		cacheResult: CatalogCacheLoadResult | undefined,
 		poolId: PoolId,
 	): PoolView {
+		const pool = config.pools[poolId];
+		const schedulingPolicy = pool.schedulingPolicy ?? "priority";
+		const positiveWeightTotal = pool.entries.reduce((total, entry) => total + Math.max(0, entry.weight ?? 1), 0);
 		return {
 			id: poolId,
 			poolId,
 			label: POOL_LABELS[poolId],
-			entries: config.pools[poolId].entries.map((entry, index) => this.viewEntry(config, cacheResult, entry, index)),
+			schedulingPolicy,
+			entries: pool.entries.map((entry, index) => this.viewEntry(config, cacheResult, entry, index, schedulingPolicy === "weighted" && positiveWeightTotal > 0 ? Math.round(((entry.weight ?? 1) / positiveWeightTotal) * 10_000) / 100 : 0)),
 		};
 	}
 
@@ -311,7 +356,7 @@ export class PoolManager {
 		cacheResult: CatalogCacheLoadResult | undefined,
 		route: RouteConfigV1,
 	): PoolRouteCandidate {
-		const view = this.viewEntry(config, cacheResult, { routeId: route.id, enabled: false }, -1);
+		const view = this.viewEntry(config, cacheResult, { routeId: route.id, enabled: false, weight: 1 }, -1, 0);
 		return { ...view, poolEnabled: false };
 	}
 
@@ -320,6 +365,7 @@ export class PoolManager {
 		cacheResult: CatalogCacheLoadResult | undefined,
 		entry: PoolRouteV1,
 		index: number,
+		effectiveShare = 0,
 	): PoolEntryView {
 		const route = config.routes[entry.routeId];
 		// A validated ConfigV1 cannot contain this state. Keep a safe placeholder
@@ -339,7 +385,9 @@ export class PoolManager {
 				thinkingEffort: normalizeThinkingEffort(entry.thinkingEffort),
 				supportedThinkingEfforts: [],
 				thinkingSupport: "unknown",
-				thinkingEffortValid: entry.thinkingEffort === undefined || entry.thinkingEffort === "auto",
+					thinkingEffortValid: entry.thinkingEffort === undefined || entry.thinkingEffort === "auto",
+					weight: entry.weight ?? 1,
+					effectiveShare,
 			};
 		}
 		const catalog = boundCatalog(config, route, cacheResult);
@@ -378,9 +426,15 @@ export class PoolManager {
 			thinkingEffort: effort,
 			supportedThinkingEfforts: availableThinkingEfforts,
 			thinkingSupport: thinkingSupport(thinkingMetadata),
-			thinkingEffortValid: effort === "auto" || isSupportedThinkingEffort(thinkingMetadata, effort),
-		};
+				thinkingEffortValid: effort === "auto" || isSupportedThinkingEffort(thinkingMetadata, effort),
+				weight: entry.weight ?? 1,
+				effectiveShare,
+			};
 	}
+}
+
+function assertWeight(poolId: PoolId, routeId: StableId, weight: number | undefined): asserts weight is number {
+	if (weight === undefined || !Number.isSafeInteger(weight) || weight < 0 || weight > MAX_POOL_ENTRY_WEIGHT) throw new PoolManagerError("invalid-weight", `Weight must be an integer from 0 to ${MAX_POOL_ENTRY_WEIGHT}`, { poolId, routeId });
 }
 
 export function createPoolManager(root: string, configStore = new ConfigStore({ root })): PoolManager {

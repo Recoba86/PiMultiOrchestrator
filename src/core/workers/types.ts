@@ -18,6 +18,7 @@ import type {
 import type { PoolId } from "../pools/index.js";
 import type { WorkerSafetyContext } from "./safety.js";
 import type { EffectiveThinkingEffort, ThinkingEffort } from "../thinking.js";
+import type { PoolSchedulingPolicy } from "../config/types.js";
 
 export const WORKER_PROTOCOL_VERSION = 1 as const;
 
@@ -141,6 +142,10 @@ export interface SubagentAttempt {
 	readonly errorMessage?: string;
 	readonly requestedThinkingEffort?: ThinkingEffort;
 	readonly effectiveThinkingEffort?: EffectiveThinkingEffort;
+	readonly selectionKind?: "scheduled" | "retry" | "fallback";
+	readonly schedulerPolicy?: PoolSchedulingPolicy;
+	readonly configuredWeight?: number;
+	readonly poolPosition?: number;
 }
 
 export type SubagentTerminalStatus =

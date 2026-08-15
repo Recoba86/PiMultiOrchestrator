@@ -24,7 +24,7 @@ import {
   type StorageFaultPoint,
 } from "./history.js";
 import { serializeConfig, deterministicJson } from "./serialize.js";
-import { migrateConfig, migratePoolThinkingEffort } from "./migrations.js";
+import { migrateConfig, migratePoolRuntimeDefaults } from "./migrations.js";
 import { validateConfig, validateStoredConfig } from "./schema.js";
 import { exportConfig, parseConfigImport } from "./transfer.js";
 import type { ConfigV1, StoredConfigV1 } from "./types.js";
@@ -176,7 +176,7 @@ export class ConfigStore {
       const current = active.kind === "valid" ? active.stored : undefined;
       const base = current ? structuredClone(current.config) : this.validateCandidate(this.defaults());
       const result = await mutator(base);
-		const candidate = migratePoolThinkingEffort(this.validateCandidate(result ?? base));
+		const candidate = migratePoolRuntimeDefaults(this.validateCandidate(result ?? base));
       if (current && serializeConfig(current.config) === serializeConfig(candidate)) {
         return {
           changed: false,
@@ -233,7 +233,7 @@ export class ConfigStore {
       const generation = await this.nextGeneration(history.entries, true);
       const candidate = this.validateCandidate(target.stored.config);
       const savedAt = this.nowIso();
-		const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: migratePoolThinkingEffort(candidate) };
+		const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: migratePoolRuntimeDefaults(candidate) };
       try {
         await ensureStorageDirectories(this.root, this.hooks);
         const write = await writeAtomicFile(join(this.root, ACTIVE_FILE), this.serializeStored(stored), this.hooks, "active");
@@ -302,7 +302,7 @@ export class ConfigStore {
       : this.currentSchemaValue(value)
         ? value
         : migrateConfig(value);
-    return structuredClone(validateConfig(migrated));
+		return migratePoolRuntimeDefaults(structuredClone(validateConfig(migrated)));
   }
 
   private validateStored(value: unknown): StoredConfigV1 {
@@ -313,7 +313,7 @@ export class ConfigStore {
         : this.currentSchemaValue(envelope.config)
           ? envelope.config
           : migrateConfig(envelope.config);
-      return validateStoredConfig({ ...envelope, config: migratedConfig });
+			return validateStoredConfig({ ...envelope, config: migratePoolRuntimeDefaults(validateConfig(migratedConfig)) });
     }
     return validateStoredConfig(value);
   }
@@ -399,7 +399,7 @@ export class ConfigStore {
   ): Promise<ConfigMutationResult> {
     const generation = await this.nextGeneration(current ? [current] : []);
     const savedAt = this.nowIso();
-		const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: migratePoolThinkingEffort(candidate) };
+		const stored: StoredConfigV1 = { storageVersion: CURRENT_STORAGE_VERSION, generation, savedAt, config: migratePoolRuntimeDefaults(candidate) };
     await ensureStorageDirectories(this.root, this.hooks);
     let historyPath: string | undefined;
     if (current) {

@@ -23,6 +23,9 @@ export type DiversityPreference =
   | "require-different-family"
   | "require-different-resource";
 
+export type PoolSchedulingPolicy = "priority" | "weighted";
+export const MAX_POOL_ENTRY_WEIGHT = 1_000_000 as const;
+
 export type QualityGate =
   | "diff"
   | "tests"
@@ -81,9 +84,13 @@ export interface PoolRouteV1 {
   maxAttempts?: number;
   /** Missing in RC19 configs; migration and runtime semantics treat it as auto. */
   thinkingEffort?: ThinkingEffort;
+  /** Missing in pre-RC23 configs; migration treats it as the neutral weight 1. */
+  weight?: number;
 }
 
 export interface PoolV1 {
+  /** Missing in pre-RC23 configs; migration treats it as Priority. */
+  schedulingPolicy?: PoolSchedulingPolicy;
   entries: PoolRouteV1[];
 }
 

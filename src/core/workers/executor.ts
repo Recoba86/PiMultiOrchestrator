@@ -108,6 +108,7 @@ export class SubagentExecutor {
 				...supplied,
 				poolId: request.poolId,
 				now: this.clock(),
+				schedulingKey: runId,
 				attemptedRouteIds: chain.attemptedRouteIds,
 				excludedRouteIds: request.excludedRouteIds ?? [],
 				...(request.diversity === undefined ? {} : { diversity: request.diversity }),
@@ -125,8 +126,10 @@ export class SubagentExecutor {
 			}
 
 			const selected = decision;
-			const routeId = selected.routeId;
-			const selectedCandidate = routingRequest.candidates.find((item) => item.routeId === routeId);
+				const routeId = selected.routeId;
+				const selectedCandidate = routingRequest.candidates.find((item) => item.routeId === routeId);
+				const selectionKind = currentRouteId === undefined ? (fallbackCount > 0 ? "fallback" : "scheduled") : "retry";
+				const schedulerPolicy = routingRequest.schedulingPolicy ?? "priority";
 			const attemptRequest: SubagentExecutionRequest = {
 				...request,
 				thinkingEffort: selectedCandidate?.thinkingEffort ?? request.thinkingEffort ?? "auto",
@@ -153,8 +156,12 @@ export class SubagentExecutor {
 					sessionTerminalState: "error",
 					errorMessage: "Route resolution failed",
 					requestedThinkingEffort: attemptRequest.thinkingEffort ?? "auto",
-					effectiveThinkingEffort: "unknown",
-				});
+						effectiveThinkingEffort: "unknown",
+						selectionKind,
+						schedulerPolicy,
+						configuredWeight: candidate?.weight ?? 1,
+						...(candidate?.poolPosition === undefined ? {} : { poolPosition: candidate.poolPosition }),
+					});
 				return resultBase(runId, request, "child_runtime_error", attempts, fallbackCount, "Child route could not be resolved");
 			}
 			const attemptId = nextId("attempt");
@@ -165,8 +172,12 @@ export class SubagentExecutor {
 				route,
 				selected,
 				request: attemptRequest,
-				retryIndex,
-				...(signal === undefined ? {} : { signal }),
+					retryIndex,
+					selectionKind,
+					schedulerPolicy,
+					configuredWeight: selectedCandidate?.weight ?? 1,
+					poolPosition: selected.poolPosition,
+					...(signal === undefined ? {} : { signal }),
 			});
 			let attempt = single.attempt;
 			attempts.push(attempt);
@@ -259,8 +270,12 @@ export class SubagentExecutor {
 		readonly route: ResolvedWorkerRoute;
 		readonly selected: import("../routing/index.js").SelectedRoute;
 		readonly request: SubagentExecutionRequest;
-		readonly retryIndex: number;
-		readonly signal?: AbortSignal;
+			readonly retryIndex: number;
+			readonly selectionKind: "scheduled" | "retry" | "fallback";
+			readonly schedulerPolicy: import("../config/types.js").PoolSchedulingPolicy;
+			readonly configuredWeight: number;
+			readonly poolPosition: number;
+			readonly signal?: AbortSignal;
 	}): Promise<SingleAttempt> {
 		const startedAt = this.clock().toISOString();
 		const resultProtocol = this.resultProtocolFactory?.(options.request) ?? createAgentResultProtocol();
@@ -395,6 +410,10 @@ export class SubagentExecutor {
 			sessionTerminalState: terminalState,
 			requestedThinkingEffort: options.request.thinkingEffort ?? "auto",
 			effectiveThinkingEffort,
+			selectionKind: options.selectionKind,
+			schedulerPolicy: options.schedulerPolicy,
+			configuredWeight: options.configuredWeight,
+			poolPosition: options.poolPosition,
 		};
 		this.emit({ type: "attempt_finished", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId });
 		return { attempt, outcome, failure, result, providerSucceeded, potentialMutation: potentialMutationObserved, protocolViolation };
@@ -624,7 +643,8 @@ function failureInputFromProviderText(value: unknown, fallbackToTransport = true
 
 function retrySelection(routeId: StableId, request: RoutingRequest): import("../routing/index.js").RoutingDecision {
 	const candidate = request.candidates.find((item) => item.routeId === routeId);
-	if (!candidate || candidate.poolId !== request.poolId || !candidate.globalEnabled || !candidate.poolEnabled || candidate.available === false || candidate.availability === "missing" || candidate.availability === "unavailable" || candidate.availability === "unknown") {
+	const weighted = request.schedulingPolicy === "weighted";
+	if (!candidate || candidate.poolId !== request.poolId || !candidate.globalEnabled || !candidate.poolEnabled || candidate.available === false || candidate.availability === "missing" || (weighted && candidate.availability === "stale") || candidate.availability === "unavailable" || candidate.availability === "unknown" || (weighted && (candidate.health?.circuit === "open" || candidate.health?.circuit === "probing")) || candidate.health?.probeInFlight) {
 		return { kind: "NO_ELIGIBLE_ROUTE", poolId: request.poolId, reasons: [] };
 	}
 	return {

@@ -1,4 +1,5 @@
-import type { DiversityPreference, StableId } from "../config/types.js";
+import { createHash } from "node:crypto";
+import type { DiversityPreference, PoolSchedulingPolicy, StableId } from "../config/types.js";
 import type { PoolId } from "../pools/index.js";
 import type { ThinkingEffort } from "../thinking.js";
 
@@ -65,6 +66,7 @@ export interface RoutingCandidate {
 	readonly health?: RouteHealthView;
 	readonly maxAttempts?: number;
 	readonly thinkingEffort?: ThinkingEffort;
+	readonly weight?: number;
 }
 
 export interface DiversityContext {
@@ -92,6 +94,9 @@ export interface RoutingRequest {
 	readonly attemptedRouteIds?: readonly StableId[];
 	readonly excludedRouteIds?: readonly StableId[];
 	readonly diversity?: DiversityContext;
+	readonly schedulingPolicy?: PoolSchedulingPolicy;
+	/** Stable per-run key; weighted selection has no mutable cursor or restart state. */
+	readonly schedulingKey?: string;
 }
 
 export interface CandidateEvaluation {
@@ -112,6 +117,7 @@ export interface SelectedRoute {
 	readonly health: RouteHealthView | undefined;
 	readonly diversityStatus: "clear" | "preferred-conflict" | "required-conflict";
 	readonly evaluations: readonly CandidateEvaluation[];
+	readonly schedulingPolicy?: PoolSchedulingPolicy;
 }
 
 export interface NoEligibleRoute {
@@ -245,15 +251,17 @@ export function selectRoute(request: RoutingRequest): RoutingDecision {
 	const attempted = new Set(request.attemptedRouteIds ?? []);
 	const excluded = new Set(request.excludedRouteIds ?? []);
 	const diversityMode = request.diversity?.mode ?? mapDiversity(request.policy.diversityPreference);
+	const schedulingPolicy = request.schedulingPolicy ?? "priority";
 	const raw = [...request.candidates]
 		.filter((candidate) => candidate.poolId === request.poolId)
 		.sort((left, right) => left.poolPosition - right.poolPosition || left.routeId.localeCompare(right.routeId));
-	const evaluations: CandidateEvaluation[] = raw.map((candidate) => evaluateCandidate(candidate, now, attempted, excluded, request.diversity, diversityMode));
+	const evaluations: CandidateEvaluation[] = raw.map((candidate) => evaluateCandidate(candidate, now, attempted, excluded, request.diversity, diversityMode, schedulingPolicy));
 	const eligible = raw
 		.map((candidate, index) => ({ candidate, evaluation: evaluations[index]! }))
 		.filter(({ evaluation }) => evaluation.eligible);
 	const preferred = diversityMode === "prefer" ? eligible.filter(({ evaluation }) => !evaluation.diversityConflict) : eligible;
-	const selected = preferred[0] ?? (diversityMode === "prefer" ? eligible[0] : undefined);
+	const preferredSelection = schedulingPolicy === "weighted" ? weightedSelection(preferred, request) : preferred[0];
+	const selected = preferredSelection ?? (diversityMode === "prefer" ? (schedulingPolicy === "weighted" ? weightedSelection(eligible, request) : eligible[0]) : undefined);
 	if (selected) {
 		const conflict = selected.evaluation.diversityConflict;
 		return {
@@ -261,10 +269,13 @@ export function selectRoute(request: RoutingRequest): RoutingDecision {
 			routeId: selected.candidate.routeId,
 			poolId: request.poolId,
 			poolPosition: selected.candidate.poolPosition,
-			reason: conflict ? "Highest-priority eligible route; diversity preference could not be satisfied" : "Highest-priority eligible route",
+			reason: schedulingPolicy === "weighted"
+				? `Weighted Rotation selected route (weight ${selected.candidate.weight ?? 1})${conflict ? "; diversity preference could not be satisfied" : ""}`
+				: conflict ? "Highest-priority eligible route; diversity preference could not be satisfied" : "Highest-priority eligible route",
 			health: selected.candidate.health,
 			diversityStatus: conflict ? "preferred-conflict" : "clear",
 			evaluations,
+			schedulingPolicy,
 		};
 	}
 	const retryTimes = evaluations.flatMap((evaluation) => evaluation.retryAt ? [evaluation.retryAt] : []);
@@ -286,15 +297,21 @@ function evaluateCandidate(
 	excluded: ReadonlySet<StableId>,
 	diversity: DiversityContext | undefined,
 	diversityMode: DiversityMode,
+	schedulingPolicy: PoolSchedulingPolicy,
 ): CandidateEvaluation {
 	const reasons: string[] = [];
 	if (!candidate.poolEnabled) reasons.push("pool entry disabled");
 	if (!candidate.globalEnabled) reasons.push("route globally disabled");
 	if (candidate.availability === "missing") reasons.push("route missing remotely");
-	// A stale last-known-good catalog is still usable; its age is surfaced by
-	// the host, while a positively missing route is hard-ineligible.
+	else if (candidate.availability === "stale" && schedulingPolicy === "weighted") reasons.push("route catalog is stale");
 	else if (candidate.availability === "unavailable" || candidate.available === false) reasons.push("route unavailable");
 	else if (candidate.availability === "unknown") reasons.push("route availability unknown");
+	if (schedulingPolicy === "weighted" && (candidate.health?.circuit === "open" || candidate.health?.circuit === "probing")) reasons.push("route health is not ready");
+	if (schedulingPolicy === "weighted") {
+		const weight = candidate.weight ?? 1;
+		if (!Number.isSafeInteger(weight) || weight < 0) reasons.push("route weight is invalid");
+		else if (weight === 0) reasons.push("route weight is zero");
+	}
 	if (attempted.has(candidate.routeId)) reasons.push("route already attempted");
 	if (excluded.has(candidate.routeId)) reasons.push("route explicitly excluded");
 	const cooldownUntil = candidate.health?.cooldownUntil;
@@ -312,6 +329,30 @@ function evaluateCandidate(
 		diversityConflict,
 		...(blockedByCooldown ? { retryAt: cooldownUntil } : {}),
 	};
+}
+
+function weightedSelection(
+	eligible: readonly { readonly candidate: RoutingCandidate; readonly evaluation: CandidateEvaluation }[],
+	request: RoutingRequest,
+): { readonly candidate: RoutingCandidate; readonly evaluation: CandidateEvaluation } | undefined {
+	const key = request.schedulingKey ?? `${request.poolId}:${toIso(request.now)}`;
+	let selected: { candidate: RoutingCandidate; evaluation: CandidateEvaluation; score: number } | undefined;
+	for (const item of eligible) {
+		const weight = item.candidate.weight ?? 1;
+		if (!Number.isSafeInteger(weight) || weight <= 0) continue;
+		const score = rendezvousScore(`${key}:${item.candidate.routeId}`, weight);
+		if (!selected || score < selected.score || (score === selected.score && item.candidate.poolPosition < selected.candidate.poolPosition)) selected = { ...item, score };
+	}
+	return selected;
+}
+
+/** Weighted rendezvous sampling keeps selection deterministic without a persisted cursor. */
+function rendezvousScore(key: string, weight: number): number {
+	const digest = createHash("sha256").update(key).digest();
+	const value = digest.readBigUInt64BE(0);
+	const denominator = 18_014_398_509_481_984n;
+	const uniform = (Number(value % denominator) + 1) / Number(denominator);
+	return -Math.log(uniform) / weight;
 }
 
 function hasDiversityConflict(candidate: RoutingCandidate, diversity: DiversityContext | undefined): boolean {

@@ -1,6 +1,6 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC21 is the public
+This guide describes the Control Center in Pi `0.84.1`. RC23 is the public
 `next`-tagged prerelease, not a stable or production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
@@ -54,6 +54,12 @@ message where applicable.
   value; Auto omits the Pi override and is not Off. A stale explicit effort is
   shown as invalid and is unavailable until changed. Implementation and
   other mutating actions retain their existing confirmation/idle gates. The
+  Scheduling Policy action selects Priority (the legacy ordered behavior) or
+  Weighted Rotation. Weighted entries use integer weights from 0 to 1000000;
+  zero-weight entries are excluded only by Weighted Rotation, and the editor
+  shows each route's effective share. **View Recommendation** is available
+  for weighted pools when analytics has at least 10 origin-tagged attempts per
+  comparable route; Apply and Ignore are explicit and stale-safe.
   Verification Pool is shared route configuration: Direct Verification Workers
   are standalone, while canonical Mission reviewers use it for M7. Use
   `/subagent-run` for the former and `/verify-task` for the latter.
@@ -92,7 +98,9 @@ message where applicable.
   completion, quality status, and canonical evidence admission remain separate.
 - **Statistics & Analytics** provides the accepted Overview, Missions, Pools,
   Routes, Tokens, Cost, Quality, Fallbacks, Recommendations, and Recommendation
-  Analyst views for 24h, 7d, 30d, all-time, or custom windows.
+  Analyst views for 24h, 7d, 30d, all-time, or custom windows. The Pools view
+  includes scheduler origin, thinking-effort, and observed-weight metadata;
+  unknown cost remains unknown and is never fabricated.
 - **Diagnostics** displays sanitized provider and observed-health metadata,
   Mission/Analytics integrity state, local Security & Trust, and the
   permission matrix; it never prints prompts, transcripts, tool output,
@@ -108,7 +116,11 @@ message where applicable.
 Deterministic M8 recommendations remain authoritative. Details, Ignore, and
 Apply are explicit actions; Apply revalidates staleness and uses
 RecommendationApplicationService → PoolManager → ConfigStore. There is no
-automatic priority mutation.
+automatic priority or weight mutation. Weighted recommendations are
+deterministic heuristics over reliability, quality decisions, latency, and
+repair rate; they preserve the current positive-weight total and record their
+baseline/suggested maps. Insufficient or origin-unknown evidence returns no
+recommendation.
 
 The optional M8.5 Recommendation Analyst is under Statistics & Analytics. It
 uses only a selected Verification Pool route, receives bounded analytics
@@ -124,7 +136,7 @@ The direct M2–M8.5 commands remain available, including `/9router-models`,
 `/routing-settings`, `/subagent-run`, `/missions`, `/quality-status`, `/verify-task`,
 `/analytics`, `/recommendations`, and `/recommendation-analyst`.
 
-## RC21 catalog, effort, and refresh safety
+## RC23 catalog, scheduling, effort, and refresh safety
 
 Discovery is separate from PMO enablement, and enablement is separate from
 Pool membership. A newly discovered route is disabled until explicitly enabled;

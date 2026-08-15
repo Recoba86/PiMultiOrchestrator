@@ -23,7 +23,7 @@ export const PACKAGE_INFO = Object.freeze({
 	version: typeof packageJson.version === "string" ? packageJson.version : "unknown",
 	releaseStatus: "candidate" as const,
 	latestAcceptedMilestone: "M10 — Safety and hardening",
-	developmentMilestone: "RC22 — Canonical model selector presentation",
+	developmentMilestone: "RC23 — Weighted Pool Scheduling and Data-Driven Weight Recommendations",
 	developmentStatus: "implemented-but-not-accepted" as const,
 	productionReady: false,
 	piCompatibility: "0.84.1",

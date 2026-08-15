@@ -210,4 +210,28 @@ describe("M4 pure routing", () => {
 		assert.deepEqual(attempts, [id("route-a"), id("route-a"), id("route-b"), id("route-b"), id("route-d")]);
 		assert.deepEqual(pool.map((entry) => entry.routeId), [id("route-a"), id("route-b"), id("route-c"), id("route-d")]);
 	});
+
+	it("[RC23][U] weighted rotation is deterministic, proportional, non-starving, and zero-weight safe", () => {
+		const candidates = [candidate("route-a", 0, { weight: 5 }), candidate("route-b", 1, { weight: 3 }), candidate("route-c", 2, { weight: 2 }), candidate("route-zero", 3, { weight: 0 })];
+		const counts = new Map<string, number>();
+		for (let index = 0; index < 10_000; index += 1) {
+			const decision = selectRoute({ poolId: "implementation", candidates, policy: policy(), now: "2026-01-01T00:00:00.000Z", schedulingPolicy: "weighted", schedulingKey: `dogfood-${index}` });
+			assert.equal(decision.kind, "SELECTED");
+			if (decision.kind === "SELECTED") counts.set(decision.routeId, (counts.get(decision.routeId) ?? 0) + 1);
+		}
+		assert.equal(counts.get("route-zero"), undefined);
+		assert.ok((counts.get("route-a") ?? 0) > 0);
+		assert.ok((counts.get("route-b") ?? 0) > 0);
+		assert.ok((counts.get("route-c") ?? 0) > 0);
+		assert.ok(Math.abs((counts.get("route-a") ?? 0) / 10_000 - 0.5) < 0.05);
+		assert.ok(Math.abs((counts.get("route-b") ?? 0) / 10_000 - 0.3) < 0.05);
+		assert.ok(Math.abs((counts.get("route-c") ?? 0) / 10_000 - 0.2) < 0.05);
+		const first = selectRoute({ poolId: "implementation", candidates, policy: policy(), now: "2026-01-01T00:00:00.000Z", schedulingPolicy: "weighted", schedulingKey: "restart-stable" });
+		const second = selectRoute({ poolId: "implementation", candidates, policy: policy(), now: "2026-01-01T00:00:00.000Z", schedulingPolicy: "weighted", schedulingKey: "restart-stable" });
+		assert.deepEqual(first, second);
+		const excluded = selectRoute({ poolId: "implementation", candidates: [candidate("route-a", 0, { weight: 5, availability: "stale" }), candidate("route-b", 1, { weight: 3, health: { circuit: "open" } })], policy: policy(), now: "2026-01-01T00:00:00.000Z", schedulingPolicy: "weighted", schedulingKey: "ineligible" });
+		assert.equal(excluded.kind, "NO_ELIGIBLE_ROUTE");
+		const priorityStale = selectRoute({ poolId: "implementation", candidates: [candidate("route-a", 0, { availability: "stale" })], policy: policy(), now: "2026-01-01T00:00:00.000Z" });
+		assert.equal(priorityStale.kind, "SELECTED");
+	});
 });

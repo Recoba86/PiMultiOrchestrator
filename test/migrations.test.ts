@@ -7,6 +7,7 @@ import {
   MigrationRegistry,
   createMigrationRegistry,
   migrateConfig,
+  migratePoolScheduling,
 } from "../src/core/config/migrations.js";
 
 test("[U][fixture-v1] current schema migrates through the default registry without mutation", () => {
@@ -16,6 +17,18 @@ test("[U][fixture-v1] current schema migrates through the default registry witho
   assert.notEqual(migrated, input);
   assert.deepEqual(migrated, input);
   assert.equal(migrated.schemaVersion, 1);
+});
+
+test("[RC23][U] pool scheduling migration is deterministic, additive, and idempotent", () => {
+  const input = createDefaultConfig();
+  input.pools.implementation.entries = [{ routeId: "route-a" as never, enabled: true, thinkingEffort: "high" }];
+  const migrated = migratePoolScheduling(input);
+  assert.equal(migrated.pools.implementation.schedulingPolicy, "priority");
+  assert.equal(migrated.pools.implementation.entries[0]?.weight, 1);
+  assert.equal(migrated.pools.implementation.entries[0]?.thinkingEffort, "high");
+  assert.equal(input.pools.implementation.schedulingPolicy, undefined);
+  assert.equal(input.pools.implementation.entries[0]?.weight, undefined);
+  assert.deepEqual(migratePoolScheduling(migrated), migrated);
 });
 
 test("[U][fixture-v1] sequential test migrations run in order and clone each step", () => {

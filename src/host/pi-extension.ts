@@ -15,7 +15,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { ModelRuntime as RuntimeModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createDefaultConfig } from "../core/config/defaults.js";
-import type { SecretRefV1, StableId } from "../core/config/types.js";
+import type { PoolSchedulingPolicy, SecretRefV1, StableId } from "../core/config/types.js";
 import { thinkingEffortLabel, type ThinkingEffort, type ThinkingLevelMap } from "../core/thinking.js";
 import { ConfigStore } from "../core/config/store.js";
 import { HealthStore, type RouteHealthRecord } from "../core/health/index.js";
@@ -85,6 +85,7 @@ import {
 	type AnalystPacket,
 	type AnalystRoute,
 	type AnalyticsEventV1,
+	type AnalyticsSummary,
 	type AnalyticsRoutingTelemetryV1,
 	type AnalyticsRange,
 	type AnalyticsStoreAdapter,
@@ -154,6 +155,9 @@ export interface PoolManagerContract {
 	moveRoute(poolId: PoolId, routeId: StableId, targetIndex: number): MaybePromise<unknown>;
 	setPoolEntryEnabled(poolId: PoolId, routeId: StableId, enabled: boolean): MaybePromise<unknown>;
 	setPoolEntryThinkingEffort?(poolId: PoolId, routeId: StableId, thinkingEffort: ThinkingEffort): MaybePromise<unknown>;
+	setSchedulingPolicy?(poolId: PoolId, schedulingPolicy: PoolSchedulingPolicy): MaybePromise<unknown>;
+	setPoolEntryWeight?(poolId: PoolId, routeId: StableId, weight: number): MaybePromise<unknown>;
+	updatePoolWeights?(poolId: PoolId, weights: Readonly<Record<string, number>>): MaybePromise<unknown>;
 }
 
 export type RecommendationAnalystMode = "deterministic" | "ai-assisted";
@@ -574,6 +578,9 @@ const emptyPoolManager = (): PoolManagerContract => ({
 	moveRoute: async () => { throw new Error("pool manager unavailable"); },
 	setPoolEntryEnabled: async () => { throw new Error("pool manager unavailable"); },
 	setPoolEntryThinkingEffort: async () => { throw new Error("pool manager unavailable"); },
+	setSchedulingPolicy: async () => { throw new Error("pool manager unavailable"); },
+	setPoolEntryWeight: async () => { throw new Error("pool manager unavailable"); },
+	updatePoolWeights: async () => { throw new Error("pool manager unavailable"); },
 });
 
 const ANALYTICS_SECTIONS = [
@@ -654,6 +661,15 @@ const analyticsQualityLines = (
 	return [
 		`${label}: ${entries.length}`,
 		...entries.map(([id, bucket]) => `${id}: observations=${bucket.observations} pass=${bucket.passes} reject=${bucket.rejects} blocked=${bucket.blocked} first-pass=${bucket.firstPass} repair-rounds=${bucket.repairRounds}`),
+	];
+};
+
+const analyticsSchedulingLines = (buckets: AnalyticsSummary["performanceByPoolRoute"]): string[] => {
+	const entries = Object.entries(buckets ?? {}).sort(([a], [b]) => a.localeCompare(b));
+	if (entries.length === 0) return ["scheduler observations: UNKNOWN (no origin-tagged attempts were reported)"];
+	return [
+		`scheduler observations: ${entries.length}`,
+		...entries.map(([id, bucket]) => `${id}: scheduled=${bucket.scheduled} retries=${bucket.retries} fallback-selections=${bucket.fallbackSelections} thinking=${JSON.stringify(bucket.byThinkingEffort)} observed-weights=${JSON.stringify(bucket.observedWeights)}`),
 	];
 };
 
@@ -825,10 +841,11 @@ async function createHostSubagentExecutor(
 			const currentPolicy = (await configStore.load()).snapshot?.config.routing ?? initialPolicy;
 			const pool = await poolManager.getPool(request.poolId);
 			const health = healthStore ? await healthStore.list() : {};
-			return {
-				poolId: request.poolId,
-				policy: currentPolicy,
-				now: new Date(),
+				return {
+					poolId: request.poolId,
+					policy: currentPolicy,
+					schedulingPolicy: pool.schedulingPolicy ?? "priority",
+					now: new Date(),
 				attemptedRouteIds,
 				excludedRouteIds,
 				...(request.diversity === undefined ? {} : { diversity: request.diversity }),
@@ -842,6 +859,7 @@ async function createHostSubagentExecutor(
 					...(entry.resourceId ? { resourceId: entry.resourceId } : {}),
 					...(entry.underlyingFamily ? { underlyingFamily: entry.underlyingFamily } : {}),
 					thinkingEffort: entry.thinkingEffort ?? "auto",
+						weight: entry.weight ?? 1,
 					availability: entry.state === "missing" ? "missing" : entry.state === "provider-unavailable" ? "unavailable" : entry.state === "unknown" ? "unknown" : entry.catalogState === "stale" ? "stale" : "available",
 					available: entry.thinkingEffortValid !== false && entry.state === "active" && entry.globalEnabled && entry.poolEnabled,
 					...(health[entry.routeId] ? { health: health[entry.routeId] } : {}),
@@ -1356,7 +1374,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			else active += 1;
 		}
 		const stale = view.entries.filter((entry) => entry.catalogState === "stale").length;
-		const details = [`${view.label} Pool`, `  ${view.entries.length} route${view.entries.length === 1 ? "" : "s"}`, `  ${active} active`];
+		const details = [`${view.label} Pool`, `  Scheduling: ${view.schedulingPolicy === "weighted" ? "Weighted Rotation" : "Priority"}`, `  ${view.entries.length} route${view.entries.length === 1 ? "" : "s"}`, `  ${active} active`];
+		const pendingRecommendations = analytics?.recommendations().filter((item) => item.status === "proposed" && item.poolId === view.poolId).length ?? 0;
+		details.push(`  Pending recommendations: ${pendingRecommendations}`);
 		if (globalDisabled > 0) details.push(`  ${globalDisabled} globally disabled`);
 		if (poolDisabled > 0) details.push(`  ${poolDisabled} pool-disabled`);
 		if (missing > 0) details.push(`  ${missing} missing`);
@@ -1364,7 +1384,20 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		if (unknown > 0) details.push(`  ${unknown} availability unknown`);
 		if (stale > 0) details.push(`  ${stale} stale`);
 		if (view.entries.length === 0) details.push("  No routes assigned.");
+		if (view.entries.length > 0) details.push(...poolScheduleLines(view).map((line) => `  ${line}`));
 		return details.join("\n");
+	};
+
+	const poolScheduleLines = (view: PoolView): readonly string[] => [
+		"Route | Thinking | Weight | Share",
+		...view.entries.map((entry) => `${entry.displayName} | ${thinkingEffortLabel(entry.thinkingEffort ?? "auto")} | ${entry.weight ?? 1} | ${view.schedulingPolicy === "weighted" ? `${entry.effectiveShare ?? 0}%` : "N/A"}`),
+	];
+	const sameWeightSnapshot = (left: unknown, right: Readonly<Record<string, number>>): boolean => {
+		if (!left || typeof left !== "object" || Array.isArray(left)) return false;
+		const candidate = left as Record<string, unknown>;
+		const leftKeys = Object.keys(candidate).sort();
+		const rightKeys = Object.keys(right).sort();
+		return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && candidate[key] === right[key]);
 	};
 
 	const showPoolStatus = async (ctx: ExtensionContext | ExtensionCommandContext, requested?: string): Promise<void> => {
@@ -1390,7 +1423,10 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			`remote: ${entry.remoteModelId}`,
 			`global enabled: ${entry.globalEnabled}`,
 			`pool enabled: ${entry.poolEnabled}`,
-			`thinking effort: ${thinkingEffortLabel(entry.thinkingEffort ?? "auto")}${entry.thinkingEffortValid === false ? " (invalid/stale)" : ""}`,
+				`thinking effort: ${thinkingEffortLabel(entry.thinkingEffort ?? "auto")}${entry.thinkingEffortValid === false ? " (invalid/stale)" : ""}`,
+				`scheduling: ${view.schedulingPolicy === "weighted" ? "Weighted Rotation" : "Priority"}`,
+				`weight: ${entry.weight ?? 1}`,
+				`effective share: ${view.schedulingPolicy === "weighted" ? `${entry.effectiveShare ?? 0}%` : "N/A"}`,
 			`thinking support: ${entry.thinkingSupport ?? "unknown"}${(entry.supportedThinkingEfforts ?? []).length > 0 ? ` (${(entry.supportedThinkingEfforts ?? []).map(thinkingEffortLabel).join(", ")})` : ""}`,
 			`state: ${poolEntryState(entry)}`,
 			`gateway: ${entry.gatewayId ?? "unknown"}`,
@@ -1449,6 +1485,28 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
+	const showPoolWeightRecommendation = async (ctx: ExtensionCommandContext, poolId: PoolId): Promise<void> => {
+		if (!analytics || !analyticsStore) { ctx.ui.notify("Recommendations are unavailable while analytics is disabled", "warning"); return; }
+		try {
+			const pool = await poolManager.getPool(poolId);
+			if (pool.schedulingPolicy !== "weighted") { ctx.ui.notify("Set Scheduling Policy to Weighted Rotation before requesting a weight recommendation", "info"); return; }
+			const currentWeights = Object.fromEntries(pool.entries.map((entry) => [entry.routeId, entry.weight ?? 1]));
+			const existing = analytics.recommendations().find((item) => item.status === "proposed" && item.recommendationKind === "weight-rebalance" && item.poolId === poolId && sameWeightSnapshot(item.proposedDiff.baselineWeights, currentWeights));
+			const recommendation = existing ?? new RecommendationEngine().generateWeightRebalance(analytics.overview(), poolId, currentWeights);
+			if (!recommendation) { ctx.ui.notify(`Insufficient comparable analytics for ${pool.label} (minimum 10 observed attempts per route)`, "warning"); return; }
+			if (!existing) analyticsStore.saveRecommendation(recommendation);
+			const action = await ctx.ui.select(`Weight Recommendation — ${pool.label}`, ["Apply", "Ignore", "Details", "Back"]);
+			if (action === "Apply") {
+				const result = recommendationApplication ? await recommendationApplication.apply(recommendation.recommendationId) : "unavailable";
+				ctx.ui.notify(result === "applied" ? "Weight recommendation applied" : result === "stale" ? "Recommendation is stale; regenerate it" : "Recommendation application is unavailable", result === "applied" ? "info" : "warning");
+			} else if (action === "Ignore") {
+				ctx.ui.notify(recommendationApplication?.ignore(recommendation.recommendationId) ? "Weight recommendation ignored" : "Recommendation status is unavailable", "info");
+			} else if (action === "Details") {
+				ctx.ui.notify([`Current: ${JSON.stringify(recommendation.proposedDiff.baselineWeights)}`, `Suggested: ${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}`, `Evidence: ${recommendation.evidence.join("; ")}`, `Limitations: ${recommendation.limitations.join("; ")}`, `Status: ${recommendation.status}`].join("\n"), "info");
+			}
+		} catch (error) { notifyError(ctx, "Weight recommendation failed", error); }
+	};
+
 	const openPoolEditor = async (ctx: ExtensionCommandContext, poolId: PoolId): Promise<void> => {
 		if (ctx.mode !== "tui" && !ctx.hasUI) {
 			ctx.ui.notify("/pool-models requires TUI or RPC UI mode", "error");
@@ -1469,25 +1527,35 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				displayName: entry.displayName,
 			})));
 			const entryOptions = entryPresentation.map((option) => option.label);
-			const options = [
-				...(entryOptions.length > 0 ? entryOptions : ["No routes assigned."]),
-				"Add Route",
-				"Refresh",
+			if (view.schedulingPolicy === "weighted") ctx.ui.notify(poolScheduleLines(view).join("\n"), "info");
+				const options = [
+					...(entryOptions.length > 0 ? entryOptions : ["No routes assigned."]),
+					"Add Route",
+					"Scheduling Policy",
+					"Refresh",
 				"Back",
 			];
 			const selected = await ctx.ui.select(`${view.label} Pool`, options);
 			if (!selected || selected === "Back") return;
 			if (selected === "Refresh") continue;
-			if (selected === "Add Route") {
-				await addPoolRoute(ctx, view);
-				continue;
-			}
+				if (selected === "Add Route") {
+					await addPoolRoute(ctx, view);
+					continue;
+				}
+					if (selected === "Scheduling Policy") {
+						const policy = await ctx.ui.select("Scheduling Policy", ["Priority", "Weighted Rotation", "Back"]);
+						if (policy === "Priority" || policy === "Weighted Rotation") {
+							if (!poolManager.setSchedulingPolicy) ctx.ui.notify("Scheduling policy mutation is unavailable", "warning");
+							else await poolMutation(ctx, `Set ${view.label} scheduling`, () => poolManager.setSchedulingPolicy!(poolId, policy === "Weighted Rotation" ? "weighted" : "priority"));
+						}
+					continue;
+				}
 			if (selected === "No routes assigned.") continue;
 			const entryIndex = entryPresentation.findIndex((option) => option.label === selected);
 			const entry = entryIndex >= 0 ? view.entries[entryIndex] : undefined;
 			if (!entry) continue;
 			const toggleLabel = entry.poolEnabled ? "Disable" : "Enable";
-			const action = await ctx.ui.select(`Route ${entry.routeId}`, ["Change Thinking Effort", "Move Up", "Move Down", "Move to position", toggleLabel, "Inspect", "Remove", "Back"]);
+			const action = await ctx.ui.select(`Route ${entry.routeId}`, ["Change Thinking Effort", "Edit Weight", "View Recommendation", "Move Up", "Move Down", "Move to position", toggleLabel, "Inspect", "Remove", "Back"]);
 			switch (action) {
 				case "Change Thinking Effort": {
 					const effortOptions = ["Auto", ...(entry.supportedThinkingEfforts ?? []).map(thinkingEffortLabel)];
@@ -1497,6 +1565,18 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					if (effort && poolManager.setPoolEntryThinkingEffort) await poolMutation(ctx, `Set ${entry.routeId} thinking effort`, () => poolManager.setPoolEntryThinkingEffort!(poolId, entry.routeId, effort));
 					break;
 				}
+				case "Edit Weight": {
+					const raw = await ctx.ui.input("Weight (0 disables weighted rotation)", String(entry.weight ?? 1));
+					if (raw?.trim() && poolManager.setPoolEntryWeight) {
+						const weight = Number.parseInt(raw.trim(), 10);
+						if (!Number.isSafeInteger(weight) || weight < 0 || weight > 1_000_000) ctx.ui.notify("Weight must be an integer from 0 to 1000000", "error");
+						else await poolMutation(ctx, `Set ${entry.routeId} weight`, () => poolManager.setPoolEntryWeight!(poolId, entry.routeId, weight));
+					}
+					break;
+				}
+				case "View Recommendation":
+					await showPoolWeightRecommendation(ctx, poolId);
+					break;
 				case "Move Up":
 					if (entry.index === 0) ctx.ui.notify("Already first; priority unchanged.", "info");
 					else await poolMutation(ctx, `Move ${entry.routeId} up`, () => poolManager.moveRouteUp(poolId, entry.routeId));
@@ -1913,8 +1993,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			remoteModelId: entry.remoteModelId,
 			...(entry.resourceId ? { resourceId: entry.resourceId } : {}),
 			...(entry.underlyingFamily ? { underlyingFamily: entry.underlyingFamily } : {}),
-			thinkingEffort: entry.thinkingEffort ?? "auto",
-			availability: routeAvailability(entry),
+				thinkingEffort: entry.thinkingEffort ?? "auto",
+				weight: entry.weight ?? 1,
+				availability: routeAvailability(entry),
 			available: entry.thinkingEffortValid !== false && (entry.projectedPiAvailable === false || entry.actualPiAvailable === false ? false : entry.state === "active"),
 			...(health[entry.routeId] ? { health: health[entry.routeId] } : {}),
 		}));
@@ -1961,7 +2042,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					blocks.push("  NO ROUTES ASSIGNED");
 					continue;
 				}
-				const decision = previewRouting({ poolId: pool.poolId, candidates, policy, now });
+					const decision = previewRouting({ poolId: pool.poolId, candidates, policy, now, schedulingPolicy: pool.schedulingPolicy ?? "priority", schedulingKey: `preview:${pool.poolId}:${now.toISOString()}` });
 				for (const entry of pool.entries) {
 					const evaluation = decision.kind === "SELECTED"
 						? decision.evaluations.find((item) => item.routeId === entry.routeId)
@@ -2087,7 +2168,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			if (analyticsStore) {
 				const base = { runId: result.runId, roleId: params.role, poolId: params.pool };
 				const events: AnalyticsEventV1[] = [{ eventId: `run-${result.runId}`, occurredAt: new Date().toISOString(), eventType: "run", ...base, ...(result.finalRouteId ? { routeId: result.finalRouteId } : {}), ...(result.finalRemoteModelId ? { remoteModelId: result.finalRemoteModelId } : {}), ...(result.requestedThinkingEffort === undefined ? {} : { requestedThinkingEffort: result.requestedThinkingEffort }), ...(result.effectiveThinkingEffort === undefined ? {} : { effectiveThinkingEffort: result.effectiveThinkingEffort }), outcome: result.terminalStatus, dimensions: { fallbackCount: result.fallbackCount } }];
-				for (const attempt of result.attempts) { const attemptEvent: AnalyticsEventV1 = { eventId: `attempt-${attempt.attemptId}`, occurredAt: attempt.endedAt, eventType: "attempt", ...base, attemptId: attempt.attemptId, routeId: attempt.routeId, remoteModelId: attempt.remoteModelId, ...(attempt.requestedThinkingEffort === undefined ? {} : { requestedThinkingEffort: attempt.requestedThinkingEffort }), ...(attempt.effectiveThinkingEffort === undefined ? {} : { effectiveThinkingEffort: attempt.effectiveThinkingEffort }), outcome: attempt.outcome }; if (attempt.latencyMs !== undefined) (attemptEvent as { durationMs?: number }).durationMs = attempt.latencyMs; if (attempt.infrastructureFailure?.class) (attemptEvent as { failureClass?: string }).failureClass = attempt.infrastructureFailure.class; if (attempt.usage) (attemptEvent as { tokenUsage?: AnalyticsEventV1["tokenUsage"] }).tokenUsage = { ...(attempt.usage.input === undefined ? {} : { inputTokens: attempt.usage.input }), ...(attempt.usage.output === undefined ? {} : { outputTokens: attempt.usage.output }), ...(attempt.usage.cacheRead === undefined ? {} : { cacheReadTokens: attempt.usage.cacheRead }), ...(attempt.usage.cacheWrite === undefined ? {} : { cacheWriteTokens: attempt.usage.cacheWrite }), ...(attempt.usage.reasoning === undefined ? {} : { reasoningTokens: attempt.usage.reasoning }), ...(attempt.usage.totalTokens === undefined ? {} : { totalTokens: attempt.usage.totalTokens }), provenance: "observed" }; events.push(attemptEvent); }
+				for (const attempt of result.attempts) { const attemptEvent: AnalyticsEventV1 = { eventId: `attempt-${attempt.attemptId}`, occurredAt: attempt.endedAt, eventType: "attempt", ...base, attemptId: attempt.attemptId, routeId: attempt.routeId, remoteModelId: attempt.remoteModelId, ...(attempt.poolPosition === undefined ? {} : { poolPosition: attempt.poolPosition }), retryIndex: attempt.retryIndex, ...(attempt.requestedThinkingEffort === undefined ? {} : { requestedThinkingEffort: attempt.requestedThinkingEffort }), ...(attempt.effectiveThinkingEffort === undefined ? {} : { effectiveThinkingEffort: attempt.effectiveThinkingEffort }), ...(attempt.configuredWeight === undefined ? {} : { configuredWeight: attempt.configuredWeight }), ...(attempt.selectionKind === undefined ? {} : { selectionKind: attempt.selectionKind }), ...(attempt.schedulerPolicy === undefined ? {} : { schedulerPolicy: attempt.schedulerPolicy }), outcome: attempt.outcome }; if (attempt.latencyMs !== undefined) (attemptEvent as { durationMs?: number }).durationMs = attempt.latencyMs; if (attempt.infrastructureFailure?.class) (attemptEvent as { failureClass?: string }).failureClass = attempt.infrastructureFailure.class; if (attempt.usage) (attemptEvent as { tokenUsage?: AnalyticsEventV1["tokenUsage"] }).tokenUsage = { ...(attempt.usage.input === undefined ? {} : { inputTokens: attempt.usage.input }), ...(attempt.usage.output === undefined ? {} : { outputTokens: attempt.usage.output }), ...(attempt.usage.cacheRead === undefined ? {} : { cacheReadTokens: attempt.usage.cacheRead }), ...(attempt.usage.cacheWrite === undefined ? {} : { cacheWriteTokens: attempt.usage.cacheWrite }), ...(attempt.usage.reasoning === undefined ? {} : { reasoningTokens: attempt.usage.reasoning }), ...(attempt.usage.totalTokens === undefined ? {} : { totalTokens: attempt.usage.totalTokens }), provenance: "observed" }; events.push(attemptEvent); }
 				for (let index = 0; index + 1 < result.attempts.length; index++) { const from = result.attempts[index]!; const to = result.attempts[index + 1]!; if (from.failureAction !== "FALLBACK_NEXT_ROUTE") continue; events.push({ eventId: `fallback-${result.runId}-${index}`, occurredAt: to.startedAt, eventType: "fallback", ...base, fallbackFromRouteId: from.routeId, fallbackToRouteId: to.routeId, ...(from.infrastructureFailure?.class ? { failureClass: from.infrastructureFailure.class } : {}), outcome: "fallback" }); }
 				for (const event of events) { try { analyticsStore.append(event); } catch { /* analytics is non-critical */ } }
 			}
@@ -3491,8 +3572,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				lines.push(`events=${summary.eventCount}`, `missions=${Object.keys(summary.byMission ?? {}).length}`, `runs=${summary.runs}`, `attempts=${summary.attempts}`, `successes=${summary.successes}`, `failures=${summary.failures}`, `success rate=${successRate(summary.successes, summary.runs)}`, `fallbacks=${summary.fallbacks}`, `quality pass/reject/blocked=${summary.qualityPasses}/${summary.qualityRejects}/${summary.qualityBlocked}`, `duration-ms=${summary.durationMs}`, `unknown token attempts=${summary.unknownTokenAttempts}`, `unknown cost events=${summary.unknownCostEvents}`, "Boss/profile/agent metrics: UNKNOWN (not reported)");
 			} else if (section === "Missions") {
 				lines.push(...analyticsMapLines("Missions", summary.byMission), ...analyticsMapLines("Roles", summary.byRole));
-			} else if (section === "Pools") {
-				lines.push(...analyticsMapLines("Pools", summary.byPool), ...analyticsQualityLines("Quality by pool", summary.qualityByPool));
+				} else if (section === "Pools") {
+					lines.push(...analyticsMapLines("Pools", summary.byPool), ...analyticsQualityLines("Quality by pool", summary.qualityByPool), ...analyticsSchedulingLines(summary.performanceByPoolRoute));
 			} else if (section === "Routes") {
 				lines.push(...analyticsMapLines("Routes/models", summary.byRoute), ...analyticsQualityLines("Quality by route", summary.qualityByRoute));
 				const models = new Map<string, string>();
@@ -3514,27 +3595,50 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				const recommendations = analytics.recommendations();
 				lines.push(`saved recommendations=${recommendations.length}`);
 				if (recommendations.length === 0) lines.push("recommendations: UNKNOWN (none saved)");
-				else for (const recommendation of recommendations) lines.push(`${recommendation.recommendationId}: pool=${recommendation.poolId} route=${recommendation.proposedRouteId} sample=${recommendation.sampleSize} score=${recommendation.score} formula=${recommendation.formulaVersion} status=${recommendation.status}`, `  evidence=${recommendation.evidence.join("; ") || "UNKNOWN"}`, `  limitations=${recommendation.limitations.join("; ") || "UNKNOWN"}`, `  actions: details/apply/ignore ${recommendation.recommendationId}`);
+					else for (const recommendation of recommendations) lines.push(`${recommendation.recommendationId}: ${recommendation.recommendationKind === "weight-rebalance" ? "kind=weight-rebalance " : ""}pool=${recommendation.poolId} route=${recommendation.proposedRouteId} sample=${recommendation.sampleSize} score=${recommendation.score} formula=${recommendation.formulaVersion} status=${recommendation.status}`, ...(recommendation.recommendationKind === "weight-rebalance" ? [`  current=${JSON.stringify(recommendation.proposedDiff.baselineWeights)}`, `  suggested=${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}`] : []), `  evidence=${recommendation.evidence.join("; ") || "UNKNOWN"}`, `  limitations=${recommendation.limitations.join("; ") || "UNKNOWN"}`, `  actions: details/apply/ignore ${recommendation.recommendationId}`);
 			}
 			ctx.ui.notify(lines.join("\n"), "info");
 		} catch (error) { notifyError(ctx, "Analytics failed", error); }
 	};
-	const showRecommendations = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
-		if (!analytics || !analyticsStore) { ctx.ui.notify("Recommendations are unavailable while analytics is disabled", "warning"); return; }
-		try {
-			const input = (args ?? "").trim(); const [action, id] = input.split(/\s+/u, 2); const saved = analytics.recommendations();
-			if (action === "ignore" && id) { recommendationApplication?.ignore(id); ctx.ui.notify(`Recommendation ${id} ignored`, "info"); return; }
-			if (action === "details" && id) { const recommendation = saved.find((item) => item.recommendationId === id); ctx.ui.notify(recommendation ? JSON.stringify(recommendation, null, 2) : `Recommendation ${id} not found`, recommendation ? "info" : "warning"); return; }
-			if (action === "apply" && id) {
-				const recommendation = saved.find((item) => item.recommendationId === id); if (!recommendation) { ctx.ui.notify(`Recommendation ${id} not found`, "warning"); return; }
-				if (recommendation.status !== "proposed") { ctx.ui.notify(`Recommendation ${id} is already ${recommendation.status}`, "warning"); return; }
-				if (ctx.mode === "tui" || ctx.hasUI) { if (!(await ctx.ui.confirm("Apply recommendation?", `${recommendation.poolId}: move ${recommendation.proposedRouteId} to first priority`))) return; }
-				if (!isPoolId(recommendation.poolId) || !recommendationApplication) { ctx.ui.notify("Recommendation has an invalid pool", "warning"); return; }
-				const applied = await recommendationApplication.apply(id); ctx.ui.notify(applied === "applied" ? `Recommendation ${id} applied` : applied === "stale" ? `Recommendation ${id} is stale; regenerate it` : `Recommendation ${id} is unavailable`, applied === "applied" ? "info" : "warning"); return;
-			}
-			const poolId = input || "implementation"; if (!isPoolId(poolId)) { ctx.ui.notify(`Unknown pool: ${poolId}`, "warning"); return; } const currentPool = await poolManager.getPool(poolId); const generated = new RecommendationEngine().generate(analytics.overview(), poolId, { currentOrder: currentPool.entries.map((entry) => entry.routeId) }); if (!generated) { ctx.ui.notify(`Insufficient analytics data or no priority change for ${poolId} (minimum 10 observed runs per route)`, "warning"); return; } const recommendation = { ...generated, proposedDiff: { ...generated.proposedDiff, baselineOrder: currentPool.entries.map((entry) => entry.routeId) } }; analyticsStore.saveRecommendation(recommendation); ctx.ui.notify([`recommendation=${recommendation.recommendationId}`, `pool=${recommendation.poolId}`, `route=${recommendation.proposedRouteId}`, `sample=${recommendation.sampleSize}`, `score=${recommendation.score}`, `formula=${recommendation.formulaVersion}`, `evidence=${recommendation.evidence.join("; ")}`, `limitations=${recommendation.limitations.join("; ")}`, "status=proposed (no configuration changed)", `actions: /recommendations details ${recommendation.recommendationId} | apply ${recommendation.recommendationId} | ignore ${recommendation.recommendationId}`].join("\n"), "info");
-		} catch (error) { notifyError(ctx, "Recommendations failed", error); }
-	};
+		const showRecommendations = async (ctx: ExtensionContext | ExtensionCommandContext, args?: string): Promise<void> => {
+			if (!analytics || !analyticsStore) { ctx.ui.notify("Recommendations are unavailable while analytics is disabled", "warning"); return; }
+			try {
+				const input = (args ?? "").trim();
+				const [action, id] = input.split(/\s+/u, 2);
+				const saved = analytics.recommendations();
+				if (action === "ignore" && id) {
+					const ignored = recommendationApplication?.ignore(id) ?? false;
+					ctx.ui.notify(ignored ? `Recommendation ${id} ignored` : `Recommendation ${id} could not be ignored`, ignored ? "info" : "warning");
+					return;
+				}
+				if (action === "details" && id) {
+					const recommendation = saved.find((item) => item.recommendationId === id);
+					ctx.ui.notify(recommendation ? JSON.stringify(recommendation, null, 2) : `Recommendation ${id} not found`, recommendation ? "info" : "warning");
+					return;
+				}
+				if (action === "apply" && id) {
+					const recommendation = saved.find((item) => item.recommendationId === id);
+					if (!recommendation) { ctx.ui.notify(`Recommendation ${id} not found`, "warning"); return; }
+					if (recommendation.status !== "proposed") { ctx.ui.notify(`Recommendation ${id} is already ${recommendation.status}`, "warning"); return; }
+					const prompt = recommendation.recommendationKind === "weight-rebalance" ? `${recommendation.poolId}: apply suggested weights ${JSON.stringify(recommendation.proposedDiff.suggestedWeights)}` : `${recommendation.poolId}: move ${recommendation.proposedRouteId} to first priority`;
+					if ((ctx.mode === "tui" || ctx.hasUI) && !(await ctx.ui.confirm("Apply recommendation?", prompt))) return;
+					if (!isPoolId(recommendation.poolId) || !recommendationApplication) { ctx.ui.notify("Recommendation has an invalid pool", "warning"); return; }
+					const applied = await recommendationApplication.apply(id);
+					ctx.ui.notify(applied === "applied" ? `Recommendation ${id} applied` : applied === "stale" ? `Recommendation ${id} is stale; regenerate it` : `Recommendation ${id} is unavailable`, applied === "applied" ? "info" : "warning");
+					return;
+				}
+				const poolId = input || "implementation";
+				if (!isPoolId(poolId)) { ctx.ui.notify(`Unknown pool: ${poolId}`, "warning"); return; }
+				const currentPool = await poolManager.getPool(poolId);
+				const currentOrder = currentPool.entries.map((entry) => entry.routeId);
+				const currentWeights = Object.fromEntries(currentPool.entries.map((entry) => [entry.routeId, entry.weight ?? 1]));
+				const existingWeight = saved.find((item) => item.status === "proposed" && item.recommendationKind === "weight-rebalance" && item.poolId === poolId && sameWeightSnapshot(item.proposedDiff.baselineWeights, currentWeights));
+				const generated = currentPool.schedulingPolicy === "weighted" ? existingWeight ?? new RecommendationEngine().generateWeightRebalance(analytics.overview(), poolId, currentWeights) : new RecommendationEngine().generate(analytics.overview(), poolId, { currentOrder });
+				if (!generated) { ctx.ui.notify(`Insufficient comparable analytics or no recommendation for ${poolId} (minimum 10 observed attempts per route)`, "warning"); return; }
+				if (!existingWeight) analyticsStore.saveRecommendation(generated);
+				ctx.ui.notify([`recommendation=${generated.recommendationId}`, `kind=${generated.recommendationKind ?? "priority"}`, `pool=${generated.poolId}`, `route=${generated.proposedRouteId}`, `sample=${generated.sampleSize}`, `score=${generated.score}`, `formula=${generated.formulaVersion}`, ...(generated.recommendationKind === "weight-rebalance" ? [`current=${JSON.stringify(generated.proposedDiff.baselineWeights)}`, `suggested=${JSON.stringify(generated.proposedDiff.suggestedWeights)}`] : []), `evidence=${generated.evidence.join("; ")}`, `limitations=${generated.limitations.join("; ")}`, "status=proposed (no configuration changed)", `actions: /recommendations details ${generated.recommendationId} | apply ${generated.recommendationId} | ignore ${generated.recommendationId}`].join("\n"), "info");
+			} catch (error) { notifyError(ctx, "Recommendations failed", error); }
+		};
 
 	const registerCommands = (): void => {
 		registerSubagentTool();
@@ -3752,7 +3856,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 					poolId,
 					candidateRouteId: recommendation.proposedRouteId,
 					currentOrder: pool.entries.map((entry) => entry.routeId),
-					metrics: { sampleSize: recommendation.sampleSize, score: recommendation.score, runs: summary.runs, successes: summary.successes, fallbacks: summary.fallbacks, qualityPasses: summary.qualityPasses, qualityRejects: summary.qualityRejects, unknownTokenAttempts: summary.unknownTokenAttempts, unknownCostEvents: summary.unknownCostEvents },
+						metrics: { sampleSize: recommendation.sampleSize, score: recommendation.score, runs: summary.runs, successes: summary.successes, fallbacks: summary.fallbacks, qualityPasses: summary.qualityPasses, qualityRejects: summary.qualityRejects, unknownTokenAttempts: summary.unknownTokenAttempts, unknownCostEvents: summary.unknownCostEvents, ...(recommendation.recommendationKind === undefined ? {} : { recommendationKind: recommendation.recommendationKind }), ...(recommendation.proposedDiff.baselineWeights === undefined ? {} : { currentWeights: JSON.stringify(recommendation.proposedDiff.baselineWeights) }), ...(recommendation.proposedDiff.suggestedWeights === undefined ? {} : { suggestedWeights: JSON.stringify(recommendation.proposedDiff.suggestedWeights) }) },
 					scoreComponents: [],
 					basis: recommendation.evidence,
 				};

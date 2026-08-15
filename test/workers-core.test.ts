@@ -300,6 +300,9 @@ describe("M5 worker core", () => {
 			assert.deepEqual(seen, [id("route-a"), id("route-a"), id("route-b")]);
 			assert.equal(result.fallbackCount, 1);
 			assert.equal(result.attempts[0]?.infrastructureFailure?.class, "rate_limited");
+			assert.deepEqual(result.attempts.map((attempt) => attempt.selectionKind), ["scheduled", "retry", "fallback"]);
+			assert.deepEqual(result.attempts.map((attempt) => attempt.configuredWeight), [1, 1, 1]);
+			assert.deepEqual(result.attempts.map((attempt) => attempt.poolPosition), [0, 0, 1]);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

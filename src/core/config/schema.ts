@@ -1,5 +1,6 @@
 import { ConfigValidationError, type ConfigIssue } from "./errors.js";
 import { THINKING_EFFORTS } from "../thinking.js";
+import { MAX_POOL_ENTRY_WEIGHT } from "./types.js";
 import type {
   AnalyticsPolicyV1,
   BillingPolicyV2,
@@ -14,6 +15,7 @@ import type {
   OperationalProfileV1,
   PoolRouteV1,
   PoolV1,
+  PoolSchedulingPolicy,
   PoolsV1,
   ProjectOverrideV1,
   QualityGate,
@@ -61,6 +63,7 @@ const QUALITY_GATES = [
   "regression",
   "no-critical-findings",
 ] as const;
+const POOL_SCHEDULING_POLICIES = ["priority", "weighted"] as const satisfies readonly PoolSchedulingPolicy[];
 
 type RecordValue = Record<string, unknown>;
 
@@ -291,19 +294,21 @@ const validateRoute = (value: unknown, path: string, issues: ConfigIssue[]): Rou
 const validatePoolEntry = (value: unknown, path: string, issues: ConfigIssue[]): PoolRouteV1 | undefined => {
   const object = record(value, path, issues);
   if (!object) return undefined;
-  ensureKeys(object, ["routeId", "enabled", "timeoutMs", "maxAttempts", "thinkingEffort"], path, issues);
+  ensureKeys(object, ["routeId", "enabled", "timeoutMs", "maxAttempts", "thinkingEffort", "weight"], path, issues);
   stableId(object.routeId, fieldPath(path, "routeId"), issues);
   booleanValue(object.enabled, fieldPath(path, "enabled"), issues);
   if ("timeoutMs" in object) boundedInteger(object.timeoutMs, fieldPath(path, "timeoutMs"), issues, 1_000, 600_000);
   if ("maxAttempts" in object) boundedInteger(object.maxAttempts, fieldPath(path, "maxAttempts"), issues, 1, 16);
   if ("thinkingEffort" in object) enumValue(object.thinkingEffort, fieldPath(path, "thinkingEffort"), issues, ["auto", ...THINKING_EFFORTS] as const);
+  if ("weight" in object) boundedInteger(object.weight, fieldPath(path, "weight"), issues, 0, MAX_POOL_ENTRY_WEIGHT);
   return value as PoolRouteV1;
 };
 
 const validatePool = (value: unknown, path: string, issues: ConfigIssue[]): PoolV1 | undefined => {
   const object = record(value, path, issues);
   if (!object) return undefined;
-  ensureKeys(object, ["entries"], path, issues);
+  ensureKeys(object, ["schedulingPolicy", "entries"], path, issues);
+  if ("schedulingPolicy" in object) enumValue(object.schedulingPolicy, fieldPath(path, "schedulingPolicy"), issues, POOL_SCHEDULING_POLICIES);
   const entries = arrayValue(object.entries, fieldPath(path, "entries"), issues);
   if (entries) entries.forEach((entry, index) => validatePoolEntry(entry, `${path}.entries[${index}]`, issues));
   return value as PoolV1;

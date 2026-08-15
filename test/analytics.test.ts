@@ -100,6 +100,40 @@ test("summary separates fallback, quality, tokens and cost provenance", () => {
 	assert.equal(summary.unknownTokenAttempts, 0);
 });
 
+test("[RC23] analytics retains scheduler origin, effort, weight, and generates an explicit evidence-gated weight recommendation", async () => {
+	const events: AnalyticsEventV1[] = [];
+	for (let index = 0; index < 10; index += 1) {
+		events.push(event(`weighted-a-${index}`, { eventType: "attempt", routeId: "route-a", outcome: "success", durationMs: 10, configuredWeight: 1, selectionKind: "scheduled", schedulerPolicy: "weighted", requestedThinkingEffort: "low" }));
+		events.push(event(`weighted-b-${index}`, { eventType: "attempt", routeId: "route-b", outcome: index < 5 ? "success" : "infrastructure_failure", durationMs: 100, configuredWeight: 3, selectionKind: index === 0 ? "fallback" : "scheduled", schedulerPolicy: "weighted", requestedThinkingEffort: "high" }));
+	}
+	const summary = summarize(events);
+	assert.equal(summary.performanceByPoolRoute?.["implementation:route-a"]?.scheduled, 10);
+	assert.equal(summary.performanceByPoolRoute?.["implementation:route-b"]?.fallbackSelections, 1);
+	assert.equal(summary.performanceByPoolRoute?.["implementation:route-a"]?.byThinkingEffort.low, 10);
+	assert.equal(summary.performanceByPoolRoute?.["implementation:route-b"]?.observedWeights["3"], 10);
+	assert.equal(new RecommendationEngine().generateWeightRebalance(summary, "implementation", { "route-a": 1, "route-b": 3 })?.recommendationKind, "weight-rebalance");
+
+	const root = mkdtempSync(join(tmpdir(), "pmo-analytics-weight-"));
+	const store = new SQLiteAnalyticsStore({ root, enabled: true });
+	for (const item of events) store.append(item);
+	const recommendation = new RecommendationEngine().generateWeightRebalance(store.summary(), "implementation", { "route-a": 1, "route-b": 3 });
+	assert.ok(recommendation);
+	store.saveRecommendation(recommendation!);
+	let updates = 0;
+	let appliedWeights: Readonly<Record<string, number>> | undefined;
+	const pool = {
+		getPool: () => ({ poolId: "implementation", entries: [{ routeId: "route-a", index: 0, weight: 1 }, { routeId: "route-b", index: 1, weight: 3 }] }),
+		moveRoute: async () => undefined,
+		updatePoolWeights: async (_poolId: string, weights: Readonly<Record<string, number>>) => { updates += 1; appliedWeights = weights; },
+	};
+	const application = new RecommendationApplicationService(store, pool);
+	assert.equal(await application.apply(recommendation!.recommendationId), "applied");
+	assert.equal(updates, 1);
+	assert.deepEqual(appliedWeights, recommendation!.proposedDiff.suggestedWeights);
+	assert.equal(application.ignore(recommendation!.recommendationId), false);
+	store.close();
+});
+
 test("scores and recommendations require evidence and do not mutate config", async () => {
 	const events = Array.from({ length: 10 }, (_, index) => event(`r-${index}`, { eventType: "run", routeId: "route-a" }));
 	const summary = summarize([...events, ...Array.from({ length: 10 }, (_, index) => event(`v-${index}`, { eventType: "run", poolId: "verification", routeId: "route-b" }))]);

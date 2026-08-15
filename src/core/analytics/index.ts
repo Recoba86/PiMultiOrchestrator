@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs"
 import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import type { EffectiveThinkingEffort, ThinkingEffort } from "../thinking.js";
+import { MAX_POOL_ENTRY_WEIGHT, type PoolSchedulingPolicy } from "../config/types.js";
 
 export const ANALYTICS_SCHEMA_VERSION = 1 as const;
 export const ANALYTICS_SCHEMA_V1 = `
@@ -42,6 +43,7 @@ export type AnalyticsEventType =
 	| "routing"
 	| "recommendation"
 	| "custom";
+export type AnalyticsSelectionKind = "scheduled" | "retry" | "fallback";
 
 export interface AnalyticsTokenUsage {
   readonly inputTokens?: number;
@@ -122,6 +124,11 @@ export interface AnalyticsEventV1 {
   readonly resourceId?: string;
   readonly requestedThinkingEffort?: ThinkingEffort;
   readonly effectiveThinkingEffort?: EffectiveThinkingEffort;
+  readonly configuredWeight?: number;
+  readonly poolPosition?: number;
+  readonly retryIndex?: number;
+  readonly selectionKind?: AnalyticsSelectionKind;
+  readonly schedulerPolicy?: PoolSchedulingPolicy;
   readonly durationMs?: number;
   readonly outcome?: string;
   readonly failureClass?: string;
@@ -187,12 +194,14 @@ export interface AnalyticsSummary {
   readonly qualityByPool: Readonly<Record<string, { readonly observations: number; readonly passes: number; readonly rejects: number; readonly blocked: number; readonly firstPass: number; readonly repairRounds: number }>>;
   readonly qualityByRoute: Readonly<Record<string, { readonly observations: number; readonly passes: number; readonly rejects: number; readonly blocked: number; readonly firstPass: number; readonly repairRounds: number }>>;
   readonly costByCurrency: Readonly<Record<string, { readonly actualMicros?: number; readonly estimatedMicros?: number; readonly avoidedMicros?: number }>>;
+  readonly performanceByPoolRoute?: Readonly<Record<string, { readonly poolId: string; readonly routeId: string; readonly scheduled: number; readonly retries: number; readonly fallbackSelections: number; readonly byThinkingEffort: Readonly<Record<string, number>>; readonly observedWeights: Readonly<Record<string, number>> }>>;
 }
 
 export interface AnalyticsRecommendation {
   readonly recommendationId: string;
   readonly poolId: string;
   readonly proposedRouteId: string;
+  readonly recommendationKind?: "priority" | "weight-rebalance";
   readonly baselineRouteId?: string;
   readonly sampleSize: number;
   readonly from?: string;
@@ -222,8 +231,9 @@ export interface AnalyticsStoreAdapter {
 export type AnalyticsStore = AnalyticsStoreAdapter;
 
 export interface RecommendationPoolManager {
-  getPool(poolId: string): Promise<{ readonly poolId: string; readonly entries: readonly { readonly routeId: string; readonly index: number }[] }> | { readonly poolId: string; readonly entries: readonly { readonly routeId: string; readonly index: number }[] };
+  getPool(poolId: string): Promise<{ readonly poolId: string; readonly schedulingPolicy?: PoolSchedulingPolicy; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] }> | { readonly poolId: string; readonly schedulingPolicy?: PoolSchedulingPolicy; readonly entries: readonly { readonly routeId: string; readonly index: number; readonly weight?: number }[] };
   moveRoute(poolId: string, routeId: string, targetIndex: number): Promise<unknown> | unknown;
+  updatePoolWeights?(poolId: string, weights: Readonly<Record<string, number>>): Promise<unknown> | unknown;
 }
 
 export class RecommendationApplicationService {
@@ -233,6 +243,14 @@ export class RecommendationApplicationService {
     const recommendation = this.store.listRecommendations().find((item) => item.recommendationId === recommendationId);
     if (!recommendation || recommendation.status !== "proposed") return "unavailable";
     const pool = await this.pools.getPool(recommendation.poolId);
+    const baselineWeights = safeWeightMap(recommendation.proposedDiff.baselineWeights);
+    const suggestedWeights = safeWeightMap(recommendation.proposedDiff.suggestedWeights);
+    if (recommendation.recommendationKind === "weight-rebalance" || suggestedWeights !== undefined) {
+      if (!this.pools.updatePoolWeights || !this.store.updateRecommendationStatus) return "unavailable";
+      if (!baselineWeights || !suggestedWeights || !sameWeightMap(pool.entries, baselineWeights) || !sameEntrySet(pool.entries, suggestedWeights)) return "stale";
+      await this.pools.updatePoolWeights(pool.poolId, suggestedWeights);
+      return this.store.updateRecommendationStatus(recommendationId, "applied") ? "applied" : "unavailable";
+    }
     const entry = pool.entries.find((item) => item.routeId === recommendation.proposedRouteId);
     const baseline = recommendation.proposedDiff.baselineOrder;
     if (!entry || !Array.isArray(baseline) || baseline.length !== pool.entries.length || baseline.some((routeId, index) => routeId !== pool.entries[index]?.routeId)) return "stale";
@@ -242,7 +260,8 @@ export class RecommendationApplicationService {
   }
 
   ignore(recommendationId: string): boolean {
-    return this.store.updateRecommendationStatus?.(recommendationId, "ignored") ?? false;
+    const recommendation = this.store.listRecommendations().find((item) => item.recommendationId === recommendationId);
+    return recommendation?.status === "proposed" && (this.store.updateRecommendationStatus?.(recommendationId, "ignored") ?? false);
   }
 }
 
@@ -263,6 +282,9 @@ const safeClassification = (value: unknown): AnalyticsClassification | undefined
 const safeRoutingCode = (value: unknown): string | undefined => typeof value === "string" && /^[a-z][a-z0-9_:-]{0,63}$/u.test(value) ? value : undefined;
 const safeRoutingAction = (value: unknown): AnalyticsRoutingTelemetryV1["action"] => ["continued", "run_as_mission", "run_normally", "cancelled", "headless_normal", "failed", "auto_mission_explicit", "auto_mission_learned", "learned_normal", "memory_conflict", "rule_created_explicit", "rule_created_learned", "rule_disabled", "rule_deleted", "learned_reset", "full_reset", "memory_bypassed_complexity"].includes(value as string) ? value as AnalyticsRoutingTelemetryV1["action"] : undefined;
 const safeThinkingEffort = (value: unknown): ThinkingEffort | "unknown" | undefined => value === "auto" || value === "low" || value === "medium" || value === "high" || value === "xhigh" || value === "max" || value === "unknown" ? value : undefined;
+const safeSelectionKind = (value: unknown): AnalyticsSelectionKind | undefined => value === "scheduled" || value === "retry" || value === "fallback" ? value : undefined;
+const safeSchedulerPolicy = (value: unknown): PoolSchedulingPolicy | undefined => value === "priority" || value === "weighted" ? value : undefined;
+const safeWeightValue = (value: unknown): number | undefined => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_POOL_ENTRY_WEIGHT ? value : undefined;
 type StoredAnalystAnalysis = import("./analyst.js").AnalystAnalysisRecord;
 const safeAnalystText = (value: unknown, max = 512): string | undefined => {
 	const text = safeText(value, max);
@@ -362,6 +384,7 @@ const safeJson = (event: AnalyticsEventV1): string => JSON.stringify({
   missionId: safeText(event.missionId), taskId: safeText(event.taskId), runId: safeText(event.runId), attemptId: safeText(event.attemptId), verificationId: safeText(event.verificationId),
   qualityRound: numberValue(event.qualityRound), roleId: safeText(event.roleId), poolId: safeText(event.poolId), routeId: safeText(event.routeId), remoteModelId: safeText(event.remoteModelId), gatewayId: safeText(event.gatewayId), sourceLabel: safeText(event.sourceLabel), resourceClass: safeText(event.resourceClass), resourceId: safeText(event.resourceId), durationMs: numberValue(event.durationMs), outcome: safeText(event.outcome), failureClass: safeText(event.failureClass), fallbackFromRouteId: safeText(event.fallbackFromRouteId), fallbackToRouteId: safeText(event.fallbackToRouteId), qualityOutcome: safeText(event.qualityOutcome), firstPass: boolValue(event.firstPass), repairRound: numberValue(event.repairRound),
   requestedThinkingEffort: safeThinkingEffort(event.requestedThinkingEffort), effectiveThinkingEffort: safeThinkingEffort(event.effectiveThinkingEffort),
+  configuredWeight: safeWeightValue(event.configuredWeight), poolPosition: numberValue(event.poolPosition), retryIndex: numberValue(event.retryIndex), selectionKind: safeSelectionKind(event.selectionKind), schedulerPolicy: safeSchedulerPolicy(event.schedulerPolicy),
   tokenUsage: safeTokenUsage(event.tokenUsage),
   cost: safeCost(event.cost),
 	routing: event.routing ? {
@@ -411,16 +434,43 @@ const safeRecommendation = (recommendation: AnalyticsRecommendation): AnalyticsR
     const value = numberValue(diff[key]);
     if (value !== undefined) proposedDiff[key] = value;
   }
+  const baselineWeights = safeWeightMap(diff.baselineWeights);
+  const suggestedWeights = safeWeightMap(diff.suggestedWeights);
+  if (baselineWeights !== undefined) proposedDiff.baselineWeights = baselineWeights;
+  if (suggestedWeights !== undefined) proposedDiff.suggestedWeights = suggestedWeights;
   const baselineRouteId = safeMetadataText(recommendation.baselineRouteId, 64);
   const from = safeMetadataText(recommendation.from, 64);
   const to = safeMetadataText(recommendation.to, 64);
+  const recommendationKind = recommendation.recommendationKind === "priority" || recommendation.recommendationKind === "weight-rebalance" ? recommendation.recommendationKind : undefined;
   return {
     recommendationId, poolId, proposedRouteId, sampleSize, score, formulaVersion, status,
+    ...(recommendationKind === undefined ? {} : { recommendationKind }),
     ...(baselineRouteId === undefined ? {} : { baselineRouteId }),
     ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }),
     evidence: list(recommendation.evidence, 256), limitations: list(recommendation.limitations, 256), proposedDiff,
   };
 };
+
+function safeWeightMap(value: unknown): Readonly<Record<string, number>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const routeId = safeMetadataText(key, 64);
+    if (!routeId || typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < 0 || raw > MAX_POOL_ENTRY_WEIGHT) return undefined;
+    result[routeId] = raw;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function sameEntrySet(entries: readonly { readonly routeId: string }[], weights: Readonly<Record<string, number>>): boolean {
+  const ids = entries.map((entry) => entry.routeId).sort();
+  const weightIds = Object.keys(weights).sort();
+  return ids.length === weightIds.length && ids.every((routeId, index) => routeId === weightIds[index]);
+}
+
+function sameWeightMap(entries: readonly { readonly routeId: string; readonly weight?: number }[], weights: Readonly<Record<string, number>>): boolean {
+  return sameEntrySet(entries, weights) && entries.every((entry) => (entry.weight ?? 1) === weights[entry.routeId]);
+}
 
 function analyticsIntegrityIssues(db: DatabaseSync): string[] {
   const issues: string[] = [];
@@ -547,6 +597,49 @@ export class RecommendationEngine {
     const recommendationId = `rec-${createHash("sha256").update(`${poolId}:${best.routeId}:${baselineRouteId ?? ""}:${summary.from ?? options.range?.from ?? ""}:${summary.to ?? options.range?.to ?? ""}`).digest("hex").slice(0, 16)}`;
     return { recommendationId, poolId, proposedRouteId: best.routeId, ...(baselineRouteId === undefined ? {} : { baselineRouteId }), sampleSize: best.runs, ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }), score: best.successes / best.runs, formulaVersion: "quality-v1", evidence: [`${best.successes}/${best.runs} successful runs on ${best.routeId}`, ...(baselineRouteId === undefined ? [] : [`baseline ${baselineRouteId} at priority ${currentIndex + 1}`])], limitations: ["correlation is not causation", "recommendation does not inspect billing or live quota"], proposedDiff, status: "proposed" };
   }
+
+  generateWeightRebalance(summary: AnalyticsSummary, poolId: string, currentWeights: Readonly<Record<string, number>>, options: { readonly range?: AnalyticsRange } = {}): AnalyticsRecommendation | undefined {
+    const routes = Object.values(summary.byPoolRoute).filter((value) => {
+      if (value.poolId !== poolId || value.runs < this.minimumSamples || (currentWeights[value.routeId] ?? 1) <= 0) return false;
+      const performance = summary.performanceByPoolRoute?.[`${poolId}:${value.routeId}`];
+      const originKnownSamples = (performance?.scheduled ?? 0) + (performance?.retries ?? 0) + (performance?.fallbackSelections ?? 0);
+      return currentWeights[value.routeId] !== undefined && originKnownSamples >= this.minimumSamples;
+    });
+    if (routes.length < 2 || routes.some((route) => currentWeights[route.routeId] === undefined)) return undefined;
+    const latencyMax = Math.max(...routes.map((route) => route.durationMs / Math.max(1, route.runs)), 1);
+    const scored = routes.map((route) => {
+      const reliability = route.successes / Math.max(1, route.runs);
+      const quality = summary.qualityByRoute[route.routeId];
+      const qualityRatio = quality && quality.observations > 0 ? quality.passes / quality.observations : reliability;
+      const repairRate = quality && quality.observations > 0 ? Math.min(1, quality.repairRounds / quality.observations) : 0;
+      const latencyScore = 1 - Math.min(1, (route.durationMs / Math.max(1, route.runs)) / latencyMax);
+      const score = Math.max(0.01, reliability * 0.55 + qualityRatio * 0.3 + latencyScore * 0.15 - repairRate * 0.1);
+      return { route, score, reliability, qualityRatio, latencyMs: route.durationMs / Math.max(1, route.runs), repairRate };
+    });
+    const totalWeight = routes.reduce((sum, route) => sum + (currentWeights[route.routeId] ?? 1), 0);
+    const scoreTotal = scored.reduce((sum, item) => sum + item.score, 0);
+    const suggestedWeights: Record<string, number> = Object.fromEntries(Object.keys(currentWeights).map((routeId) => [routeId, currentWeights[routeId] ?? 0]));
+    for (const item of scored) suggestedWeights[item.route.routeId] = Math.max(1, Math.min(MAX_POOL_ENTRY_WEIGHT, Math.round(item.score / scoreTotal * totalWeight)));
+    while (Object.values(suggestedWeights).reduce((sum, weight) => sum + weight, 0) > totalWeight) {
+      const candidate = scored.filter((item) => (suggestedWeights[item.route.routeId] ?? 0) > 1).sort((a, b) => a.score - b.score)[0];
+      if (!candidate) break;
+      suggestedWeights[candidate.route.routeId] = (suggestedWeights[candidate.route.routeId] ?? 0) - 1;
+    }
+    while (Object.values(suggestedWeights).reduce((sum, weight) => sum + weight, 0) < totalWeight) {
+      const candidate = scored.sort((a, b) => b.score - a.score)[0];
+      if (!candidate) break;
+      suggestedWeights[candidate.route.routeId] = (suggestedWeights[candidate.route.routeId] ?? 0) + 1;
+    }
+    const changed = Object.keys(currentWeights).some((routeId) => (currentWeights[routeId] ?? 0) !== suggestedWeights[routeId]);
+    if (!changed) return undefined;
+    const top = [...scored].sort((a, b) => b.score - a.score || a.route.routeId.localeCompare(b.route.routeId))[0]!;
+    const from = summary.from ?? options.range?.from;
+    const to = summary.to ?? options.range?.to;
+    const baselineWeights = Object.fromEntries(Object.entries(currentWeights).sort(([a], [b]) => a.localeCompare(b)));
+    const normalizedSuggested = Object.fromEntries(Object.entries(suggestedWeights).sort(([a], [b]) => a.localeCompare(b)));
+    const recommendationId = `rec-${createHash("sha256").update(`${poolId}:weight-rebalance:${JSON.stringify(baselineWeights)}:${JSON.stringify(normalizedSuggested)}:${from ?? ""}:${to ?? ""}`).digest("hex").slice(0, 16)}`;
+    return { recommendationId, poolId, proposedRouteId: top.route.routeId, recommendationKind: "weight-rebalance", sampleSize: Math.min(...routes.map((route) => route.runs)), ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }), score: top.score, formulaVersion: "weight-rebalance-v1", evidence: ["comparable routes each have at least 10 observed attempts", ...scored.map((item) => `${item.route.routeId}: reliability ${Math.round(item.reliability * 100)}%, quality ${Math.round(item.qualityRatio * 100)}%, repair ${Math.round(item.repairRate * 100)}%, latency ${Math.round(item.latencyMs)}ms`)], limitations: ["weights are a conservative heuristic, not an autonomous policy", "quality evidence is unavailable when no durable quality decisions exist", "recommendation does not inspect billing, subscriptions, or live quota"], proposedDiff: { poolId, routeId: top.route.routeId, baselineWeights, suggestedWeights: normalizedSuggested }, status: "proposed" };
+  }
 }
 
 export const summarize = (events: readonly AnalyticsEventV1[], range?: AnalyticsRange): AnalyticsSummary => {
@@ -557,6 +650,7 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
   const byMission: Record<string, { runs: number; successes: number; failures: number; fallbacks: number; tokens: number; durationMs: number }> = {};
   const byRole: Record<string, { runs: number; successes: number; failures: number; fallbacks: number; tokens: number; durationMs: number }> = {};
   const byPoolRoute: Record<string, { poolId: string; routeId: string; runs: number; successes: number; failures: number; fallbacks: number; tokens: number; durationMs: number }> = {};
+  const performanceByPoolRoute: Record<string, { poolId: string; routeId: string; scheduled: number; retries: number; fallbackSelections: number; byThinkingEffort: Record<string, number>; observedWeights: Record<string, number> }> = {};
   const fallbackTransitions: Record<string, { fromRouteId: string; toRouteId: string; failureClass?: string; count: number }> = {};
   const qualityByPool: Record<string, { observations: number; passes: number; rejects: number; blocked: number; firstPass: number; repairRounds: number }> = {};
   const qualityByRoute: Record<string, { observations: number; passes: number; rejects: number; blocked: number; firstPass: number; repairRounds: number }> = {};
@@ -616,10 +710,19 @@ export const summarize = (events: readonly AnalyticsEventV1[], range?: Analytics
       transition.count++;
     }
     if (event.poolId && event.routeId) { const key = `${event.poolId}:${event.routeId}`; const bucket = byPoolRoute[key] ??= { poolId: event.poolId, routeId: event.routeId, runs: 0, successes: 0, failures: 0, fallbacks: 0, tokens: 0, durationMs: 0 }; if (isCanonicalSample(event)) { bucket.runs++; if (successful(event)) bucket.successes++; if (failed(event)) bucket.failures++; bucket.tokens += event.tokenUsage?.totalTokens ?? 0; bucket.durationMs += event.durationMs ?? 0; } if (event.eventType === "fallback") bucket.fallbacks++; }
+    if (event.poolId && event.routeId && isCanonicalSample(event)) {
+      const key = `${event.poolId}:${event.routeId}`;
+      const bucket = performanceByPoolRoute[key] ??= { poolId: event.poolId, routeId: event.routeId, scheduled: 0, retries: 0, fallbackSelections: 0, byThinkingEffort: {}, observedWeights: {} };
+      if (event.selectionKind === "scheduled") bucket.scheduled++;
+      if (event.selectionKind === "retry") bucket.retries++;
+      if (event.selectionKind === "fallback") bucket.fallbackSelections++;
+      if (event.requestedThinkingEffort) bucket.byThinkingEffort[event.requestedThinkingEffort] = (bucket.byThinkingEffort[event.requestedThinkingEffort] ?? 0) + 1;
+      if (event.configuredWeight !== undefined) { const weight = String(event.configuredWeight); bucket.observedWeights[weight] = (bucket.observedWeights[weight] ?? 0) + 1; }
+    }
     if (event.cost) { const amount = event.cost.amountMicros; const currency = event.cost.currency?.trim().toUpperCase(); if (amount === undefined || event.cost.provenance === "unknown" || event.cost.provenance === "unavailable" || !currency) unknownCostEvents++; else { const c = costByCurrency[currency] ??= {}; if (event.cost.kind === "actual" && (event.cost.provenance === "observed" || event.cost.provenance === "provider_reported")) { actualCostMicros += amount; hasActual = true; c.actualMicros = (c.actualMicros ?? 0) + amount; } else if (event.cost.kind === "avoided" && (event.cost.provenance === "estimated" || event.cost.provenance === "configured")) { avoidedCostMicros += amount; hasAvoided = true; c.avoidedMicros = (c.avoidedMicros ?? 0) + amount; } else if ((event.cost.kind === "equivalent" || event.cost.provenance === "estimated" || event.cost.provenance === "configured") && event.cost.kind !== "actual") { estimatedCostMicros += amount; hasEstimate = true; c.estimatedMicros = (c.estimatedMicros ?? 0) + amount; } else unknownCostEvents++; } } else if (isCanonicalSample(event)) unknownCostEvents++;
   }
   const currencies = Object.keys(costByCurrency);
-  return { ...(range?.from ? { from: range.from } : {}), ...(range?.to ? { to: range.to } : {}), eventCount: events.length, runs, attempts, successes, failures, fallbacks, qualityPasses, qualityRejects, qualityBlocked, firstPassSuccesses, repairRounds, durationMs, tokens, unknownTokenAttempts, ...(hasActual && currencies.length <= 1 ? { actualCostMicros } : {}), ...(hasEstimate && currencies.length <= 1 ? { estimatedCostMicros } : {}), ...(hasAvoided && currencies.length <= 1 ? { avoidedCostMicros } : {}), unknownCostEvents, ...(routing.decisions === 0 ? {} : { routing }), byPool, byRoute, byMission, byRole, byPoolRoute, fallbackTransitions, qualityByPool, qualityByRoute, costByCurrency };
+  return { ...(range?.from ? { from: range.from } : {}), ...(range?.to ? { to: range.to } : {}), eventCount: events.length, runs, attempts, successes, failures, fallbacks, qualityPasses, qualityRejects, qualityBlocked, firstPassSuccesses, repairRounds, durationMs, tokens, unknownTokenAttempts, ...(hasActual && currencies.length <= 1 ? { actualCostMicros } : {}), ...(hasEstimate && currencies.length <= 1 ? { estimatedCostMicros } : {}), ...(hasAvoided && currencies.length <= 1 ? { avoidedCostMicros } : {}), unknownCostEvents, ...(routing.decisions === 0 ? {} : { routing }), byPool, byRoute, byMission, byRole, byPoolRoute, performanceByPoolRoute, fallbackTransitions, qualityByPool, qualityByRoute, costByCurrency };
 };
 
 export { AnalyticsQueryService as AnalyticsService };

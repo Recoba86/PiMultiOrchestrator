@@ -97,6 +97,30 @@ describe("PoolManager", () => {
 		}
 	});
 
+	it("[RC23][I] migrates legacy pools, keeps weights pool-specific, and exposes weighted shares", async () => {
+		const { root, store, manager } = await setup();
+		try {
+			const legacy = await manager.getPool("implementation");
+			assert.equal(legacy.schedulingPolicy, "priority");
+			assert.deepEqual(legacy.entries.map((entry) => entry.weight), [1, 1, 1, 1]);
+			await manager.setSchedulingPolicy("implementation", "weighted");
+			await manager.updatePoolWeights("implementation", { "route-a": 5, "route-b": 3, "route-c": 2, "route-d": 0 });
+			await manager.addRoute("investigation", id("route-a"));
+			await manager.setPoolEntryWeight("investigation", id("route-a"), 7);
+			const weighted = await manager.getPool("implementation");
+			assert.equal(weighted.schedulingPolicy, "weighted");
+			assert.deepEqual(weighted.entries.map((entry) => entry.weight), [5, 3, 2, 0]);
+			assert.deepEqual(weighted.entries.map((entry) => entry.effectiveShare), [50, 30, 20, 0]);
+			assert.equal((await manager.getPool("investigation")).entries[0]?.weight, 7);
+			assert.equal((await manager.getPool("implementation")).entries[0]?.thinkingEffort, "auto");
+			const generationBefore = (await store.load()).snapshot?.generation;
+			await manager.updatePoolWeights("implementation", { "route-a": 4, "route-b": 3, "route-c": 2, "route-d": 1 });
+			assert.equal((await store.load()).snapshot?.generation, (generationBefore ?? 0) + 1);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("[I][fixture-v1] preserves cross-pool membership and same-family route identities", async () => {
 		const { root, manager } = await setup();
 		try {
