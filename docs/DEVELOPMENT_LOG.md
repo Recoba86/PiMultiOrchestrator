@@ -4,6 +4,37 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC18 — Real-world Pi/9Router compatibility repair
+
+- **Date/status:** 2026-08-15; local source repair and dogfood PASS. The package
+  remains `0.1.0-rc.17`; this work did not rebuild/repack or publish a package,
+  create a tag, push, or modify source outside the repair.
+- **Defects fixed:** RC17's factory-time two-model projection shadowed an
+  existing user `9router` catalog because Pi `0.84.1` replaces supplied model
+  lists. Reconcile/dispose could unregister a provider the host did not own.
+  The parser also discarded current object-shaped `capabilities` metadata and
+  the manager forced all projected models to `reasoning: false`.
+- **Implementation:** commit `0af7b8e` adds credential-blind factory probing
+  plus `ctx.modelRegistry` confirmation, explicit external/owned lifecycle
+  handling, backward-compatible current/legacy capability parsing, cache-safe
+  reasoning/vision/rich metadata, and focused tests for the 27-model external
+  provider, owned standalone lifecycle, Gemini/GPT/Grok metadata, and legacy
+  aliases. `ConfigV1` and public route schema are unchanged.
+- **Validation:** focused suites passed; production build passed; full
+  `npm run check` passed `234/234` across 13 suites with zero
+  failed/cancelled/skipped/todo; `git diff --check` passed.
+- **Runtime boundary:** baseline and explicit local-extension `--list-models`
+  runs against the existing Pi model/auth configuration both exited 0, exposed
+  exactly 27 `9router` rows, and matched byte-for-byte while PMO/session state
+  was disposable. A bounded RPC load exited 0. No provider request, refresh,
+  credential display, live Pi configuration mutation, npm action, tag, push,
+  or release was performed.
+- **Future requirement:** **Dynamic Route Catalog & Capability Sync** remains
+  **PLANNED / NOT IMPLEMENTED**. It must add manual Refresh Now, configurable
+  periodic sync, diffing, per-route caps, provenance, last-known-good, stale
+  indicators, safe user overrides, and provider-advertised versus empirically
+  observed capability distinction.
+
 ## M12 final Planner/manual acceptance — RC17 PASS
 
 - **Date:** 2026-08-15.

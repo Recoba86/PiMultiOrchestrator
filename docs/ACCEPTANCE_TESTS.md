@@ -1060,3 +1060,47 @@ This RC13 record is historical. At the time, External Review #5 remained
 `EXTERNAL_REVIEW_PENDING`; RC15 supersedes that pending state and passes final
 external review. Planner/manual acceptance, public release, tags, push, npm
 publication, and GitHub release remain separate pending or unauthorized gates.
+
+## RC18 — Real-world Pi/9Router compatibility repair
+
+### RC18-01 — External provider is not shadowed or unregistered
+
+- **Level:** U/I fixture
+- **Action:** seed a Pi `9router` provider with 27 user models, reconcile a PMO
+  projection containing two enabled models, make the projection empty, and
+  dispose/reload the host.
+- **Pass:** the PMO host makes zero provider registration/unregistration calls;
+  all 27 external models remain unchanged.
+
+### RC18-02 — PMO-owned standalone lifecycle remains bounded
+
+- **Level:** U/I fixture
+- **Action:** reconcile an absent namespace, update its PMO projection, clear
+  the projection, and dispose twice.
+- **Pass:** PMO registers and updates only its own namespace, unregisters it on
+  loss/disposal exactly once, and never unregisters an unknown namespace.
+
+### RC18-03 — Current and legacy catalog metadata are preserved
+
+- **Level:** U/I fixture
+- **Action:** parse current `capabilities` objects and legacy arrays/aliases,
+  including Gemini-style vision/reasoning/context/max-output and GPT/Grok
+  current/legacy rows; project enabled routes.
+- **Pass:** reasoning, text/image input, bounded context/max tokens, exact IDs,
+  and useful bounded tools/search/audio/video/thinking metadata are preserved;
+  absent capabilities remain unknown/conservative and `ConfigV1` is unchanged.
+
+### RC18-04 — Installed Pi dogfood does not change the user catalog
+
+- **Level:** P / isolated local Pi `0.84.1`
+- **Action:** compare baseline `--list-models 9router` with the explicit local
+  `--no-extensions -e ./dist/host/pi-extension.js` load, isolating PMO/session
+  state while inheriting the existing Pi model/auth catalog.
+- **Pass:** both processes exit 0, expose 27 exact matching `9router` rows, and
+  bounded RPC loading exits 0; no refresh, model request, credential display,
+  or live Pi configuration mutation occurs.
+
+RC18 does not implement the future requirement **Dynamic Route Catalog &
+Capability Sync**; periodic sync, manual Refresh Now, diffs, provenance,
+last-known-good/stale indicators, overrides, and advertised-versus-observed
+capability distinction remain planned.

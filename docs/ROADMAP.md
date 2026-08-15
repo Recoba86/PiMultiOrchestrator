@@ -342,3 +342,36 @@ the same Verification route stopped before valid `submit_verification_result`
 capture in two bounded attempts, leaving M7 blocked with no decision. The
 isolated offline Pi `0.84.1` technical TUI path passed. RC17 is the accepted
 local successor; publication remains a separate unauthorized gate.
+
+## RC18 — Real-world Pi/9Router compatibility repair
+
+Status: IMPLEMENTED / LOCAL DOGFOOD PASS; not a package version, public release,
+or acceptance promotion. The manifest remains `0.1.0-rc.17`.
+
+RC18 repairs the RC17 dogfood defects at the shared provider bridge and catalog
+boundary:
+
+- preserve an existing user/Pi `9router` catalog and never unregister an
+  external provider;
+- register, update, and unregister only a PMO-owned provider namespace while
+  retaining standalone registration and `--list-models` behavior when absent;
+- parse current object-shaped and legacy `/v1/models` capability fields without
+  fabricating unknown values, and keep richer metadata out of public config;
+- prove the 27-model non-shadowing case, PMO-owned lifecycle, current
+  Gemini/GPT/Grok metadata, legacy aliases, full check, and explicit local Pi
+  dogfood.
+
+Exit evidence: source/test commit `0af7b8e`; production build and
+`npm run check` `234/234 PASS`; baseline and explicit local-extension Pi
+`0.84.1` `--list-models 9router` both exited 0 with 27 exact matching rows;
+bounded RPC exited 0. No refresh, model request, credential display, live Pi
+configuration mutation, package rebuild/repack, publication, tag, push, or
+GitHub release was performed.
+
+### Future requirement — Dynamic Route Catalog & Capability Sync
+
+Status: PLANNED / NOT IMPLEMENTED. Future work covers manual Refresh Now,
+configurable periodic sync, route/capability diffs, per-route capabilities,
+provenance, last-known-good state, stale indicators, safe user overrides, and
+the distinction between provider-advertised and empirically observed
+capabilities. This is explicitly outside RC18.

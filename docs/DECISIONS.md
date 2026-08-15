@@ -297,3 +297,21 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   not an OS sandbox. The bounded scan has a deliberate finite ceiling and
   check/use race window; other platforms, real providers, human TUI smoke,
   Planner acceptance, and publication remain separate gates.
+
+## ADR-038 — RC18 preserves external Pi provider catalogs
+
+- **Decision:** Keep the public Pi provider namespace `9router`, but probe the
+  credential-blind user `models.json` catalog before factory reconciliation and
+  confirm the bound `ctx.modelRegistry` at `session_start`. Treat an existing
+  provider as external and do not register, replace, or unregister it. Mark a
+  provider PMO-owned only after this host successfully registers an absent
+  namespace; only that owned provider may be updated or removed.
+- **Rationale:** Pi `0.84.1` replaces a provider's full model list when a
+  `models` projection is supplied, and its public registration API has no
+  ownership token. A fail-closed occupancy check is the least invasive way to
+  preserve user catalogs while retaining standalone PMO behavior.
+- **Consequences:** `ConfigV1` and route identity stay unchanged. Current and
+  legacy 9Router capability aliases are normalized into the domain/cache layer,
+  with conservative defaults only when fields are absent. A provider created
+  dynamically by another extension after both probes remains unprovable under
+  Pi 0.84.1's public API. Dynamic Route Catalog & Capability Sync is deferred.

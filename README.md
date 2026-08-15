@@ -65,9 +65,18 @@ Tests use Node's built-in runner, temporary directories, and a random loopback f
 Development loading is explicit; the extension is not installed into the live Pi directory:
 
 ```sh
-PI_MULTI_ORCH_CONFIG_ROOT=/path/to/isolated/root \
-  pi --no-extensions -e ./dist/host/pi-extension.js
+RC18_ROOT="$(mktemp -d)"
+mkdir -p "$RC18_ROOT/pmo" "$RC18_ROOT/sessions"
+PI_MULTI_ORCH_CONFIG_ROOT="$RC18_ROOT/pmo" \
+PI_CODING_AGENT_SESSION_DIR="$RC18_ROOT/sessions" \
+PI_OFFLINE=1 \
+  pi --no-extensions -e "$PWD/dist/host/pi-extension.js" \
+  --no-session --no-context-files
 ```
+
+This keeps PMO/session state disposable while the normal Pi model/auth
+catalog remains the operator's existing configuration. Do not run refreshes or
+model requests during a compatibility check.
 
 The M2 commands are `/orchestrator`, `/9router-models [filter]`, `/9router-refresh`, and `/9router-status`. M3 adds `/pool-models [investigation|implementation|verification]` and `/pool-status`; the same three pool editors are available from `/orchestrator`. M4 adds `/routing-status [pool]`, `/route-health [filter]`, and `/routing-settings`, plus Routing & Fallback and Health & Quotas sections in `/orchestrator`. M5 adds parent-only `delegate_agent` and Direct Worker `/subagent-run`; role and pool are explicit, while M4 selects the exact route/model. M6 adds `/missions` and `/mission-packet <mission-id> <task-id>` plus Context & Mission Settings in `/orchestrator`. M7 adds `/quality-status [mission-id] [task-id]` and confirmation-gated `/verify-task <mission-id> <task-id> [target-run-id]`; M8 adds `/analytics [24h|7d|30d|custom FROM TO]` and `/recommendations [pool]` with explicit details/apply/ignore actions. M8.5 adds `/recommendation-analyst` and the Statistics & Analytics → Recommendation Analyst menu with Deterministic only/AI-assisted mode, Verification Pool route selection, Analyze Now/Re-analyze, status, and last-analysis details. M9 makes `/orchestrator` the twelve-section Control Center; see the [operator guide](docs/OPERATOR_GUIDE.md). M12.1 adds `@orchestrator <goal>` at the beginning (surrounding whitespace allowed) of a normal Pi input; ordinary prompts are unchanged, and empty entry reports `Add a goal after @orchestrator.` M12.2 adds Smart Routing inside Routing & Fallback: clear prompts stay normal, clear multi-stage prompts show a Run as Mission/Run Normally choice, and ambiguous prompts may use only a configured triage route. M12.3 adds Routing Memory controls in that same section, `Always orchestrate similar tasks`, learned Mission/Normal preferences, and abstract-only Learned Behaviors/backup management. Direct Workers are foreground/ad-hoc execution; use `/verify-task` for canonical Mission/M7 verification. Analyst execution is explicit and never applies a recommendation. Task detail exposes verification history and bounded repair/re-review when reviewer and repair services are configured. Pool edits change validated configuration only and never select a route or launch a subagent. Routing status is a non-mutating preview; health reset changes only runtime health. Connection setup accepts an origin (normalized to `/v1`) or a `/v1` base URL and an environment reference such as `env:NINEROUTER_API_KEY`, never a raw key. Other URL paths are rejected.
 

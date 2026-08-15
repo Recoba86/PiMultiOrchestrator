@@ -14,6 +14,7 @@ This file records releasable product state. It does not promote development prog
 | Public stable release | NONE |
 | Product version | NONE assigned |
 | Development manifest version | `0.1.0-rc.17` — final local candidate, locally accepted; not public |
+| RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
 | Local technical release readiness | CLEARED LOCALLY — detached verification, live canonical M7, and technical TUI gates pass; publication is not authorized |
 | Release tag | NONE |
@@ -65,6 +66,7 @@ Milestone acceptance does not itself create a product release.
 | M12 RC15 historical final-review candidate | Historical final external review PASS; superseded by RC16 |
 | M12 RC16 final-review candidate | Historical detached verifier PASS; superseded by RC17 after the live M7 handoff block |
 | M12 RC17 final-review candidate | Exact detached verifier PASS on commit `5def791b31a7ad940ed87f6e720aabb0228500e7`, tree `c23424f26600e988e6d96cbd794a0d22cc121ecd`; source digest `04935d63c419c56c4c9b92214abf06d4151bfe13ebc7a255b08475895c7d7f2c`; artifact SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`; bundle root `f5f58cdf255580b4cdd772b0b5885fde531232fc4130b7e352972fe7be9b9bcf`; clean `npm run check` `231/231 PASS`, Pi `0.84.1`, privacy, worker-safety, and `20/20` integrity PASS |
+| RC18 compatibility repair evidence | Commit `0af7b8e`; `npm run check` `234/234 PASS`; production build and Pi `0.84.1` baseline/local 27-model exact-match dogfood PASS; local-only, not a release artifact |
 | RC17 final Planner/manual attempt | PASS: disposable Mission → Task → Implementation → Verification Pool → `submit_verification_result` → M7 decision; technical TUI PASS; no live configuration mutation |
 | Typecheck | PASS |
 | Aggregate check | PASS — `231/231`; exact detached release verification PASS |
@@ -93,6 +95,9 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 - Residual low-risk notes accepted for the supported local workflow: local Smart Router signal analysis runs over the supplied Pi prompt before the separately bounded Triage payload, and numbered internal Routing Memory history is retention-bounded but not independently byte-capped. These are application-level resource limits; supported restore paths fail closed and no release-blocking finding remains open.
 - M10's application-level policy is not an OS/kernel sandbox. Stage 4A proves the bounded supported route and product path only; it does not promote M11 to accepted or production-ready.
 - Pi `0.84.1` must be given the extracted `directory-source/` derived from the verified RC `.tgz`; direct `pi install <artifact>.tgz` is not a supported local workflow. The source checkout is never installed.
+- RC18 repairs Pi/provider compatibility in source only. The manifest remains
+  `0.1.0-rc.17`; no accepted artifact was rebuilt or repacked, and no npm
+  publication, tag, push, or GitHub release was performed for this repair.
 - Review #3 rejected rc.2 after reproducing arbitrary caller-supplied custom-tool execution. R6 closed that bypass, but Review #4 rejected rc.3 for evidence-integrity weaknesses. R8 builds rc.4 only from commit `ae39f24937988ef95975b2b45c018f4c45efd23c`, binds source/test/tool identities, preserves authentic M10 state across upgrade and rollback, rejects all 20 required attacks, and anchors the recursively hashed review bundle to a separately supplied root digest. It remains external-review evidence, not acceptance or publication.
 
 ## Future release record

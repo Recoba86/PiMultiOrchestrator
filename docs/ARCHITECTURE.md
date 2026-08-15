@@ -141,6 +141,18 @@ full catalog generation
 
 The full catalog never becomes the Pi provider's model list. A TUI save that changes enabled routes publishes a new config generation and re-registers the provider model projection immediately when safe. Pi `0.84.1` replaces the supplied provider model list in place, so a failed validation leaves the prior registry intact. If activation fails, configuration remains saved and the UI reports the runtime error for a later reconciliation.
 
+The RC18 bridge establishes ownership before applying that projection. At
+factory time it performs a credential-blind, offline probe of Pi's
+`models.json`; at `session_start` it confirms the bound `ctx.modelRegistry`.
+When `9router` already exists, the provider is external: PMO supplies no
+replacement model list and never unregisters it during reconcile, reload, or
+dispose. When the namespace is absent, a successful PMO registration marks it
+owned, and only that owned registration may be updated or removed. This keeps
+standalone PMO registration and `--list-models` behavior when the namespace is
+absent without changing the public route/config schema. Pi 0.84.1 has no
+owner token, so a provider created dynamically by another extension after both
+probes remains outside what this API can prove.
+
 ### 5.5 `pools` and `policy`
 
 M3 implements `core/pools` as the only pool-mutation service. It reads configured routes and the optional endpoint-bound catalog snapshot, then exposes the three ordered pool views and applies add/remove/per-pool-enable/reorder operations through `ConfigStore.update()`. Array position is the sole priority representation. Globally disabled or remotely missing routes retain membership and position, and pool-only edits never reconcile the Pi provider.
@@ -342,6 +354,11 @@ Objects merge only through declared fields. Ordinary arrays replace wholesale. P
 - Pi's bundled subagent example launches separate `pi --mode json -p --no-session` child processes, streams JSON events, applies model/tool arguments, caps output, limits concurrency, and propagates abort.
 
 M2 loads `dist/host/pi-extension.js` explicitly with `-e`. Its config root is `PI_MULTI_ORCH_CONFIG_ROOT` when set, otherwise `join(getAgentDir(), "pi-multi-orchestrator")`; no `.pi` path is hard-coded. Isolated acceptance also sets `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, and `PI_OFFLINE=1`.
+
+RC18 additionally probes the existing `models.json` catalog with network and
+credential resolution disabled before factory-time provider reconciliation;
+the actual session registry remains the runtime authority once Pi binds the
+extension.
 
 ### 8.2 Custom layers required
 
