@@ -196,7 +196,7 @@ Exit gate: RC.8 clean install, upgrade, rollback, package verification, Stage 4A
 
 ## M12 — Smart Mission Entry, Hybrid Routing & Routing Memory
 
-Status: COMPLETE / LOCAL PLANNER ACCEPTANCE PASS. RC17 is the locally accepted final candidate after the bounded reviewer-handoff repair; M10 remains the latest accepted development milestone, and publication remains unauthorized.
+Status: COMPLETE / PUBLIC PRERELEASE. RC17 is the source-bound public candidate after the bounded reviewer-handoff repair; M10 remains the latest accepted development milestone. RC18 remains local and is not included in the RC17 artifact.
 
 ### M12 final Planner/manual acceptance — RC17
 
@@ -207,8 +207,8 @@ verification and independent review passed; clean `npm run check` passed
 passed. A disposable live Mission → Task → Implementation → Verification Pool
 → `submit_verification_result` → M7 path passed at round 0 on the explicit ag
 route, and the isolated offline technical TUI passed with clean Back/exit and
-no credential text. The candidate remains local-only; no publication or live
-configuration mutation occurred.
+no credential text. The accepted candidate is published as a prerelease; no
+live configuration mutation occurred.
 
 ### M12.1 — Frictionless Mission Entry
 
@@ -222,7 +222,7 @@ Deliverables:
 - clear `Direct Workers` and canonical Mission/M7 terminology without changing `/verify-task` semantics; and
 - deterministic parser, persistence, menu-equivalence, ordinary-input, and direct-worker regression coverage.
 
-Exit gate: PASS — local typecheck/build/full tests, focused UX review, isolated offline Pi `0.84.1` checks, and detached RC17 release verification pass; the combined M12 Planner/manual acceptance is recorded above and publication remains separate.
+Exit gate: PASS — local typecheck/build/full tests, focused UX review, isolated offline Pi `0.84.1` checks, detached RC17 release verification, and the authorized public prerelease verification pass. Stable production release remains separate.
 
 ### M12.2 — Hybrid Smart Router
 
@@ -341,7 +341,18 @@ disposable live canonical Mission Implementation leg succeeded on the pinned
 the same Verification route stopped before valid `submit_verification_result`
 capture in two bounded attempts, leaving M7 blocked with no decision. The
 isolated offline Pi `0.84.1` technical TUI path passed. RC17 is the accepted
-local successor; publication remains a separate unauthorized gate.
+public prerelease; stable production release remains a separate gate.
+
+## RC17 public prerelease closeout
+
+Status: PUBLISHED / PRERELEASE. The exact source-bound tag is
+`v0.1.0-rc.17` at `5def791b31a7ad940ed87f6e720aabb0228500e7`. GitHub marks the
+release as a prerelease, and npm publishes
+`pi-multi-orchestrator@0.1.0-rc.17` with `next` pointing to that version.
+The registry tarball is byte-identical to the accepted GitHub asset and has
+SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`.
+The existing `latest` tag was observed before this checkpoint; no publish or
+dist-tag mutation was performed here.
 
 ## RC18 — Real-world Pi/9Router compatibility repair
 

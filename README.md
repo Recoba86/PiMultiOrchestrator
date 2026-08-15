@@ -4,17 +4,18 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The current local candidate is `0.1.0-rc.17`; rc.1 through rc.16 are historical
+The current public prerelease is `0.1.0-rc.17`; rc.1 through rc.16 are historical
 candidates. RC17 carries RC16's M12.1 frictionless-entry, Mission/M7 evidence,
 recovery, Unicode, input-boundary, timeout, and release-tool provenance
 repairs plus a bounded reviewer handoff that stops exploratory inspection
 before structured M7 submission can be stranded. Detached release verification
-and final Planner/manual acceptance pass locally; RC17 remains local, not public
-or production-ready.
+and final Planner/manual acceptance passed; the immutable RC17 artifact is
+published as a GitHub prerelease and on npm under `next`. RC17 is not stable or
+production-ready.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. RC13, RC15, and RC16 are historical; RC17 is the successor candidate after the final RC16 live M7 reviewer handoff blocked before structured submission. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
-This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox; M12.1, M12.2, M12.3, and the M12 final gate have local Planner-acceptance evidence for RC17, while publication remains unauthorized. M11's local RC and M12 candidates are not public or production-ready. A quality PASS is not by itself mission completion, canonical evidence admission, or public release readiness.
+This is still an early development extension, not the complete multi-agent orchestrator or a stable public release. 9Router's internal account/combo fallback remains opaque. Health is stored separately from ConfigStore/export/history. Quality rejection is separate from provider health. The accepted M8.5 analyst is optional, manual-only, cannot alter deterministic metrics, and cannot Apply recommendations. M9's Boss runtime remains explicitly deferred; the Control Center does not add autonomous planning, background work, or automatic priority changes. M10 safety policies are application-level and do not claim an OS sandbox; RC17's public prerelease is separate from the local RC18 compatibility repair. M11's local RC and M12 candidates are not stable or production-ready. A quality PASS is not by itself mission completion, canonical evidence admission, or public release readiness.
 
 The implementation contract is split across the repository files
 `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/ACCEPTANCE_TESTS.md`,
@@ -45,13 +46,19 @@ Evidence and proof-of-concept boundaries are recorded in `docs/ARCHITECTURE.md`.
 
 Requires Node.js `>=22.19.0` and npm.
 
-## Local release candidate install
+## RC17 prerelease install
 
 The `.tgz` is the immutable release artifact. Pi `0.84.1` does not unpack a
 local tarball passed directly to `pi install`; verify its checksum, extract it
 to a fresh directory, and install the extracted `package/` directory in
-isolated Pi settings. The source checkout is never the installed package. The
-candidate is local-only and not a public or production release.
+isolated Pi settings. The source checkout is never the installed package. For
+the public prerelease, use Pi's npm package source:
+
+```sh
+pi install npm:pi-multi-orchestrator@0.1.0-rc.17
+```
+
+This is an early prerelease, not a stable or production release.
 
 ```sh
 npm install
@@ -91,7 +98,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC17 is a locally Planner-accepted candidate, not a public release. Public tag/push, npm/GitHub publication, production installation, and live configuration mutation remain unauthorized. See `docs/ROADMAP.md` for the release gate.
+M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC17 is a public prerelease, not a stable or production release. RC18 remains a local source repair and is not included in the RC17 artifact. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 

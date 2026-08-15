@@ -12,26 +12,41 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.17` — GitHub prerelease and npm `next` |
 | Product version | NONE assigned |
-| Development manifest version | `0.1.0-rc.17` — final local candidate, locally accepted; not public |
+| Development manifest version | `0.1.0-rc.17` — source-bound public prerelease; RC18 remains local |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | CLEARED LOCALLY — detached verification, live canonical M7, and technical TUI gates pass; publication is not authorized |
-| Release tag | NONE |
-| Release commit | NONE |
-| GitHub release | NONE |
-| Installable production release | NONE |
+| Local technical release readiness | PUBLISHED PRERELEASE — detached verification, live canonical M7, and technical TUI gates pass; not stable/production-ready |
+| Release tag | `v0.1.0-rc.17` → `5def791b31a7ad940ed87f6e720aabb0228500e7` |
+| Release commit | `5def791b31a7ad940ed87f6e720aabb0228500e7` |
+| GitHub release | [v0.1.0-rc.17](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.17) — prerelease |
+| Installable production release | NONE; RC17 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
 
+## RC17 public prerelease publication
+
+- **Package:** `pi-multi-orchestrator@0.1.0-rc.17`.
+- **Artifact:** `pi-multi-orchestrator-0.1.0-rc.17.tgz`, SHA-256
+  `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`.
+- **Source binding:** tag `v0.1.0-rc.17` peels to source commit
+  `5def791b31a7ad940ed87f6e720aabb0228500e7`.
+- **Registry verification:** npm reports version `0.1.0-rc.17` and `next`
+  points to it. The downloaded npm tarball is byte-identical to the accepted
+  GitHub release asset.
+- **Latest boundary:** `latest` was already `0.1.0-rc.17` at checkpoint start;
+  this checkpoint made no npm publish or dist-tag mutation, and does not infer
+  the historical creation of that existing tag.
+
 ## RC17 final Planner/manual acceptance
 
 - **Disposition:** `PMO_FINAL_PLANNER_ACCEPTANCE_PASS`. RC17 is the successor
-  candidate after RC16's live reviewer handoff block. It is locally accepted
-  for this mission, but remains unpublished and not a production installation.
+  candidate after RC16's live reviewer handoff block. It is publicly published
+  as a prerelease, not a production installation.
 - **Identity:** source commit `5def791b31a7ad940ed87f6e720aabb0228500e7`, tree `c23424f26600e988e6d96cbd794a0d22cc121ecd`, source digest `04935d63c419c56c4c9b92214abf06d4151bfe13ebc7a255b08475895c7d7f2c`, build digest `aaefde527e8f18a6accbd1dc79e9fffb87ae0f6df832c876911a4cd509373b58`, artifact SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`, and independent bundle-root SHA-256 `f5f58cdf255580b4cdd772b0b5885fde531232fc4130b7e352972fe7be9b9bcf`.
 - **Offline evidence:** `231/231` tests across 13 suites, zero failed/cancelled/skipped/todo, typecheck/build, detached release verification, Pi `0.84.1` compatibility/install/upgrade/rollback/rescue, privacy, worker safety, and `20/20` integrity attacks all passed.
 - **Live evidence:** Mission `mission-b5a2cc76-d2b1-41d4-9c31-a922e7727d53` → Task `task-2b48f5e6-d3d2-4282-8318-6259a1a4e399` → Implementation attempt `attempt-783ba966-d696-4dfd-9230-f7094c8bedae` → Verification `verification-f5ea93ba-deea-41c3-a6ae-8c9d009102a4` → pass decision `decision-30772023-ebec-4ce9-a2cf-ba90e4e191c1`, all on the explicitly configured ag route. The reviewer captured one valid `submit_verification_result` with four satisfied criteria and no mutation.
@@ -83,15 +98,15 @@ Fake-gateway behavior does not prove the live 9Router model count, metadata shap
 
 ## Known release blockers and limitations
 
-- No public artifact, tag, GitHub release, npm publication, or production-ready install exists. The local M11 RC and its verification metadata are not a public release.
+- RC17 has a public artifact, immutable tag, GitHub prerelease, and npm version. No stable or production-ready install exists.
 - RC16 addresses the M12.1/M7 and recovery findings carried forward from RC15 review: explicit-entry failure preserves the original prompt, completion requires Boss authorization and passed M7 evidence, cross-Mission evidence is rejected, corrupt routing state is repairable, Unicode and input sizes are bounded, worker timeouts honor route ceilings, and the TypeScript launcher is provenance-bound. Detached release evidence passes; final development acceptance remains separate.
 - The 2026-08-15 RC16 acceptance attempt is historical and was hard-blocked at the live canonical M7 reviewer handoff. RC17 resolved that handoff with the smallest source-bound reviewer instruction and a regression assertion; the RC17 live Verification Pool run captured one valid submission and passed M7.
 - The extension is loaded explicitly for development and is not installed into the user's live Pi configuration.
-- Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and public release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
+- Boss runtime, scheduled/autonomous tuning, cost/budget-aware routing, parallel orchestration, and stable production release remain incomplete. M10 is the latest Planner-accepted development state; M11 is implemented but not accepted.
 - RC17 technical TUI smoke passed in isolated offline Pi `0.84.1` RPC, including dashboard, Routing & Fallback, Missions, Back, clean exit, and no credential text. This is a local candidate gate, not a claim of public installation or live keyboard acceptance.
 - Historical M11 RC.8 Computer-Use dogfood and canonical M7 real-route verification passed; final human sanity smoke, live metadata limits, and Planner acceptance remain open validation. RC15 is historical; RC16 detached verification passed.
-- M12.1 RC.9 changes are historical local evidence. RC17 is the current local candidate for the combined M12 final acceptance; M12.2 RC.11 and M12.3 RC.12 remain historical local candidates, and M10 remains the latest accepted development milestone.
-- M12.2 and M12 final live-route triage were executed only through the secure auth bridge and disposable roots. The user Pi configuration, provider account, Keychain, credential values, and source checkout were not modified. The M12 final routing gate passed locally on RC13; RC16 carries the follow-on M12.1/M7/recovery repairs. Planner/manual acceptance and publication remain pending.
+- M12.1 RC.9 changes are historical local evidence. RC17 is the public prerelease for the combined M12 final acceptance; M12.2 RC.11 and M12.3 RC.12 remain historical local candidates, and M10 remains the latest accepted development milestone.
+- M12.2 and M12 final live-route triage were executed only through the secure auth bridge and disposable roots. The user Pi configuration, provider account, Keychain, credential values, and source checkout were not modified. The M12 final routing gate passed locally on RC13; RC16 carries the follow-on M12.1/M7/recovery repairs. Stable production release remains separate.
 - Residual low-risk notes accepted for the supported local workflow: local Smart Router signal analysis runs over the supplied Pi prompt before the separately bounded Triage payload, and numbered internal Routing Memory history is retention-bounded but not independently byte-capped. These are application-level resource limits; supported restore paths fail closed and no release-blocking finding remains open.
 - M10's application-level policy is not an OS/kernel sandbox. Stage 4A proves the bounded supported route and product path only; it does not promote M11 to accepted or production-ready.
 - Pi `0.84.1` must be given the extracted `directory-source/` derived from the verified RC `.tgz`; direct `pi install <artifact>.tgz` is not a supported local workflow. The source checkout is never installed.

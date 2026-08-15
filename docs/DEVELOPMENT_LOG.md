@@ -4,6 +4,22 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC17 public prerelease publication
+
+- **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE`. The immutable RC17
+  artifact is public for dogfooding and is not a stable or production release.
+- **Identity:** source commit `5def791b31a7ad940ed87f6e720aabb0228500e7`, tag
+  `v0.1.0-rc.17`, package `pi-multi-orchestrator@0.1.0-rc.17`, and artifact
+  SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`.
+- **Remote proof:** GitHub release `v0.1.0-rc.17` is explicitly marked
+  prerelease; the remote tag peels to the source-bound commit. npm reports the
+  exact package/version and `next` points to `0.1.0-rc.17`.
+- **Artifact proof:** independently downloaded npm and GitHub tarballs are
+  byte-identical and match the accepted SHA-256. No rebuild or repack was done.
+- **Tag boundary:** npm `latest` was already observed as `0.1.0-rc.17` when
+  this checkpoint began. No npm publish or dist-tag mutation was performed in
+  this checkpoint; historical creation of that existing tag is not inferred.
+
 ## RC18 — Real-world Pi/9Router compatibility repair
 
 - **Date/status:** 2026-08-15; local source repair and dogfood PASS. The package
