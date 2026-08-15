@@ -104,6 +104,31 @@ const sortValue = (value) => {
 
 const semanticHash = (value) => createHash("sha256").update(JSON.stringify(sortValue(value))).digest("hex");
 
+const COMPATIBILITY_ADDITIONS = Object.freeze([
+	"config.pools.*.schedulingPolicy",
+	"config.pools.*.entries[].thinkingEffort",
+	"config.pools.*.entries[].weight",
+	"analytics.summary.performanceByPoolRoute",
+]);
+const legacyConfigProjection = (value) => {
+	const projected = structuredClone(value);
+	for (const pool of Object.values(projected.pools ?? {})) {
+		if (!pool || typeof pool !== "object") continue;
+		delete pool.schedulingPolicy;
+		for (const entry of Array.isArray(pool.entries) ? pool.entries : []) {
+			if (!entry || typeof entry !== "object") continue;
+			delete entry.thinkingEffort;
+			delete entry.weight;
+		}
+	}
+	return projected;
+};
+const legacyAnalyticsProjection = (value) => {
+	const projected = structuredClone(value);
+	if (projected.summary && typeof projected.summary === "object") delete projected.summary.performanceByPoolRoute;
+	return projected;
+};
+
 const moduleAt = (root, relativePath) => import(pathToFileURL(join(root, relativePath)).href);
 
 async function seedCompatibilityState(source, configRoot, cwd) {
@@ -185,6 +210,12 @@ async function captureSemanticState(source, configRoot, provenance, seedIds) {
 		analyticsEvents: analyticsEvents.length,
 		trustRecords: trust.length,
 	};
+	const compatibilityDomains = {
+		config: legacyConfigProjection(domains.config),
+		mission: domains.mission,
+		analytics: legacyAnalyticsProjection(domains.analytics),
+		trust: domains.trust,
+	};
 	const hashes = {
 		config: semanticHash(domains.config),
 		mission: semanticHash(domains.mission),
@@ -192,9 +223,16 @@ async function captureSemanticState(source, configRoot, provenance, seedIds) {
 		trust: semanticHash(domains.trust),
 		all: semanticHash(domains),
 	};
+	const compatibilityHashes = {
+		config: semanticHash(compatibilityDomains.config),
+		mission: semanticHash(compatibilityDomains.mission),
+		analytics: semanticHash(compatibilityDomains.analytics),
+		trust: semanticHash(compatibilityDomains.trust),
+		all: semanticHash(compatibilityDomains),
+	};
 	const packageManifest = JSON.parse(await readFile(join(source, "package.json"), "utf8"));
 	return {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		source: {
 			role: provenance.role,
 			commit: provenance.commit,
@@ -209,6 +247,7 @@ async function captureSemanticState(source, configRoot, provenance, seedIds) {
 		domains,
 		counts,
 		hashes,
+		compatibilityHashes,
 		nonEmpty: {
 			config: counts.config === 1 && counts.routes >= 2,
 			mission: counts.missions > 0 && counts.tasks > 0 && counts.attempts > 0 && counts.evidence > 0 && counts.canonicalItems > 0 && counts.missionEvents > 0,
@@ -423,7 +462,7 @@ const main = async () => {
 		const finalList = await assertEmptyPackageList(pi.path, env, cwd);
 
 		const snapshots = [beforeState, baselineState, candidateState, rollbackState];
-		const equality = Object.fromEntries(["config", "mission", "analytics", "trust"].map((domain) => [domain, snapshots.every((snapshot) => snapshot.hashes[domain] === beforeState.hashes[domain])]));
+		const equality = Object.fromEntries(["config", "mission", "analytics", "trust"].map((domain) => [domain, snapshots.every((snapshot) => snapshot.compatibilityHashes[domain] === beforeState.compatibilityHashes[domain])]));
 		const semanticStatePreserved = Object.values(equality).every(Boolean);
 		const nonEmptyState = snapshots.every((snapshot) => Object.values(snapshot.nonEmpty).every(Boolean));
 		const dataLoss = !semanticStatePreserved || !nonEmptyState;
@@ -457,6 +496,7 @@ const main = async () => {
 				baseline: baselineState,
 				candidate: candidateState,
 				rollback: rollbackState,
+				compatibility: { policy: "legacy-semantic-projection-v2", additions: COMPATIBILITY_ADDITIONS },
 				equality,
 				semanticStatePreserved,
 				configMissionAnalyticsTrustPreserved: semanticStatePreserved,
