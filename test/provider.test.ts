@@ -30,7 +30,7 @@ import { HealthStore } from "../src/core/health/index.js";
 import { classifyFailure } from "../src/core/routing/index.js";
 import { NINEROUTER_GATEWAY_ID, type ProviderProjection } from "../src/core/ninerouter/index.js";
 import type { StableId } from "../src/core/config/types.js";
-import { POOL_IDS, type PoolEntryView, type PoolId } from "../src/core/pools/index.js";
+import { POOL_IDS, type PoolEntryView, type PoolId, type PoolRouteCandidate } from "../src/core/pools/index.js";
 import type { SubagentExecutionRequest, SubagentExecutor, SubagentRunResult } from "../src/core/workers/index.js";
 import { createMissionStore } from "../src/core/mission/index.js";
 import type { MissionRecord, MissionStoreAdapter } from "../src/core/mission/types.js";
@@ -146,6 +146,33 @@ function poolManagerFixture(): PoolManagerContract & {
 	};
 	Object.defineProperty(fixture, "moveDownCalls", { get: () => moveDownCalls, enumerable: true });
 	return fixture;
+}
+
+function emptyPoolCandidateFixture(): PoolManagerContract & { readonly added: Array<{ poolId: PoolId; routeId: StableId }> } {
+	const candidate = {
+		routeId: "r9-ninerouter-ag-foo-1234567890abcdef" as StableId,
+		displayName: "ag/foo",
+		remoteModelId: "ag/foo",
+		globalEnabled: true,
+		poolEnabled: false,
+		state: "active",
+		catalogState: "fresh",
+		resourceClass: "subscription",
+	} satisfies PoolRouteCandidate;
+	const added: Array<{ poolId: PoolId; routeId: StableId }> = [];
+	const empty = (poolId: PoolId) => ({ id: poolId, poolId, label: poolId[0]!.toUpperCase() + poolId.slice(1), entries: [] as readonly PoolEntryView[] });
+	return {
+		added,
+		listPools: async () => POOL_IDS.map(empty),
+		getPool: async (poolId) => empty(poolId),
+		getAvailableCandidatesToAdd: async () => [candidate],
+		addRoute: async (poolId, routeId) => { added.push({ poolId, routeId }); },
+		removeRoute: async () => {},
+		moveRouteUp: async () => {},
+		moveRouteDown: async () => {},
+		moveRoute: async () => {},
+		setPoolEntryEnabled: async () => {},
+	};
 }
 
 interface PiFixture {
@@ -486,9 +513,9 @@ describe("Pi 9Router host adapter", () => {
 		const notifications: string[] = [];
 		let prompts = 0;
 		const selections: Array<string | undefined> = [
-			"[x] remote-a — Remote A",
+			"remote-a",
 			"Inspect",
-			"[x] remote-a — Remote A",
+			"remote-a",
 			"Disable",
 			undefined,
 		];
@@ -589,10 +616,10 @@ describe("Pi 9Router host adapter", () => {
 						modelMenuCalls += 1;
 						assert.equal(choices[0], "Refresh Models");
 						assert.equal(choices[1], "────────────");
+						assert.deepEqual(choices.slice(2, -1), ["remote-rich", "remote-false", "remote-unknown"]);
+						assert.ok(choices.slice(2, -1).every((choice) => !/ACTIVE|Thinking|r9-ninerouter/iu.test(choice)));
 						const rich = choices.find((choice) => choice.includes("remote-rich"))!;
 						assert.doesNotMatch(rich, /internal-route-id/u);
-						assert.ok(choices.some((choice) => /remote-false.*thinking: not supported/u.test(choice)));
-						assert.ok(choices.some((choice) => /remote-unknown.*thinking: unknown/u.test(choice)));
 						return modelMenuCalls === 1 ? rich : "Back";
 					}
 					return "Inspect";
@@ -694,7 +721,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /RC19 .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /RC22 .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);
@@ -715,7 +742,7 @@ describe("Pi 9Router host adapter", () => {
 		} as unknown as ExtensionCommandContext);
 		assert.deepEqual(analyst.calls, [{ mode: "deterministic", routeId: "route-a" }]);
 		assert.match(notifications[0] ?? "", /manual-only/);
-		assert.match(notifications[0] ?? "", /verification-route=Route A \(route-a\)/);
+		assert.match(notifications[0] ?? "", /verification-route=remote-a/u);
 		const titles: string[] = [];
 		await pi.commands.get("recommendation-analyst")!.handler("", {
 			mode: "tui",
@@ -734,7 +761,11 @@ describe("Pi 9Router host adapter", () => {
 							return "Back";
 						}
 						if (title === "Recommendation Analyst mode") return "AI-assisted";
-						if (title === "Verification Pool route") return options.find((option) => option.includes("route-b"));
+						if (title === "Verification Pool route") {
+							assert.deepEqual(options.slice(0, -1), ["remote-a", "remote-b"]);
+							assert.equal(options.some((option) => /route-[ab]|r9-ninerouter/iu.test(option)), false);
+							return "remote-b";
+						}
 						return "Back";
 					};
 				})(),
@@ -1190,7 +1221,8 @@ describe("Pi 9Router host adapter", () => {
 			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), configStore, smartRoutingStore });
 			host.registerCommands();
 			const calls: Array<{ title: string; options: readonly string[] }> = [];
-			const rootSelections: Array<string | undefined> = ["Routing & Fallback", undefined];
+			const rootSelections: Array<string | undefined> = ["Routing & Fallback", "Back"];
+			let routingSettingsCalls = 0;
 			await pi.commands.get("orchestrator")!.handler("", {
 				mode: "tui",
 				hasUI: true,
@@ -1198,7 +1230,17 @@ describe("Pi 9Router host adapter", () => {
 				ui: {
 					select: async (title: string, options: readonly string[]) => {
 						calls.push({ title, options });
-						return title === "Pi Multi-Orchestrator" ? rootSelections.shift() : "Back";
+						if (title === "Pi Multi-Orchestrator") return rootSelections.shift();
+						if (title === "Routing & Fallback" && routingSettingsCalls++ === 0) {
+							assert.ok(options.some((option) => option === "Triage Primary (None)"));
+							assert.equal(options.some((option) => option.includes("route-a")), false);
+							return "Triage Primary (None)";
+						}
+						if (title === "Triage Primary route") {
+							assert.deepEqual(options, ["None", "remote-a", "Back"]);
+							return "remote-a";
+						}
+						return "Back";
 					},
 					notify: () => {},
 				},
@@ -1207,6 +1249,7 @@ describe("Pi 9Router host adapter", () => {
 			assert.ok(settings);
 			assert.ok(settings.options.some((option) => option.startsWith("Smart Routing (ON)")));
 			assert.ok(settings.options.includes("AI usage (ambiguous prompts only)"));
+			assert.equal((await smartRoutingStore.load()).settings.primaryRouteId, "route-a");
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -1350,6 +1393,42 @@ describe("Pi 9Router host adapter", () => {
 		assert.ok(titles.includes("Verification Pool"));
 	});
 
+	it("[RC22][U/TUI][fixture-pi-0.84.1] uses clean canonical labels for Investigation and Verification add-route selectors", async () => {
+		const pools = emptyPoolCandidateFixture();
+		const pi = piFixture();
+		const host = createPiHost(pi.pi, { manager: managerFixture(projection()), poolManager: pools });
+		host.registerCommands();
+		for (const poolId of ["investigation", "verification"] as const) {
+			let editorOpen = true;
+			await pi.commands.get("pool-models")!.handler(poolId, {
+				mode: "tui",
+				hasUI: true,
+				isIdle: () => true,
+				ui: {
+					select: async (title: string, options: readonly string[]) => {
+						if (title === `${poolId[0]!.toUpperCase()}${poolId.slice(1)} Pool`) {
+							if (editorOpen) {
+								editorOpen = false;
+								assert.ok(options.includes("No routes assigned."));
+								return "Add Route";
+							}
+							return undefined;
+						}
+						assert.equal(title, `Add route to ${poolId[0]!.toUpperCase()}${poolId.slice(1)} Pool`);
+						assert.deepEqual(options, ["ag/foo"]);
+						assert.equal(options.some((option) => /r9-ninerouter|ag\/foo — ag\/foo|ACTIVE|Thinking/iu.test(option)), false);
+						return "ag/foo";
+					},
+					notify: () => {},
+				},
+			} as unknown as ExtensionCommandContext);
+		}
+		assert.deepEqual(pools.added, [
+			{ poolId: "investigation", routeId: "r9-ninerouter-ag-foo-1234567890abcdef" },
+			{ poolId: "verification", routeId: "r9-ninerouter-ag-foo-1234567890abcdef" },
+		]);
+	});
+
 	it("[U][fixture-pi-0.84.1] refuses provider mutations while Pi is busy", async () => {
 		const fixture = managerFixture(projection());
 		const pools = poolManagerFixture();
@@ -1361,7 +1440,7 @@ describe("Pi 9Router host adapter", () => {
 			isIdle: () => false,
 			ui: { notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
-		const selections = ["1. Route A — remote-a [ACTIVE] (route-a)", "Move Down", "Back"];
+		const selections = ["remote-a", "Move Down", "Back"];
 		await pi.commands.get("pool-models")!.handler("implementation", {
 			mode: "tui",
 			hasUI: true,
@@ -1384,7 +1463,7 @@ describe("Pi 9Router host adapter", () => {
 		host.registerCommands();
 		const notifications: string[] = [];
 		const selections: Array<string | undefined> = [
-			"1. Route A — remote-a [ACTIVE] (route-a)",
+			"remote-a",
 			"Move Down",
 			"Back",
 		];
@@ -1417,7 +1496,7 @@ describe("Pi 9Router host adapter", () => {
 		host.registerCommands();
 		const notifications: string[] = [];
 		const selections: Array<string | undefined> = [
-			"1. Route A — remote-a [ACTIVE] (route-a)",
+			"remote-a",
 			"Inspect",
 			"Back",
 		];
@@ -1537,7 +1616,7 @@ describe("Pi 9Router host adapter", () => {
 				ui: {
 					select: async (title: string, options: readonly string[]) => {
 						healthSelection += 1;
-						if (healthSelection === 1) return options.find((option) => option.includes("route-a"));
+						if (healthSelection === 1) return options.find((option) => option.startsWith("remote-a"));
 						if (healthSelection === 2) return "Reset health";
 						return undefined;
 					},

@@ -44,8 +44,10 @@ import {
 	EnvSecretResolver,
 	SecretResolutionError,
 	NINEROUTER_PI_AUTH_REFERENCE,
+	canonicalModelOptions,
 	type NineRouterAuth,
 	type CatalogRow,
+	type CanonicalModelOption,
 	type PiProviderCatalog,
 	type PiProviderCatalogModel,
 	type ProviderProjection,
@@ -371,16 +373,6 @@ const safeStatusLine = (status: unknown): string => {
 	return pieces.length > 0 ? pieces.join(" ") : "status: available";
 };
 
-const modelLabel = (entry: ModelManagerEntry): string => {
-	const enabled = entry.enabled ? "[x]" : "[ ]";
-	const state = entry.missing ? " ! missing" : entry.stale ? " ! stale" : entry.available === false ? " ! unavailable" : "";
-	const ambiguity = entry.status === "ambiguous" ? " ! ambiguous" : "";
-	const display = entry.displayName && entry.displayName !== entry.remoteModelId ? ` — ${entry.displayName}` : "";
-	const source = entry.sourceLabel === "Pi 9Router" ? " [Pi 9Router]" : "";
-	const thinking = entry.reasoning === false ? " [thinking: not supported]" : entry.reasoning === true ? " [thinking: supported]" : " [thinking: unknown]";
-	return `${enabled} ${entry.remoteModelId}${display}${source}${thinking}${state}${ambiguity}`;
-};
-
 const modelCatalogFingerprint = (entry: ModelManagerEntry): string => JSON.stringify({
 	remoteModelId: entry.remoteModelId,
 	displayName: entry.displayName,
@@ -554,15 +546,6 @@ const poolEntryState = (entry: PoolEntryView): string =>
 			: entry.projectedPiAvailable === false || entry.actualPiAvailable === false
 				? "provider-unavailable"
 				: entry.state;
-
-const poolEntryLabel = (entry: PoolEntryView): string => {
-	const effortValue = entry.thinkingEffort ?? "auto";
-	const effort = entry.thinkingEffortValid !== false ? thinkingEffortLabel(effortValue) : `${thinkingEffortLabel(effortValue)} invalid`;
-	return `${entry.index + 1}. ${entry.displayName} — ${entry.remoteModelId} [${poolEntryState(entry).toUpperCase()}] Thinking: ${effort} (${entry.routeId})`;
-};
-
-const poolCandidateLabel = (entry: PoolRouteCandidate): string =>
-	`${entry.displayName} — ${entry.remoteModelId} [${entry.state.toUpperCase()}] Thinking: Auto (${entry.routeId})`;
 
 const routeAvailability = (entry: PoolEntryView): RouteAvailability => {
 	if (entry.thinkingEffortValid === false) return "unavailable";
@@ -1197,7 +1180,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			} else return;
 		}
 		while (true) {
-			const modelOptions = ["Refresh Models", "────────────", ...entries.map(modelLabel), "Back"];
+			const modelPresentation = canonicalModelOptions(entries.map((entry) => ({
+				value: entry.routeId ?? entry.remoteModelId,
+				remoteModelId: entry.remoteModelId,
+				displayName: entry.displayName,
+			})));
+			const modelOptions = ["Refresh Models", "────────────", ...modelPresentation.map((option) => option.label), "Back"];
 			const selected = await ctx.ui.select("9Router Models — select a model", modelOptions);
 			if (!selected || selected === "Back") return;
 			if (selected === "────────────") continue;
@@ -1206,10 +1194,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				try { entries = await modelEntries(filter); } catch (error) { notifyError(ctx, "9Router model list failed", error); return; }
 				continue;
 			}
-			const index = entries.findIndex((candidate) => {
-				const label = modelLabel(candidate);
-				return label === selected || label.startsWith(`${selected} `);
-			});
+			const index = modelPresentation.findIndex((option) => option.label === selected);
 			const entry = index >= 0 ? entries[index] : undefined;
 			if (!entry) return;
 			const action = await ctx.ui.select(`9Router model: ${entry.remoteModelId}`, ["Inspect", entry.enabled ? "Disable" : "Enable", "Back"]);
@@ -1441,9 +1426,14 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				ctx.ui.notify("No configured routes available to add.", "warning");
 				return;
 			}
-			const selected = await ctx.ui.select(`Add route to ${view.label} Pool`, candidates.map(poolCandidateLabel));
+			const candidatePresentation = canonicalModelOptions(candidates.map((entry) => ({
+				value: entry.routeId,
+				remoteModelId: entry.remoteModelId,
+				displayName: entry.displayName,
+			})));
+			const selected = await ctx.ui.select(`Add route to ${view.label} Pool`, candidatePresentation.map((option) => option.label));
 			if (!selected) return;
-			const entry = candidates[candidates.map(poolCandidateLabel).indexOf(selected)];
+			const entry = candidates[candidatePresentation.findIndex((option) => option.label === selected)];
 			if (!entry) return;
 			const effortOptions = ["Auto", ...(entry.supportedThinkingEfforts ?? []).map(thinkingEffortLabel)];
 			if (entry.thinkingSupport === "not-supported") ctx.ui.notify("This route does not advertise reasoning; Auto is the only valid effort.", "info");
@@ -1473,7 +1463,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				notifyError(ctx, `${poolLabels[poolId]} pool load failed`, error);
 				return;
 			}
-			const entryOptions = view.entries.map(poolEntryLabel);
+			const entryPresentation = canonicalModelOptions(view.entries.map((entry) => ({
+				value: entry.routeId,
+				remoteModelId: entry.remoteModelId,
+				displayName: entry.displayName,
+			})));
+			const entryOptions = entryPresentation.map((option) => option.label);
 			const options = [
 				...(entryOptions.length > 0 ? entryOptions : ["No routes assigned."]),
 				"Add Route",
@@ -1488,8 +1483,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				continue;
 			}
 			if (selected === "No routes assigned.") continue;
-			const entryIndex = entryOptions.indexOf(selected);
-			const entry = entryIndex >= 0 ? view.entries[entryIndex] : view.entries.find((candidate) => selected.includes(`(${candidate.routeId})`));
+			const entryIndex = entryPresentation.findIndex((option) => option.label === selected);
+			const entry = entryIndex >= 0 ? view.entries[entryIndex] : undefined;
 			if (!entry) continue;
 			const toggleLabel = entry.poolEnabled ? "Disable" : "Enable";
 			const action = await ctx.ui.select(`Route ${entry.routeId}`, ["Change Thinking Effort", "Move Up", "Move Down", "Move to position", toggleLabel, "Inspect", "Remove", "Back"]);
@@ -1997,12 +1992,6 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		return [...memberships.values()];
 	};
 
-	const healthLabel = (entry: PoolEntryView, record: RouteHealthRecord | undefined, pools: readonly string[]): string => {
-		const status = healthStore ? healthStore.status(record) : "Unknown";
-		const cooldown = record?.cooldownUntil ? ` until ${record.cooldownUntil}` : "";
-		return `${entry.displayName} — ${entry.routeId} [${status}${cooldown}] (${pools.join(", ")})`;
-	};
-
 	const showRouteHealth = async (ctx: ExtensionContext | ExtensionCommandContext, filter?: string): Promise<void> => {
 		if (!healthStore) {
 			ctx.ui.notify("Route health is unavailable until the runtime store is configured", "error");
@@ -2018,7 +2007,17 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				ctx.ui.notify("No routes assigned", "warning");
 				return;
 			}
-			const options = entries.map(({ entry, pools }) => healthLabel(entry, health[entry.routeId], pools));
+			const healthPresentation = canonicalModelOptions(entries.map(({ entry }) => ({
+				value: entry.routeId,
+				remoteModelId: entry.remoteModelId,
+				displayName: entry.displayName,
+			})));
+			const options = healthPresentation.map((option, index) => {
+				const { entry, pools } = entries[index]!;
+				const status = healthStore ? healthStore.status(health[entry.routeId]) : "Unknown";
+				const cooldown = health[entry.routeId]?.cooldownUntil ? ` until ${health[entry.routeId]!.cooldownUntil}` : "";
+				return `${option.label} [${status}${cooldown}] (${pools.join(", ")})`;
+			});
 			if (ctx.mode !== "tui" && !ctx.hasUI) {
 				ctx.ui.notify(options.join("\n"), "info");
 				return;
@@ -2238,15 +2237,21 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const loaded = configStore ? await configStore.load() : undefined;
 			const current = loaded?.snapshot?.config.routing ?? createDefaultConfig().routing;
 			const smart = await loadSmartRoutingSettings();
-			const routeEntries: Array<{ readonly routeId: StableId; readonly label: string; readonly state: "available" | "missing" | "stale" | "unavailable" }> = (await manager.list()).flatMap((entry) => {
+			const routeEntries: Array<{ readonly routeId: StableId; readonly remoteModelId: string; readonly displayName?: string; readonly state: "available" | "missing" | "stale" | "unavailable" }> = (await manager.list()).flatMap((entry) => {
 				if (!entry.routeId) return [];
 				const state = entry.missing ? "missing" : entry.stale ? "stale" : entry.available === false ? "unavailable" : "available";
-				return [{ routeId: entry.routeId as StableId, label: `${entry.displayName ?? entry.remoteModelId} — ${entry.routeId} [${state}]`, state }];
+				return [{ routeId: entry.routeId as StableId, remoteModelId: entry.remoteModelId, ...(entry.displayName === undefined ? {} : { displayName: entry.displayName }), state }];
 			});
 			for (const routeId of [smart.primaryRouteId, smart.fallbackRouteId]) {
-				if (routeId && !routeEntries.some((entry) => entry.routeId === routeId)) routeEntries.push({ routeId, label: `Configured route — ${routeId} [missing or stale]`, state: "missing" });
+				if (routeId && !routeEntries.some((entry) => entry.routeId === routeId)) routeEntries.push({ routeId, remoteModelId: "", displayName: "Configured route unavailable", state: "missing" });
 			}
-			const routeOptions = [...new Map(routeEntries.map((entry) => [entry.routeId, entry])).values()];
+			const uniqueRouteEntries = [...new Map(routeEntries.map((entry) => [entry.routeId, entry])).values()];
+			const routeOptions = canonicalModelOptions(uniqueRouteEntries.map((entry) => ({
+				value: entry.routeId,
+				remoteModelId: entry.remoteModelId,
+				displayName: entry.displayName,
+			})));
+			const routeLabel = (routeId: StableId | undefined): string => routeId === undefined ? "None" : routeOptions.find((option) => option.value === routeId)?.label ?? "Configured route unavailable";
 			const primaryEntry = smart.primaryRouteId === undefined ? undefined : routeEntries.find((entry) => entry.routeId === smart.primaryRouteId);
 			const triageLabel = primaryEntry?.state !== "available" ? "UNAVAILABLE" : smart.aiTriageEnabled ? "ON" : "OFF";
 			const choice = await ctx.ui.select("Routing & Fallback", [
@@ -2255,8 +2260,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				`Learn from routing choices (${smart.learnFromRoutingChoices ? "ON" : "OFF"})`,
 				"Learned Behaviors",
 				`AI Triage (${triageLabel})`,
-				`Triage Primary (${smart.primaryRouteId ?? "None"})`,
-				`Triage Fallback (${smart.fallbackRouteId ?? "None"})`,
+				`Triage Primary (${routeLabel(smart.primaryRouteId)})`,
+				`Triage Fallback (${routeLabel(smart.fallbackRouteId)})`,
 				"AI usage (ambiguous prompts only)",
 				`Max attempts (${current.maxAttempts})`,
 				`Timeout ms (${current.timeoutMs})`,
@@ -2286,7 +2291,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				const labels = ["None", ...routeOptions.map((entry) => entry.label), "Back"];
 				const selected = await ctx.ui.select("Triage Primary route", labels);
 				if (selected && selected !== "Back") {
-					const entry = routeOptions.find((candidate) => candidate.label === selected);
+					const entryIndex = routeOptions.findIndex((candidate) => candidate.label === selected);
+					const entry = entryIndex >= 0 ? uniqueRouteEntries[entryIndex] : undefined;
 					await updateSmartRoutingSettings((draft) => {
 						const { primaryRouteId: _old, ...rest } = draft;
 						return entry ? { ...rest, primaryRouteId: entry.routeId, aiTriageEnabled: entry.state === "available" } : { ...rest, aiTriageEnabled: false };
@@ -2296,7 +2302,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				const labels = ["None", ...routeOptions.map((entry) => entry.label), "Back"];
 				const selected = await ctx.ui.select("Triage Fallback route", labels);
 				if (selected && selected !== "Back") {
-					const entry = routeOptions.find((candidate) => candidate.label === selected);
+					const entryIndex = routeOptions.findIndex((candidate) => candidate.label === selected);
+					const entry = entryIndex >= 0 ? uniqueRouteEntries[entryIndex] : undefined;
 					await updateSmartRoutingSettings((draft) => {
 						const { fallbackRouteId: _old, ...rest } = draft;
 						return entry ? { ...rest, fallbackRouteId: entry.routeId } : rest;
@@ -3329,7 +3336,13 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const pool = await poolManager.getPool("verification");
 		return pool.entries.map((entry) => ({ routeId: entry.routeId, displayName: entry.displayName, remoteModelId: entry.remoteModelId, enabled: entry.poolEnabled && entry.globalEnabled, available: entry.state === "active" }));
 	};
-	const analystRouteLabel = (route: RecommendationAnalystRoute): string => `${route.displayName ?? route.remoteModelId ?? route.routeId} (${route.routeId})${route.available === false ? " [unavailable]" : route.enabled === false ? " [disabled]" : ""}`;
+	const analystRouteOptions = (routes: readonly RecommendationAnalystRoute[]): readonly CanonicalModelOption[] => canonicalModelOptions(routes.map((route) => ({
+		value: route.routeId,
+		remoteModelId: route.remoteModelId,
+		displayName: route.displayName,
+	})));
+	const analystRouteLabel = (route: RecommendationAnalystRoute, routes: readonly RecommendationAnalystRoute[] = [route]): string =>
+		analystRouteOptions(routes).find((option) => option.value === route.routeId)?.label ?? "Unknown model";
 	const runRecommendationAnalysis = async (
 		ctx: ExtensionContext | ExtensionCommandContext,
 		mode: RecommendationAnalystMode,
@@ -3348,7 +3361,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const status = await recommendationAnalyst.getStatus();
 		const resultStatus = result && typeof result === "object" ? result as RecommendationAnalystStatus : status;
 		ctx.ui.notify([
-			...analystStatusLines(resultStatus, { mode, routeId: selectedRoute.routeId }, analystRouteLabel(selectedRoute)),
+			...analystStatusLines(resultStatus, { mode, routeId: selectedRoute.routeId }, analystRouteLabel(selectedRoute, routes)),
 			`action=${reanalyze ? "re-analyze" : "analyze"}`,
 		].join("\n"), resultStatus.state === "failed" ? "warning" : "info");
 	};
@@ -3358,6 +3371,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const initialSettings = await recommendationAnalyst.getSettings();
 			const initialStatus = await recommendationAnalyst.getStatus();
 			const routes = await analystRoutes();
+			const routePresentation = analystRouteOptions(routes);
 			const defaultRoute = initialSettings.routeId && routes.some((route) => route.routeId === initialSettings.routeId) ? initialSettings.routeId : routes[0]?.routeId;
 			const raw = (args ?? "").trim();
 			const parts = raw.split(/\s+/u).filter(Boolean);
@@ -3365,7 +3379,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const requestedMode = analystMode(parts.find((part) => analystMode(part) !== undefined));
 			const requestedRoute = parts.find((part) => routes.some((route) => route.routeId === part));
 			if (action === "status" || action === "show") {
-				ctx.ui.notify(analystStatusLines(initialStatus, initialSettings, routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute)) ? analystRouteLabel(routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute))!) : undefined).join("\n"), "info");
+				const statusRoute = routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute));
+				ctx.ui.notify(analystStatusLines(initialStatus, initialSettings, statusRoute ? analystRouteLabel(statusRoute, routes) : undefined).join("\n"), "info");
 				return;
 			}
 			if (action === "analyze" || action === "reanalyze" || action === "re-analyze") {
@@ -3377,7 +3392,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				return;
 			}
 			if (ctx.mode !== "tui" && !ctx.hasUI) {
-				ctx.ui.notify(analystStatusLines(initialStatus, initialSettings, routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute)) ? analystRouteLabel(routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute))!) : undefined).join("\n"), "info");
+				const statusRoute = routes.find((route) => route.routeId === (initialStatus.routeId ?? defaultRoute));
+				ctx.ui.notify(analystStatusLines(initialStatus, initialSettings, statusRoute ? analystRouteLabel(statusRoute, routes) : undefined).join("\n"), "info");
 				return;
 			}
 			let mode = initialSettings.mode;
@@ -3389,7 +3405,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					"Analyze Now",
 					"Re-analyze",
 					`Mode: ${analystModeLabel(mode)}`,
-					`Verification route: ${route ? analystRouteLabel(route) : "UNKNOWN"}`,
+					`Verification route: ${route ? analystRouteLabel(route, routes) : "UNKNOWN"}`,
 					"Status",
 					"Back",
 				]);
@@ -3399,7 +3415,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					continue;
 				}
 				if (choice === "Status") {
-					ctx.ui.notify(analystStatusLines(status, { mode, ...(routeId === undefined ? {} : { routeId }) }, route ? analystRouteLabel(route) : undefined).join("\n"), "info");
+					ctx.ui.notify(analystStatusLines(status, { mode, ...(routeId === undefined ? {} : { routeId }) }, route ? analystRouteLabel(route, routes) : undefined).join("\n"), "info");
 					continue;
 				}
 				if (choice.startsWith("Mode:")) {
@@ -3408,8 +3424,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					continue;
 				}
 				if (choice.startsWith("Verification route:")) {
-					const selected = await ctx.ui.select("Verification Pool route", [...routes.map(analystRouteLabel), "Back"]);
-					const index = routes.map(analystRouteLabel).indexOf(selected ?? "");
+					const selected = await ctx.ui.select("Verification Pool route", [...routePresentation.map((option) => option.label), "Back"]);
+					const index = routePresentation.findIndex((option) => option.label === selected);
 					if (index >= 0) routeId = routes[index]!.routeId;
 				}
 			}

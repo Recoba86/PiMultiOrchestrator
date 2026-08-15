@@ -23,7 +23,7 @@ export const PACKAGE_INFO = Object.freeze({
 	version: typeof packageJson.version === "string" ? packageJson.version : "unknown",
 	releaseStatus: "candidate" as const,
 	latestAcceptedMilestone: "M10 — Safety and hardening",
-	developmentMilestone: "RC19 — Pi 9Router onboarding and adoption",
+	developmentMilestone: "RC22 — Canonical model selector presentation",
 	developmentStatus: "implemented-but-not-accepted" as const,
 	productionReady: false,
 	piCompatibility: "0.84.1",

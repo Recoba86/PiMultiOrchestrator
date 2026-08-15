@@ -4,5 +4,6 @@ export * from "./connection.js";
 export * from "./errors.js";
 export * from "./identity.js";
 export * from "./manager.js";
+export * from "./presentation.js";
 export * from "./secrets.js";
 export * from "./types.js";

@@ -1235,7 +1235,7 @@ test("[P][fixture-v1] Pi RPC route-health reset clears persisted cooldown withou
 									send({ type: "extension_ui_response", id, value: "Back" });
 									continue;
 								}
-								const selected = options.find((option) => option.includes(routeId));
+								const selected = options.find((option) => option.startsWith("fake/model-01"));
 								assert.ok(selected, options.join("\n"));
 								send({ type: "extension_ui_response", id, value: selected });
 							} else if (id && method === "select" && title.startsWith("route:")) {
