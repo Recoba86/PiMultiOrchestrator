@@ -4,11 +4,12 @@ Pi Multi-Orchestrator is a Pi extension for coordinating bounded investigation, 
 
 ## Status
 
-The current prerelease line is RC20 (`0.1.0-rc.20`), built on the accepted
+The current source/release line is RC20 (`0.1.0-rc.20`), built on the accepted
 RC19 provider-adoption boundary. RC20 adds per-Pool-route Thinking Effort,
 manual live `Refresh Models`, safe catalog diff/LKG handling, and explicit
-PMO route enablement separate from Pi provider ownership. It is published
-under the `next` dist-tag, not a stable or production release.
+PMO route enablement separate from Pi provider ownership. RC20 is published;
+the npm `next` pointer currently targets the exact RC17 prerelease checkpoint.
+Neither is a stable or production release.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. RC13, RC15, and RC16 are historical; RC17 is the successor candidate after the final RC16 live M7 reviewer handoff blocked before structured submission. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
@@ -60,6 +61,15 @@ open `/orchestrator` → **Models & 9Router** → **Refresh Models**. Enable a P
 route before adding it to a Pool; each Pool entry stores its own Thinking Effort
 (`Auto`, `Low`, `Medium`, `High`, `XHigh`, or `Max` when supported). Auto omits
 the PMO override and defers to Pi/provider defaults; it is not Off.
+
+For the accepted RC17 publication, use the exact npm pin:
+
+```sh
+pi install npm:pi-multi-orchestrator@0.1.0-rc.17
+```
+
+The source-bound Git fallback is
+`git:github.com/Recoba86/PiMultiOrchestrator@v0.1.0-rc.17`.
 
 ```sh
 npm install

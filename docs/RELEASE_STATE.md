@@ -12,14 +12,14 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.20` — GitHub prerelease and npm `next` |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.17` — npm `next`; RC20 remains a public GitHub/npm prerelease |
 | Product version | NONE assigned |
 | Development manifest version | `0.1.0-rc.20` — RC20 public prerelease |
 | RC20 release | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; published prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | PUBLISHED PRERELEASE — RC20 full gate, artifact, registry, GitHub, and public Pi dogfood pass; not stable/production-ready |
+| Local technical release readiness | PUBLISHED PRERELEASE — RC20 full gate, artifact, registry, GitHub, and public Pi dogfood pass; npm `next` currently points to RC17; not stable/production-ready |
 | Release tag | `v0.1.0-rc.20` → `8bcb4a61796623ea09bd1ed09c411656bd657138` |
 | Release commit | `8bcb4a61796623ea09bd1ed09c411656bd657138` |
 | GitHub release | [v0.1.0-rc.20](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.20) — prerelease |
@@ -82,9 +82,10 @@ handling. It remains prerelease-only; `latest` must not move.
 - **Registry verification:** npm reports version `0.1.0-rc.17` and `next`
   points to it. The downloaded npm tarball is byte-identical to the accepted
   GitHub release asset.
-- **Latest boundary:** `latest` was already `0.1.0-rc.17` at checkpoint start;
-  this checkpoint made no npm publish or dist-tag mutation, and does not infer
-  the historical creation of that existing tag.
+- **Latest boundary:** `latest` was `0.1.0-rc.17` before and after the
+  checkpoint. The exact RC17 version and accepted bytes were already present in
+  npm, so no republish or repack was performed; authenticated interactive npm
+  flow moved only `next` from RC20 to RC17.
 
 ## RC17 final Planner/manual acceptance
 

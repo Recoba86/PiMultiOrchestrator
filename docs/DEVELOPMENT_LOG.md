@@ -80,9 +80,10 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   exact package/version and `next` points to `0.1.0-rc.17`.
 - **Artifact proof:** independently downloaded npm and GitHub tarballs are
   byte-identical and match the accepted SHA-256. No rebuild or repack was done.
-- **Tag boundary:** npm `latest` was already observed as `0.1.0-rc.17` when
-  this checkpoint began. No npm publish or dist-tag mutation was performed in
-  this checkpoint; historical creation of that existing tag is not inferred.
+- **Publication checkpoint:** npm already contained the exact immutable RC17
+  version and byte-identical artifact, so no republish or repack was performed.
+  The authenticated interactive npm flow moved only `next` from RC20 to RC17;
+  `latest` remained `0.1.0-rc.17` before and after the checkpoint.
 
 ## RC18 — Real-world Pi/9Router compatibility repair
 

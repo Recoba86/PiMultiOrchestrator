@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC20 Thinking/Model Router work is the current `next` prerelease line |
+| Development phase | M10 remains the latest accepted development milestone; RC20 is the latest source/release line, while npm `next` currently points to the exact RC17 prerelease |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -29,7 +29,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC17 final Planner attempt | 2026-08-15 — PASS after the bounded reviewer-handoff repair; source-bound artifact is public as a prerelease |
 | RC18 compatibility repair | Local source repair at `0af7b8e`; package manifest remains `0.1.0-rc.17`; no package rebuild/release or publication is claimed |
 | RC19 release | `0.1.0-rc.19` — public prerelease; commit `717a20413fc22f7ca7fde8df8a841ebde05b0f1a`, tag `v0.1.0-rc.19`, artifact SHA-256 `338d466a2308711e2c6befc838a29b77e6c1a5d1574350441bf9b5f46845a88e` |
-| RC20 release | `0.1.0-rc.20` — public prerelease under npm `next`; source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag `v0.1.0-rc.20`, artifact SHA-256 `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc` |
+| RC20 release | `0.1.0-rc.20` — public prerelease; source commit `8bcb4a61796623ea09bd1ed09c411656bd657138`, tag `v0.1.0-rc.20`, artifact SHA-256 `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc`; npm `next` is currently RC17 |
 | M12 RC15 historical candidate | `0.1.0-rc.15` — local, superseded by RC16 repairs |
 | M12 RC13 historical candidate | `0.1.0-rc.13` — local, superseded by RC15 and RC16 repairs |
 | M12.1 historical candidate | `0.1.0-rc.9` — local, not public; explicit native Mission entry |
@@ -115,8 +115,9 @@ empirically observed capabilities. RC18 does not implement this requirement.
 
 ## RC20 — Thinking-aware Pool routing and live catalog refresh
 
-- **Status:** `PUBLISHED / PRERELEASE`; RC20 is public under npm `next` and
-  GitHub, not stable or production-ready.
+- **Status:** `PUBLISHED / PRERELEASE`; RC20 is public on npm and GitHub, not
+  stable or production-ready. The later RC17 publication checkpoint currently
+  points npm `next` to RC17.
 - **Thinking Effort:** each Pool route entry stores `auto`, `low`, `medium`,
   `high`, `xhigh`, or `max` when the route advertises that level. Auto omits
   the Pi override and is not Off. Legacy missing fields migrate to Auto at the
@@ -136,8 +137,9 @@ empirically observed capabilities. RC18 does not implement this requirement.
   `556de8db9bb661e3f82f47badd2b93f68b3145e29b056b6abc29bea15efda9bc`.
 - **Release evidence:** clean `npm run check` passed `242/242`; independent
   release verification passed Pi `0.84.1`, privacy/worker-safety checks, and
-  `20/20` integrity attacks. npm `next` points to RC20, `latest` remains
-  `0.1.0-rc.17`, and the public registry tarball matches the local artifact
+  `20/20` integrity attacks. At RC20 publication, npm `next` pointed to RC20
+  and `latest` was RC17; the later RC17 checkpoint intentionally repointed
+  only `next` to RC17. The public registry tarball matches the local artifact
   byte-for-byte. GitHub release `v0.1.0-rc.20` is a prerelease.
 - **Boundary:** no periodic automatic sync or Benchmark Lab is included. The
   final live check was read-only/offline with 27 catalog rows and temporary
@@ -187,9 +189,10 @@ empirically observed capabilities. RC18 does not implement this requirement.
   independently and were byte-identical with the accepted SHA-256. npm
   `next` points to `0.1.0-rc.17`.
 - **Tag/release proof:** the remote tag peels to `5def791b31a7ad940ed87f6e720aabb0228500e7`, and GitHub marks the release as a prerelease with the accepted artifact and manifest assets.
-- **Latest boundary:** `latest` was already observed as `0.1.0-rc.17` when
-  this checkpoint began. No publish or dist-tag mutation was performed in this
-  checkpoint; historical creation of that existing tag is not inferred.
+- **Latest boundary:** `latest` was observed as `0.1.0-rc.17` before and after
+  this checkpoint. The exact RC17 version and bytes were already present in the
+  public registry, so no republish or repack was performed; the authenticated
+  interactive npm flow moved only `next` from RC20 to RC17.
 
 ## RC17 final Planner/manual acceptance — PASS
 

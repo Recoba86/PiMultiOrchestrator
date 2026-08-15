@@ -351,8 +351,10 @@ release as a prerelease, and npm publishes
 `pi-multi-orchestrator@0.1.0-rc.17` with `next` pointing to that version.
 The registry tarball is byte-identical to the accepted GitHub asset and has
 SHA-256 `2a9343de7b456840ebdd596ef14c674a51abdad65e3e840b6a29b760e9aa5b62`.
-The existing `latest` tag was observed before this checkpoint; no publish or
-dist-tag mutation was performed here.
+The existing `latest` tag was observed as `0.1.0-rc.17` before and after this
+checkpoint. The exact immutable RC17 version and artifact were already present
+in npm, so no republish or repack was performed; authenticated interactive npm
+flow moved only `next` from RC20 to RC17.
 
 ## RC18 — Real-world Pi/9Router compatibility repair
 
