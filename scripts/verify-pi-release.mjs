@@ -108,6 +108,9 @@ const COMPATIBILITY_ADDITIONS = Object.freeze([
 	"config.pools.*.schedulingPolicy",
 	"config.pools.*.entries[].thinkingEffort",
 	"config.pools.*.entries[].weight",
+	"config.bossProfiles.*.schedulingPolicy",
+	"config.bossProfiles.*.entries[].thinkingEffort",
+	"config.bossProfiles.*.entries[].weight",
 	"analytics.summary.performanceByPoolRoute",
 ]);
 const legacyConfigProjection = (value) => {
@@ -120,6 +123,11 @@ const legacyConfigProjection = (value) => {
 			delete entry.thinkingEffort;
 			delete entry.weight;
 		}
+	}
+	for (const profile of Object.values(projected.bossProfiles ?? {})) {
+		if (!profile || typeof profile !== "object") continue;
+		delete profile.schedulingPolicy;
+		delete profile.entries;
 	}
 	return projected;
 };
