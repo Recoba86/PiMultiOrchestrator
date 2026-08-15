@@ -26,7 +26,10 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   `AssistantMessage` contract; classified invocation diagnostics; separate
   `selectBossFallbackEntry`; truthful Boss Profile overview.
 - **Publication:** none. No `v0.1.0-rc.28` tag, npm dist-tag change, GitHub
-  Release, or live Pi installation change. RC27 was not mutated.
+  Release, or live Pi installation change. RC27 was not mutated. Detached
+  verifier PASS on `aad28c33260326665ec17e347d50fe985b18a953` with
+  `302/302` tests, `20/20` integrity attacks, artifact SHA-256
+  `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3`.
 
 ## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
 

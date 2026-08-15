@@ -129,6 +129,14 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   eligibility and does not show `Unconfigured Boss` after routes exist.
 - **Publication boundary:** public RC27 remains immutable. RC28 is not tagged,
   npm was not published, and the live Pi installation was not modified.
+  Detached `npm run release:verify` PASS on implementation commit
+  `aad28c33260326665ec17e347d50fe985b18a953`: tests `302/302`, integrity
+  attacks `20/20`, artifact SHA-256
+  `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3`, bundle
+  root SHA-256
+  `683987202951b38c887fef7b61c8e1bd22855660fd71702b0a13bbba5de5f652`. That
+  artifact is source-bound to the implementation commit, not a later
+  documentation-only commit.
 
 ## RC27 implemented / pre-release ready
 

@@ -15,7 +15,7 @@ This file records releasable product state. It does not promote development prog
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.27` — npm `next`; `latest` remains `0.1.0-rc.17` |
 | Product version | `0.1.0-rc.27` public prerelease |
 | Development manifest version | `0.1.0-rc.28` — RC28 Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; not public |
-| RC28 local candidate | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; implemented / pre-release ready; not published |
+| RC28 local candidate | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; implemented / pre-release ready; not published; detached verifier PASS on `aad28c3`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release line | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release line | Goal terminal CANCELLED/SAFETY_STOP plus truthful runtime package metadata; public prerelease; immutable |
 | RC25 release line | Weighted multi-route Boss profiles, one pinned Boss per Mission, bounded goal-loop repair/replan, explicit infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations |
