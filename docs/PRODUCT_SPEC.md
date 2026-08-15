@@ -375,6 +375,18 @@ worker, rejected verification, incomplete implementation, malformed evidence, or
 recoverable provider failure MUST continue through a valid repair path when one
 exists and MUST never be treated as completion.
 
+Executable `@orchestrator` / Smart Routing / AUTO_MISSION Missions MUST
+bootstrap their own canonical Tasks. The user MUST NOT be required to open
+`/missions` and add a Task for those entrypoints to proceed. Boss inference
+responses MUST be validated against the BossDecision protocol at runtime; a
+TypeScript cast of parsed JSON is not sufficient. Plan-phase `dispatch` or
+`replan` with zero tasks is a protocol/actionable-plan failure, MUST feed
+bounded corrective feedback to the same pinned Boss, and MUST NOT become false
+`COMPLETED`. Goal-level Mission acceptance criteria MUST be durable: explicit
+structured criteria outrank labelled goal sections, which outrank bounded
+derived criteria. Goal criteria remain distinct from per-Task acceptance
+criteria.
+
 ## 19. M12.1 explicit Mission entry
 
 - `@orchestrator <goal>` is an explicit, one-step canonical Mission entry on Pi's normal input surface. The marker is recognized only at the supported beginning position, with surrounding whitespace and marker case handled by the documented parser contract.

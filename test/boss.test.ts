@@ -12,6 +12,9 @@ import { SQLiteAnalyticsStore } from "../src/core/analytics/index.js";
 import { PathSafetyError, ProjectTrustRequiredError } from "../src/core/security/index.js";
 import {
 	BossInfrastructureError,
+	BossProtocolError,
+	formatBossLoopDiagnostics,
+	normalizeBossDecision,
 	runMissionGoalLoop,
 	selectBossEntry,
 	type BossDecision,
@@ -216,6 +219,10 @@ const orchestration = (store: ReturnType<typeof createMissionStore>, missionId: 
 	readonly bossAssignment?: { readonly routeId?: string; readonly fallbackFromRouteId?: string };
 	readonly fallbackHistory?: readonly unknown[];
 	readonly repairCycles?: number;
+	readonly protocolFailures?: number;
+	readonly actionablePlanFailures?: number;
+	readonly lastProtocolError?: string;
+	readonly acceptanceCriteriaProvenance?: string;
 	readonly terminal?: string;
 	readonly terminalReason?: string;
 	readonly terminalProvenance?: string;
@@ -223,6 +230,10 @@ const orchestration = (store: ReturnType<typeof createMissionStore>, missionId: 
 	readonly bossAssignment?: { readonly routeId?: string; readonly fallbackFromRouteId?: string };
 	readonly fallbackHistory?: readonly unknown[];
 	readonly repairCycles?: number;
+	readonly protocolFailures?: number;
+	readonly actionablePlanFailures?: number;
+	readonly lastProtocolError?: string;
+	readonly acceptanceCriteriaProvenance?: string;
 	readonly terminal?: string;
 	readonly terminalReason?: string;
 	readonly terminalProvenance?: string;
@@ -583,6 +594,234 @@ describe("RC26 Boss terminal semantics", () => {
 				"verification:verification",
 			]);
 			assert.equal(orchestration(store, String(mission.missionId))?.bossAssignment?.routeId, result.assignment?.routeId);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
+const passVerify = (store: ReturnType<typeof createMissionStore>, missionId: string, criterion = "tests pass") => async (task: TaskRecord) => {
+	const attemptId = store.getTask(task.taskId)?.lastRunId;
+	assert.ok(attemptId);
+	const quality = new QualityService(store);
+	const verification = quality.startVerification({ missionId, taskId: task.taskId, targetRunId: attemptId, round: 0 });
+	quality.completeVerification(verification.verificationId, {
+		verdict: "pass",
+		criterionResults: [{ criterion, status: "satisfied", evidenceSummary: "ok" }],
+		mechanicalChecks: [{ command: "npm test", outcome: "passed", provenance: "reviewer" }],
+		findings: [],
+		requiredFixes: [],
+		risks: [],
+		summary: "pass",
+	}, task.acceptanceCriteria);
+	return { verdict: "pass" as const, summary: "pass" };
+};
+
+const succeedDispatch = (store: ReturnType<typeof createMissionStore>) => async (task: TaskRecord) => {
+	const attempt = store.createAttempt({ taskId: task.taskId, routeId: "worker-route", remoteModelId: "worker-remote" });
+	store.finishAttempt(attempt.attemptId, "succeeded", { result: { status: "completed" } });
+	return { taskId: String(task.taskId), status: "succeeded" as const, summary: "worker completed" };
+};
+
+describe("RC27 autonomous Mission bootstrap and Boss protocol", () => {
+	it("rejects malformed BossDecision objects and empty dispatch/replan plans", () => {
+		assert.throws(() => normalizeBossDecision({ summary: "no action", tasks: [] }), BossProtocolError);
+		assert.throws(() => normalizeBossDecision({ action: "ship_it", summary: "wrong fields", tasks: [] }), BossProtocolError);
+		assert.throws(() => normalizeBossDecision({ action: "dispatch", summary: "empty", tasks: [] }, { phase: "plan" }), /dispatch requires at least one actionable task/u);
+		assert.throws(() => normalizeBossDecision({ action: "replan", summary: "empty", tasks: [] }, { phase: "plan" }), /replan requires at least one actionable task/u);
+		assert.throws(() => normalizeBossDecision({ action: "dispatch", summary: "ok", tasks: [{ roleId: "x" }] }), BossProtocolError);
+		assert.throws(() => normalizeBossDecision({ action: "complete", summary: "ok", tasks: [], acceptanceSatisfied: "yes" }), /acceptanceSatisfied/u);
+		const complete = normalizeBossDecision({ action: "complete", summary: "done", tasks: [], acceptanceSatisfied: true });
+		assert.equal(complete.action, "complete");
+		const evaluateReplan = normalizeBossDecision({ action: "replan", summary: "need another plan cycle", tasks: [], requiredFixes: ["repair"] }, { phase: "evaluate" });
+		assert.equal(evaluateReplan.action, "replan");
+		assert.equal(evaluateReplan.tasks.length, 0);
+	});
+
+	it("creates the first canonical Task from an autonomous Goal without a pre-existing /missions Add Task", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc27-autonomous-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "autonomous-bootstrap", goal: "Perform a bounded docs-only repository task" });
+			assert.equal(store.listTasks(mission.missionId).length, 0);
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1), route("boss-b", 1)],
+				invoke: async ({ phase }) => phase === "plan"
+					? { action: "dispatch", summary: "create the first task", tasks: [{ roleId: "implementer", executionClass: "implementation", poolId: "implementation", objective: "edit docs only", acceptanceCriteria: ["docs updated"] }] }
+					: { action: "complete", summary: "goal satisfied", tasks: [], acceptanceSatisfied: true },
+				dispatch: succeedDispatch(store),
+				verify: passVerify(store, String(mission.missionId), "docs updated"),
+				maxCycles: 2,
+			});
+			assert.equal(result.status, "completed");
+			assert.equal(result.terminal, "COMPLETED");
+			assert.equal(store.listTasks(mission.missionId).length, 1);
+			assert.equal(store.getMission(mission.missionId)?.acceptanceCriteria.length === 0, false);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("repairs an invalid empty plan on the next pinned Boss inference, then completes through M7", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc27-self-repair-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "self-repair", goal: "ship the docs fix", acceptanceCriteria: ["docs updated"] });
+			const calls: Array<{ phase: string; cycle: number; routeId: string }> = [];
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1), route("boss-b", 1)],
+				invoke: async (request) => {
+					calls.push({ phase: request.phase, cycle: request.cycle, routeId: request.assignment.routeId });
+					if (request.phase === "plan" && request.cycle === 0) return { action: "dispatch", summary: "empty plan", tasks: [] };
+					if (request.phase === "plan") return { action: "dispatch", summary: "repaired plan", tasks: [{ roleId: "implementer", executionClass: "implementation", poolId: "implementation", objective: "write the docs", acceptanceCriteria: ["docs updated"] }] };
+					return { action: "complete", summary: "verified", tasks: [], acceptanceSatisfied: true };
+				},
+				dispatch: succeedDispatch(store),
+				verify: passVerify(store, String(mission.missionId), "docs updated"),
+				maxCycles: 4,
+			});
+			assert.equal(result.status, "completed");
+			assert.equal(store.listTasks(mission.missionId).length, 1);
+			assert.equal(new Set(calls.map((call) => call.routeId)).size, 1);
+			assert.equal(orchestration(store, String(mission.missionId))?.fallbackHistory?.length ?? 0, 0);
+			assert.equal((orchestration(store, String(mission.missionId))?.protocolFailures ?? 0) >= 1, true);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("models the RC26 dogfood failure: 4 empty Boss cycles never complete and stay informative AWAITING_USER", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc27-dogfood-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "mission-5f02627a-f84b-4ecb-95c1-a900dacfa5a8", goal: "Perform a bounded docs-only repository task" });
+			const calls: string[] = [];
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1), route("boss-b", 1)],
+				invoke: async ({ assignment, phase }) => {
+					calls.push(`${phase}:${assignment.routeId}`);
+					return { action: "dispatch", summary: "I will plan later", tasks: [] };
+				},
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "must not dispatch" }),
+				verify: async () => ({ verdict: "blocked", summary: "must not verify" }),
+				maxCycles: 4,
+			});
+			assert.equal(result.status, "awaiting-review");
+			assert.equal(result.terminal, "AWAITING_USER");
+			assert.notEqual(result.terminal, "COMPLETED");
+			assert.equal(store.listTasks(mission.missionId).length, 0);
+			assert.equal(store.getMission(mission.missionId)?.status, "awaiting-review");
+			const state = orchestration(store, String(mission.missionId));
+			assert.equal(state?.actionablePlanFailures, 4);
+			assert.equal(state?.protocolFailures, 4);
+			assert.equal(state?.fallbackHistory?.length ?? 0, 0);
+			assert.match(state?.terminalReason ?? "", /tasks=0/u);
+			assert.match(state?.terminalReason ?? "", /actionablePlanFailures=4/u);
+			assert.equal(new Set(calls.map((item) => item.split(":")[1])).size, 1);
+			const inspect = formatBossLoopDiagnostics(store.getMission(mission.missionId)!, 0);
+			assert.ok(inspect.some((line) => line.includes("actionable-plan failures: 4")));
+			assert.ok(inspect.some((line) => line.includes("tasks generated: 0")));
+			assert.ok(inspect.some((line) => line.includes("why execution stopped:")));
+			assert.ok(inspect.some((line) => line.includes("pinned Boss route:")));
+			assert.ok(inspect.some((line) => line.includes("boss fallback: none")));
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not treat protocol failure as M4 infrastructure Boss fallback", async () => {
+		const entries = [route("boss-a", 1), route("boss-b", 1), route("boss-c", 1)];
+		const key = Array.from({ length: 100 }, (_, index) => `protocol-${index}`).find((candidate) => selectBossEntry(entries, candidate)?.routeId === "boss-a");
+		assert.ok(key);
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc27-protocol-pin-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "protocol-pin", goal: "keep the same Boss" });
+			const calls: string[] = [];
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries,
+				schedulingKey: key,
+				invoke: async ({ assignment }) => {
+					calls.push(assignment.routeId);
+					throw new BossProtocolError("malformed Boss JSON object");
+				},
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "not dispatched" }),
+				verify: async () => ({ verdict: "blocked", summary: "not verified" }),
+				maxCycles: 3,
+			});
+			assert.equal(result.status, "awaiting-review");
+			assert.equal(result.terminal, "AWAITING_USER");
+			assert.deepEqual([...new Set(calls)], ["boss-a"]);
+			assert.equal(orchestration(store, String(mission.missionId))?.bossAssignment?.routeId, "boss-a");
+			assert.equal(orchestration(store, String(mission.missionId))?.fallbackHistory?.length ?? 0, 0);
+			assert.equal(orchestration(store, String(mission.missionId))?.protocolFailures, 3);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("still falls back on genuine infrastructure failure", async () => {
+		const entries = [route("boss-a", 1), route("boss-b", 1)];
+		const key = Array.from({ length: 100 }, (_, index) => `infra-${index}`).find((candidate) => selectBossEntry(entries, candidate)?.routeId === "boss-a");
+		assert.ok(key);
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc27-infra-fallback-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "infra-fallback", goal: "recover from provider outage" });
+			const calls: string[] = [];
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries,
+				schedulingKey: key,
+				invoke: async ({ assignment }) => {
+					calls.push(assignment.routeId);
+					if (assignment.routeId === "boss-a") throw new BossInfrastructureError("provider unavailable");
+					return { action: "blocked", summary: "external dependency after fallback", tasks: [] };
+				},
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "blocked", summary: "not reached" }),
+				verify: async () => ({ verdict: "blocked", summary: "not reached" }),
+				maxCycles: 1,
+			});
+			assert.equal(result.terminal, "BLOCKED");
+			assert.deepEqual(calls, ["boss-a", "boss-b"]);
+			assert.equal(orchestration(store, String(mission.missionId))?.bossAssignment?.routeId, "boss-b");
+			assert.equal(orchestration(store, String(mission.missionId))?.fallbackHistory?.length, 1);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps explicit Goal criteria and does not overwrite them with derived criteria", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc27-explicit-criteria-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "explicit-criteria", goal: "Do the work\nAcceptance criteria:\n- labelled", acceptanceCriteria: ["keep the user criterion"] });
+			await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1)],
+				invoke: async () => ({ action: "awaiting_user", summary: "need a human decision", tasks: [] }),
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "not dispatched" }),
+				verify: async () => ({ verdict: "blocked", summary: "not verified" }),
+				maxCycles: 1,
+			});
+			assert.deepEqual(store.getMission(mission.missionId)?.acceptanceCriteria, ["keep the user criterion"]);
+			assert.equal(orchestration(store, String(mission.missionId))?.acceptanceCriteriaProvenance, "explicit");
 			store.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });

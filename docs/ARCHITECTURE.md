@@ -491,6 +491,17 @@ cycle/repair dimensions and terminal analytics, including `CANCELLED` and
 `SAFETY_STOP`; it cannot mark completion from a single finished task or a
 Boss completion claim without execution and verification evidence.
 
+Executable `@orchestrator` Missions do not wait for a manual Task editor. The
+Boss runtime validates inference JSON with `normalizeBossDecision` instead of
+casting parsed objects. Plan-phase `dispatch` and `replan` require at least
+one actionable task; an empty plan is a `BossProtocolError`, counts as an
+actionable-plan failure, and retries on the same pinned Boss until the cycle
+budget is exhausted. Exhaustion persists Inspectable `AWAITING_USER`
+diagnostics (last action, protocol/actionable-plan failure counts, task count,
+stop reason, pin, fallback). Goal-level acceptance criteria are resolved at
+Mission creation (explicit, labelled, or derived) and are not overwritten when
+the user already supplied them.
+
 The Boss is not an Implementation Worker. The Boss owns Mission-level
 planning, evaluation, and terminal decisions; Investigation, Implementation,
 and Verification remain the only worker pools and keep their own per-task/run

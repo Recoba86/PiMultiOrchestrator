@@ -20,6 +20,7 @@ import type {
 	QualityFailureFinalizationInput, QualityFailureFinalizationResult, QualityFinalizationInput, QualityFinalizationResult,
 	QualityStatus, TaskQualityStatus, VerificationRunInput, VerificationRunRecord, VerificationStatus,
 } from "../quality/types.js";
+import { resolveMissionAcceptanceCriteria } from "./acceptance-criteria.js";
 
 type Row = Record<string, unknown>;
 const json = (value: unknown): string => JSON.stringify(value ?? null);
@@ -41,9 +42,10 @@ export const createCanonicalMission = (
 ): MissionRecord => {
 	const normalizedGoal = normalizeMissionText(goal);
 	if (!normalizedGoal) throw new MissionValidationError([{ path: "goal", message: "goal is required" }]);
+	const resolved = resolveMissionAcceptanceCriteria(normalizedGoal, options.acceptanceCriteria);
 	return store.createMission({
 		goal: normalizedGoal,
-		...(options.acceptanceCriteria && options.acceptanceCriteria.length > 0 ? { acceptanceCriteria: options.acceptanceCriteria } : {}),
+		...(resolved.criteria.length > 0 ? { acceptanceCriteria: resolved.criteria } : {}),
 		...(options.repositoryCwd ? { repository: { cwd: options.repositoryCwd } } : {}),
 		status: "draft",
 		actor: "user",
@@ -491,3 +493,10 @@ export const restoreMissionStore = (options: MissionStoreOptions, backupPath: st
 export * from "./types.js";
 export * from "./errors.js";
 export * from "./execution.js";
+export {
+	deriveAcceptanceCriteriaFromGoal,
+	extractLabelledAcceptanceCriteria,
+	inferAcceptanceCriteriaProvenance,
+	resolveMissionAcceptanceCriteria,
+	type MissionAcceptanceCriteriaProvenance,
+} from "./acceptance-criteria.js";

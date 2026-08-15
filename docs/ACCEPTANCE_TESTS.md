@@ -1284,12 +1284,52 @@ requirements and remain future work.
 
 - **Level:** U
 - **Setup:** load `PACKAGE_INFO` from compiled `dist`/`dist-test` output.
-- **Pass:** version equals `package.json` (`0.1.0-rc.26`); development line is
-  `RC26 — Goal Terminal Semantics & Runtime Metadata Correctness`; RC23 titles
+- **Pass:** version equals `package.json` (`0.1.0-rc.27`); development line is
+  `RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair`; RC23 titles
   are absent; `latestAcceptedMilestone` is M10; `productionReady` is false;
   an unmapped version would report `stale-development-line:<version>` rather
-  than an older RC title. `@orchestrator` and Smart Routing Run as Mission
+  than an older RC title. The `0.1.0-rc.26` map entry remains historical.
+  `@orchestrator` and Smart Routing Run as Mission
   still enter the same canonical Boss loop.
+
+### RC27-01 — Autonomous Mission bootstrap does not require Add Task
+
+- **Level:** U/I, fake runtime
+- **Setup:** start `@orchestrator` / Smart Routing / AUTO_MISSION with a Goal
+  and no pre-created Tasks.
+- **Pass:** the Boss produces an actionable plan and the store contains at
+  least one canonical Task without `/missions` → Add Task. Automatic creation
+  feedback includes `Boss execution starting automatically...` and omits
+  `add a Task`. Manual New Mission may still show Add Task guidance.
+
+### RC27-02 — Empty and malformed Boss plans are protocol failures
+
+- **Level:** U
+- **Pass:** `dispatch` with `tasks=[]` and plan-phase `replan` with `tasks=[]`
+  throw/repair as `BossProtocolError`. A JSON object with the wrong
+  BossDecision fields is rejected. An invalid plan can self-repair on the next
+  pinned inference. Four empty dispatch cycles matching public RC26 dogfood
+  become informative `AWAITING_USER` with 0 tasks, not `COMPLETED`. Protocol
+  failure does not trigger infrastructure Boss fallback; genuine infrastructure
+  failure still may.
+
+### RC27-03 — Goal-level acceptance criteria are durable
+
+- **Level:** U
+- **Pass:** labelled Mission/acceptance/success criteria in a free-form Goal
+  persist as canonical Mission criteria. A Goal without a labelled section
+  still gets non-zero derived criteria. Explicit user criteria outrank labelled
+  and derived values and are not overwritten.
+
+### RC27-04 — Safety-budget Inspect diagnostics
+
+- **Level:** U
+- **Pass:** when the Boss budget exhausts into `AWAITING_USER`, Inspect shows
+  last Boss action, protocol/actionable-plan failure counts, whether Tasks were
+  generated, why execution stopped, the pinned Boss route, and whether fallback
+  occurred, without raw prompts or secrets. CANCELLED and SAFETY_STOP remain
+  intact.
+
 
 ### RC26-04 — Persisted Pi install evidence is machine-neutral
 

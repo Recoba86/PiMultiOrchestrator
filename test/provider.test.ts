@@ -828,7 +828,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /RC26 .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /RC27 .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);
@@ -998,7 +998,9 @@ describe("Pi 9Router host adapter", () => {
 			assert.equal(mission.repository.cwd, ctx.cwd);
 			assert.equal(store.listMissions().length, 1);
 			assert.deepEqual(pi.entries, [{ customType: "pi-multi-orchestrator:mission", data: { missionId: mission.missionId, status: "draft", revision: 1 } }]);
-			assert.match(notifications[0] ?? "", /Mission created[\s\S]*Goal: بررسی mixed مسیر[\s\S]*Status: draft[\s\S]*Next:/u);
+			assert.match(notifications[0] ?? "", /Mission created[\s\S]*Goal: بررسی mixed مسیر[\s\S]*Status: draft[\s\S]*Boss execution starting automatically/u);
+			assert.doesNotMatch(notifications[0] ?? "", /add a Task/iu);
+			assert.equal(mission.acceptanceCriteria.length > 0, true);
 
 			assert.deepEqual(await handleInput({ type: "input", text: "What does @orchestrator mean?", source: "interactive" }, ctx), { action: "continue" });
 			assert.deepEqual(await handleInput({ type: "input", text: "@orchestrator   ", source: "interactive" }, ctx), { action: "handled" });
@@ -1025,6 +1027,8 @@ describe("Pi 9Router host adapter", () => {
 			assert.equal(menuMission.status, "draft");
 			assert.deepEqual(menuMission.repository, { cwd: ctx.cwd });
 			assert.deepEqual(menuMission.acceptanceCriteria, ["tests pass", "review complete"]);
+			const menuNotice = notifications.find((message) => message.includes("Menu-created mission"));
+			assert.match(menuNotice ?? "", /Next: open \/missions .* to add a Task/u);
 		} finally {
 			store.close();
 			await rm(root, { recursive: true, force: true });
@@ -1781,6 +1785,35 @@ describe("Pi 9Router host adapter", () => {
 			assert.equal(runtimeNotices.length, 4);
 			assert.equal(new Set(runtimeNotices).size, 1);
 			assert.equal(store.listMissions().every((mission) => mission.status !== "completed"), true);
+		} finally {
+			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("[U][RC27] @orchestrator bootstraps Goal criteria and does not ask the user to add a Task", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-rc27-entry-"));
+		const store = createMissionStore({ root, id: () => `rc27-${Date.now()}-${Math.random().toString(16).slice(2)}` });
+		try {
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store });
+			host.registerCommands();
+			const notifications: string[] = [];
+			const ctx = {
+				cwd: "/private/tmp/pi-rc27-entry",
+				isIdle: () => true,
+				ui: { notify: (message: string) => notifications.push(message) },
+			} as unknown as ExtensionContext;
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+			const goal = "Perform a bounded docs-only repository task.\n\nMission acceptance criteria:\n- docs mention the loop\n- no production code changes";
+			assert.deepEqual(await handleInput({ type: "input", text: `@orchestrator ${goal}`, source: "interactive" }, ctx), { action: "handled" });
+			const mission = store.listMissions()[0];
+			assert.ok(mission);
+			assert.deepEqual(mission.acceptanceCriteria, ["docs mention the loop", "no production code changes"]);
+			assert.equal(store.listTasks(mission.missionId).length, 0);
+			assert.match(notifications[0] ?? "", /Boss execution starting automatically/u);
+			assert.doesNotMatch(notifications.join("\n"), /add a Task/iu);
 		} finally {
 			store.close();
 			await rm(root, { recursive: true, force: true });

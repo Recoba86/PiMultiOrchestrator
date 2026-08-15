@@ -12,10 +12,11 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.25` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.25` public prerelease |
-| Development manifest version | `0.1.0-rc.26` — RC26 Goal Terminal Semantics & Runtime Metadata Correctness; not public |
-| RC26 local candidate | Goal terminal CANCELLED/SAFETY_STOP plus truthful runtime package metadata; implemented / pre-release ready; not published |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.26` — npm `next`; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.26` public prerelease |
+| Development manifest version | `0.1.0-rc.27` — RC27 Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; not public |
+| RC27 local candidate | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; implemented / pre-release ready; not published |
+| RC26 release line | Goal terminal CANCELLED/SAFETY_STOP plus truthful runtime package metadata; public prerelease; immutable |
 | RC25 release line | Weighted multi-route Boss profiles, one pinned Boss per Mission, bounded goal-loop repair/replan, explicit infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations |
 | RC24 release line | Model Router rows show `[x]` for enabled PMO routes and `[ ]` for discovered-but-disabled routes; Enter opens the existing action menu and persistence path |
 | RC22 local candidate | Canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`; artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; not published |
@@ -23,12 +24,12 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC26 IMPLEMENTED / PRE-RELEASE READY in source; RC25 remains the verified public prerelease |
-| Release tag | `v0.1.0-rc.25` → `52b665f6ace6eec078cbe8a28c35cce36a9cb045` |
-| Release commit | `52b665f6ace6eec078cbe8a28c35cce36a9cb045` |
-| Release artifact | `pi-multi-orchestrator-0.1.0-rc.25.tgz`; SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5` |
-| GitHub release | [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25) — prerelease with artifact and checksum |
-| Installable production release | NONE; RC25 is a prerelease |
+| Local technical release readiness | RC27 IMPLEMENTED / PRE-RELEASE READY in source; RC26 remains the verified public prerelease |
+| Release tag | `v0.1.0-rc.26` → `11153f0587634bcba732a5b214c95319c305f9e6` |
+| Release commit | `11153f0587634bcba732a5b214c95319c305f9e6` |
+| Release artifact | `pi-multi-orchestrator-0.1.0-rc.26.tgz`; SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a` |
+| GitHub release | `v0.1.0-rc.26` — public prerelease identity recorded by the RC27 baseline; RC26 is immutable |
+| Installable production release | NONE; RC26 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
@@ -77,7 +78,42 @@ production-ready; `latest` remains `0.1.0-rc.17`.
   passed through offline RPC. No live Pi configuration or provider/model call
   was used.
 
-## RC26 Goal Terminal Semantics & Runtime Metadata Correctness — pre-release ready
+## RC27 Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair — pre-release ready
+
+RC27 is implemented in source and prepared as `0.1.0-rc.27`. It is **not**
+public, tagged, npm-published, or a GitHub Release. Public RC26 remains
+immutable until the operator performs a later explicit publication of RC27.
+
+- **Autonomous bootstrap:** `@orchestrator`, Smart Routing Run as Mission, and
+  AUTO_MISSION create a canonical Mission and start the Boss loop. The Boss
+  must produce an actionable plan and create canonical Task(s) without a
+  manual `/missions` Add Task step. Manual Mission creation may still offer
+  the Task editor.
+- **Protocol:** `normalizeBossDecision` validates Boss JSON at runtime. Wrong
+  actions, missing summary, non-array tasks, invalid task fields, and invalid
+  `acceptanceSatisfied`/`requiredFixes` types become `BossProtocolError`.
+- **Zero-task invariant:** plan-phase `dispatch` or `replan` with `tasks=[]`
+  is an actionable-plan failure. It feeds bounded corrective feedback to the
+  same pinned Boss. It is never false `COMPLETED`. After the safety budget,
+  `AWAITING_USER` includes task count, protocol/actionable-plan failures, last
+  action, pin, and fallback metadata.
+- **Goal criteria:** explicit structured criteria outrank labelled goal
+  sections, which outrank bounded derived Goal criteria. Goal criteria stay
+  distinct from per-Task criteria.
+- **UX:** automatic Mission creation says `Boss execution starting
+  automatically...` and does not tell the user to add a Task.
+- **Publication:** none for RC27. RC26 was not mutated, retagged, rebuilt, or
+  republished.
+
+## RC26 Goal Terminal Semantics & Runtime Metadata Correctness — public prerelease
+
+Public identity is immutable: `pi-multi-orchestrator@0.1.0-rc.26`, tag
+`v0.1.0-rc.26`, source `11153f0587634bcba732a5b214c95319c305f9e6`, artifact
+SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a`.
+Do not mutate, retag, rebuild, or republish it.
+
+The following bullets are the original RC26 source-handoff snapshot and are
+not rewritten. Operator publication later made RC26 public.
 
 RC26 is implemented in source and prepared as `0.1.0-rc.26`. It is **not**
 public, tagged, npm-published, or a GitHub Release. RC25 remains the current

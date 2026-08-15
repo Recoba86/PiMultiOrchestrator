@@ -432,10 +432,44 @@ release verification (`20/20` integrity attacks), and isolated public Pi
 `0.84.1` fresh-install/RC24→RC25 upgrade gates all pass. The release remains
 a prerelease and is not a production-readiness claim.
 
-## RC26 — Goal Terminal Semantics & Runtime Metadata Correctness
+## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
 
 Status: IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or
-production-ready. RC25 remains the current public prerelease.
+production-ready. Public RC26 remains immutable.
+
+Deliverables:
+
+- runtime validation of Boss inference JSON against the BossDecision protocol
+  (`normalizeBossDecision`); malformed objects become `BossProtocolError` and
+  enter bounded repair on the pinned Boss rather than TypeScript casts;
+- plan-phase `dispatch`/`replan` with zero tasks is an actionable-plan failure,
+  never a silent no-op and never false `COMPLETED`;
+- autonomous `@orchestrator` / Smart Routing / AUTO_MISSION Missions create
+  their own canonical Tasks; `/missions` Add Task is not required for those
+  entrypoints and remains available for explicit manual Missions;
+- durable Goal-level acceptance criteria: explicit structured values outrank
+  labelled goal sections, which outrank bounded derived criteria;
+- Inspect diagnostics for safety-budget `AWAITING_USER`: last action, protocol
+  and actionable-plan failure counts, task count, stop reason, pinned Boss,
+  and whether fallback occurred;
+- recorded public RC26 dogfood: Mission
+  `mission-5f02627a-f84b-4ecb-95c1-a900dacfa5a8` burned 4 Boss cycles with
+  0 tasks / 0 evidence / acceptance criteria 0 / awaiting-review.
+
+Exit evidence: focused Boss protocol, zero-task, criteria, UX, pin/fallback,
+CANCELLED, and SAFETY_STOP suites plus `npm run check`. Publication, tagging,
+npm dist-tags, and GitHub Release remain operator-owned. RC26 is not mutated.
+
+## RC26 — Goal Terminal Semantics & Runtime Metadata Correctness
+
+
+Status: PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or
+production-ready. Identity: `0.1.0-rc.26`, tag `v0.1.0-rc.26`, source
+`11153f0587634bcba732a5b214c95319c305f9e6`, artifact SHA-256
+`1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a`.
+The original source-handoff described pre-release readiness; that text is not
+rewritten below.
+
 
 Deliverables:
 

@@ -25,13 +25,13 @@ function readRepoManifest(startDir: string): { readonly name: string; readonly v
 
 const manifest = readRepoManifest(dirname(fileURLToPath(import.meta.url)));
 
-describe("RC26 runtime package metadata", () => {
-	it("derives package version from package.json and reports the RC26 development line", () => {
-		assert.equal(manifest.version, "0.1.0-rc.26");
+describe("RC27 runtime package metadata", () => {
+	it("derives package version from package.json and reports the RC27 development line", () => {
+		assert.equal(manifest.version, "0.1.0-rc.27");
 		assert.equal(PACKAGE_INFO.name, manifest.name);
 		assert.equal(PACKAGE_INFO.version, manifest.version);
-		assert.equal(PACKAGE_INFO.developmentMilestone, "RC26 — Goal Terminal Semantics & Runtime Metadata Correctness");
-		assert.match(PACKAGE_INFO.developmentMilestone, /^RC26\b/u);
+		assert.equal(PACKAGE_INFO.developmentMilestone, "RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair");
+		assert.match(PACKAGE_INFO.developmentMilestone, /^RC27\b/u);
 		assert.doesNotMatch(PACKAGE_INFO.developmentMilestone, /RC23/u);
 		assert.doesNotMatch(PACKAGE_INFO.version, /rc\.23/u);
 	});
@@ -51,6 +51,7 @@ describe("RC26 runtime package metadata", () => {
 		assert.notEqual(PACKAGE_INFO.developmentMilestone, "RC23 — Weighted Pool Scheduling and Data-Driven Weight Recommendations");
 		assert.equal(developmentLineForVersion("0.1.0-rc.23"), "stale-development-line:0.1.0-rc.23");
 		assert.doesNotMatch(developmentLineForVersion("0.1.0-rc.23"), /RC23 — Weighted/u);
-		assert.equal(developmentLineForVersion("0.1.0-rc.26"), PACKAGE_INFO.developmentMilestone);
+		assert.equal(developmentLineForVersion("0.1.0-rc.26"), "RC26 — Goal Terminal Semantics & Runtime Metadata Correctness");
+		assert.equal(developmentLineForVersion("0.1.0-rc.27"), PACKAGE_INFO.developmentMilestone);
 	});
 });

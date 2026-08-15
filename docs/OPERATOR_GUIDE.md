@@ -1,9 +1,10 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC25 is the current
-public `next`-tagged prerelease; RC24 is superseded. Source currently also
-prepares RC26 (`0.1.0-rc.26`) as implemented / pre-release ready; that
-candidate is not public until the operator publishes it. None of these are a
+This guide describes the Control Center in Pi `0.84.1`. RC26 is the current
+public `next`-tagged prerelease; RC25 is superseded. Source currently also
+prepares RC27 (`0.1.0-rc.27`) as implemented / pre-release ready; that
+candidate is not public until the operator publishes it. Public RC26 is
+immutable. None of these are a
 stable or production release. Local validation
 uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
@@ -161,9 +162,11 @@ then the assignment is persisted in the Mission's orchestration plan. It does
 not rotate between normal Boss inferences or repair cycles.
 
 Both `@orchestrator <goal>` and Smart Routing → Run as Mission/AUTO_MISSION use
-the same canonical loop. The Boss plans, dispatches existing worker pools,
+the same canonical loop. The Boss plans, automatically creates canonical Tasks,
+dispatches existing worker pools,
 consumes bounded results, invokes M7 Verification, and evaluates the goal and
-acceptance criteria. Rejection or recoverable failure causes bounded
+acceptance criteria. You do not need to add a Task by hand for that automatic
+path. Rejection or recoverable failure causes bounded
 replan/repair/reverification. A safety bound ends in explicit
 `AWAITING_USER`/review evidence rather than a false completion. User or
 AbortSignal cancellation ends as `cancelled` and does not complete, fall back,
@@ -194,10 +197,12 @@ guessed.
 
 `@orchestrator <goal>` is the explicit Mission entry from Pi's normal input
 surface. With a configured Boss profile it enters the same canonical goal loop
-as Smart Routing → Run as Mission/AUTO_MISSION: plan/decompose, dispatch
+as Smart Routing → Run as Mission/AUTO_MISSION: plan/decompose, automatically
+create canonical Tasks, dispatch
 Investigation/Implementation tasks through their existing pools, run M7
 Verification, evaluate acceptance, and repair/replan/reverify while bounded
-budgets remain. Ordinary prompts remain ordinary Pi prompts; the marker must be
+budgets remain. The user does not need to open `/missions` and add a Task for
+that automatic path. Ordinary prompts remain ordinary Pi prompts; the marker must be
 at the beginning (surrounding whitespace is allowed), and an empty marker asks
 for a goal.
 

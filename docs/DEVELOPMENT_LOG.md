@@ -4,7 +4,27 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
+
+- **Date/status:** 2026-08-15; `IMPLEMENTED / PRE-RELEASE READY`. Source is
+  prepared as `0.1.0-rc.27`. Not public, tagged, npm-published, accepted, or
+  production-ready. Public RC26 remains immutable.
+- **Dogfood incident (public RC26):** Mission
+  `mission-5f02627a-f84b-4ecb-95c1-a900dacfa5a8` entered the Boss loop from
+  installed `@orchestrator`, ran 4 cycles, persisted awaiting-review with
+  0 tasks, 0 evidence, 0 acceptance criteria, and stale "add a Task" guidance.
+- **Root causes:** Boss JSON was TypeScript-cast; `dispatch`/`replan` with
+  `tasks=[]` was a silent no-op; Mission criteria were not extracted or derived
+  from the Goal; automatic Mission UX told the user to add a Task.
+- **Fix:** runtime `normalizeBossDecision`; empty actionable plans become
+  protocol failures with pinned-Boss self-repair; Goal criteria bootstrap;
+  automatic Mission message tells the truth; Inspect records why a budget stop
+  happened.
+- **Publication:** none. No `v0.1.0-rc.27` tag, npm dist-tag change, GitHub
+  Release, or live Pi installation change. RC26 was not mutated.
+
 ## RC26 — Release evidence privacy hotfix
+
 
 - **Date/status:** 2026-08-15; `IMPLEMENTED / PRE-RELEASE READY` correction on
   the unpublished `0.1.0-rc.26` line. Not public, tagged, or npm-published.

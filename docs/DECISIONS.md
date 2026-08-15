@@ -429,3 +429,28 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
 - **Boundary:** RC26 prepares `0.1.0-rc.26` in source only. Publication, tags,
   npm dist-tags, and GitHub Releases remain a separate operator-owned step.
   RC25 remains the public prerelease until that step occurs.
+
+## ADR-044 — RC27 validates Boss protocol and bootstraps autonomous Tasks
+
+- **Decision:** Keep the RC25/RC26 canonical goal loop, once-per-Mission pinned
+  Boss, infrastructure-only fallback, M7 quality separation, CANCELLED, and
+  SAFETY_STOP. Validate Boss inference JSON at runtime with
+  `normalizeBossDecision`. Treat plan-phase `dispatch`/`replan` with zero tasks
+  as `BossProtocolError`, not a silent cycle. Feed bounded corrective feedback
+  to the same pinned Boss. Protocol/quality failure must not trigger M4
+  infrastructure fallback.
+- **Decision:** `@orchestrator`, Smart Routing Run as Mission, and AUTO_MISSION
+  must create canonical Tasks themselves. The `/missions` Task editor remains
+  for explicit manual Missions and must not be required to make `@orchestrator`
+  work. Automatic Mission UX must not tell the user to add a Task.
+- **Decision:** Goal-level acceptance criteria are durable. Explicit structured
+  criteria outrank labelled goal sections, which outrank bounded derived
+  criteria. Do not overwrite explicit user criteria. Goal criteria stay
+  distinct from per-Task criteria.
+- **Rationale:** Public RC26 dogfood Mission
+  `mission-5f02627a-f84b-4ecb-95c1-a900dacfa5a8` burned 4 Boss cycles with 0
+  tasks and entered `AWAITING_USER` while asking the user to add a Task.
+- **Boundary:** RC27 prepares `0.1.0-rc.27` in source only. Public RC26
+  (`0.1.0-rc.26`, tag `v0.1.0-rc.26`, source
+  `11153f0587634bcba732a5b214c95319c305f9e6`) is immutable. Publication, tags,
+  npm dist-tags, and GitHub Releases remain a separate operator-owned step.

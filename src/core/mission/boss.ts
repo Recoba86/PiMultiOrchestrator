@@ -3,6 +3,7 @@ import type { BossRouteV1, StableId } from "../config/types.js";
 import { PathSafetyError, ProjectTrustRequiredError } from "../security/index.js";
 import type { ThinkingEffort, ThinkingLevelMap } from "../thinking.js";
 import type { AnalyticsEventV1 } from "../analytics/index.js";
+import { inferAcceptanceCriteriaProvenance, resolveMissionAcceptanceCriteria } from "./acceptance-criteria.js";
 import type { MissionId, MissionRecord, MissionStoreAdapter, MissionStatus, TaskRecord } from "./types.js";
 
 export interface BossRouteCandidate extends BossRouteV1 {
@@ -90,10 +91,14 @@ export interface BossMissionState {
 	readonly version: 1;
 	readonly cycle: number;
 	readonly repairCycles: number;
+	readonly protocolFailures: number;
+	readonly actionablePlanFailures: number;
 	readonly bossAssignment?: BossAssignment;
 	readonly fallbackHistory: readonly { readonly fromRouteId: StableId; readonly toRouteId: StableId; readonly reason: string }[];
 	readonly tokenUsage?: AnalyticsEventV1["tokenUsage"];
 	readonly lastDecision?: { readonly phase: "plan" | "evaluate"; readonly action: BossDecisionAction; readonly summary: string };
+	readonly lastProtocolError?: string;
+	readonly acceptanceCriteriaProvenance?: "explicit" | "labelled-goal" | "derived-from-goal";
 	readonly terminal?: BossTerminalState;
 	readonly terminalReason?: string;
 	readonly terminalProvenance?: string;
@@ -251,7 +256,7 @@ export function selectBossEntry(entries: readonly BossRouteCandidate[], scheduli
 	return selectWeightedRoute(entries.filter((entry) => entry.enabled && (entry.weight ?? 1) > 0), schedulingKey);
 }
 
-const defaultState = (): BossMissionState => ({ version: 1, cycle: 0, repairCycles: 0, fallbackHistory: [] });
+const defaultState = (): BossMissionState => ({ version: 1, cycle: 0, repairCycles: 0, protocolFailures: 0, actionablePlanFailures: 0, fallbackHistory: [] });
 
 const readState = (mission: MissionRecord): BossMissionState => {
 	if (!isRecord(mission.plan) || !isRecord(mission.plan.orchestration)) return defaultState();
@@ -279,9 +284,13 @@ const readState = (mission: MissionRecord): BossMissionState => {
 		version: 1,
 		cycle: typeof value.cycle === "number" && Number.isSafeInteger(value.cycle) && value.cycle >= 0 ? value.cycle : 0,
 		repairCycles: typeof value.repairCycles === "number" && Number.isSafeInteger(value.repairCycles) && value.repairCycles >= 0 ? value.repairCycles : 0,
+		protocolFailures: typeof value.protocolFailures === "number" && Number.isSafeInteger(value.protocolFailures) && value.protocolFailures >= 0 ? value.protocolFailures : 0,
+		actionablePlanFailures: typeof value.actionablePlanFailures === "number" && Number.isSafeInteger(value.actionablePlanFailures) && value.actionablePlanFailures >= 0 ? value.actionablePlanFailures : 0,
 		...(assignment === undefined ? {} : { bossAssignment: assignment }),
 		fallbackHistory: history,
 		...(last === undefined ? {} : { lastDecision: last }),
+		...(typeof value.lastProtocolError === "string" && value.lastProtocolError.trim() ? { lastProtocolError: value.lastProtocolError.trim().slice(0, 240) } : {}),
+		...(value.acceptanceCriteriaProvenance === "explicit" || value.acceptanceCriteriaProvenance === "labelled-goal" || value.acceptanceCriteriaProvenance === "derived-from-goal" ? { acceptanceCriteriaProvenance: value.acceptanceCriteriaProvenance } : {}),
 		...(normalizedTokenUsage(value.tokenUsage) === undefined ? {} : { tokenUsage: normalizedTokenUsage(value.tokenUsage) }),
 		...(value.terminal === "COMPLETED" || value.terminal === "BLOCKED" || value.terminal === "AWAITING_USER" || value.terminal === "CANCELLED" || value.terminal === "SAFETY_STOP" ? { terminal: value.terminal } : {}),
 		...(typeof value.terminalReason === "string" ? { terminalReason: value.terminalReason.slice(0, 240) } : {}),
@@ -297,18 +306,44 @@ const planWithState = (mission: MissionRecord, state: BossMissionState): unknown
 const persistState = (store: MissionStoreAdapter, mission: MissionRecord, state: BossMissionState, metadata: Record<string, unknown>): MissionRecord =>
 	store.updateMission(mission.missionId, { plan: planWithState(mission, state) }, { actor: "boss", expectedRevision: mission.revision, metadata });
 
-const normalizedDecision = (decision: BossDecision): BossDecision => {
-	if (!decision || !["dispatch", "replan", "complete", "blocked", "awaiting_user"].includes(decision.action)) throw new BossProtocolError();
-	const summary = text(decision.summary);
+export function formatBossLoopDiagnostics(mission: MissionRecord, taskCount: number): readonly string[] {
+	const state = readState(mission);
+	if (!state.bossAssignment && !state.lastDecision && !state.terminal && state.protocolFailures === 0 && state.actionablePlanFailures === 0) return [];
+	const pin = state.bossAssignment?.remoteModelId ?? state.bossAssignment?.routeId;
+	const fallback = state.fallbackHistory.length === 0
+		? "none"
+		: state.fallbackHistory.map((item) => `${item.fromRouteId} -> ${item.toRouteId}`).join("; ").slice(0, 240);
+	return [
+		...(pin === undefined ? [] : [`pinned Boss route: ${pin}`]),
+		...(state.lastDecision === undefined ? [] : [`last Boss action: ${state.lastDecision.phase}/${state.lastDecision.action}`]),
+		`protocol failures: ${state.protocolFailures}`,
+		`actionable-plan failures: ${state.actionablePlanFailures}`,
+		`tasks generated: ${taskCount}`,
+		...(state.lastProtocolError === undefined ? [] : [`last protocol error: ${state.lastProtocolError}`]),
+		...(state.acceptanceCriteriaProvenance === undefined ? [] : [`acceptance criteria provenance: ${state.acceptanceCriteriaProvenance}`]),
+		...(state.terminal === undefined ? [] : [`boss terminal: ${state.terminal}`]),
+		...(state.terminalReason === undefined ? [] : [`why execution stopped: ${state.terminalReason}`]),
+		...(pin === undefined && state.fallbackHistory.length === 0 ? [] : [`boss fallback: ${fallback}`]),
+	];
+}
+
+export function normalizeBossDecision(value: unknown, options?: { readonly phase?: "plan" | "evaluate" }): BossDecision {
+	if (!isRecord(value)) throw new BossProtocolError("Boss decision is not an object");
+	if (!["dispatch", "replan", "complete", "blocked", "awaiting_user"].includes(value.action as string)) throw new BossProtocolError("Boss decision action is invalid");
+	const action = value.action as BossDecisionAction;
+	const summary = text(value.summary);
 	if (!summary) throw new BossProtocolError("Boss decision summary is missing");
-	if (!Array.isArray(decision.tasks) || decision.tasks.length > 32) throw new BossProtocolError("Boss task plan exceeds the safety bound");
-	const tasks = decision.tasks.map((task) => {
+	if (!Array.isArray(value.tasks)) throw new BossProtocolError("Boss tasks must be an array");
+	if (value.tasks.length > 32) throw new BossProtocolError("Boss task plan exceeds the safety bound");
+	if (value.acceptanceSatisfied !== undefined && typeof value.acceptanceSatisfied !== "boolean") throw new BossProtocolError("Boss acceptanceSatisfied must be a boolean");
+	if (value.requiredFixes !== undefined && !Array.isArray(value.requiredFixes)) throw new BossProtocolError("Boss requiredFixes must be an array of strings");
+	const tasks = value.tasks.map((task) => {
 		if (!isRecord(task)) throw new BossProtocolError("Boss task plan is invalid");
 		const roleId = text(task.roleId, 128);
 		const objective = text(task.objective, 8_000);
-		const executionClass = task.executionClass as BossTaskSpec["executionClass"];
+		const executionClass = task.executionClass;
 		if (!roleId || !objective || (executionClass !== "investigation" && executionClass !== "implementation" && executionClass !== "verification")) throw new BossProtocolError("Boss task plan is invalid");
-		const poolId = (task.poolId === undefined ? executionClass : task.poolId) as BossTaskSpec["poolId"];
+		const poolId = task.poolId === undefined ? executionClass : task.poolId;
 		if (poolId !== "investigation" && poolId !== "implementation" && poolId !== "verification") throw new BossProtocolError("Boss task pool is invalid");
 		const acceptanceCriteria = task.acceptanceCriteria === undefined ? undefined : Array.isArray(task.acceptanceCriteria) ? task.acceptanceCriteria.flatMap((item) => typeof item === "string" && item.trim() ? [item.trim().slice(0, 2_000)] : []).slice(0, 32) : undefined;
 		if (task.acceptanceCriteria !== undefined && acceptanceCriteria === undefined) throw new BossProtocolError("Boss task acceptance criteria is invalid");
@@ -319,10 +354,22 @@ const normalizedDecision = (decision: BossDecision): BossDecision => {
 			poolId,
 			objective,
 			...(acceptanceCriteria === undefined ? {} : { acceptanceCriteria }),
-		};
+		} satisfies BossTaskSpec;
 	});
-	return { action: decision.action, summary, tasks, ...(decision.acceptanceSatisfied === undefined ? {} : { acceptanceSatisfied: decision.acceptanceSatisfied === true }), ...(decision.requiredFixes === undefined ? {} : { requiredFixes: decision.requiredFixes.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 2_000)).slice(0, 32) }), ...(normalizedTokenUsage(decision.tokenUsage) === undefined ? {} : { tokenUsage: normalizedTokenUsage(decision.tokenUsage) }) };
-};
+	const requiresActionableTasks = action === "dispatch" || (action === "replan" && options?.phase !== "evaluate");
+	if (requiresActionableTasks && tasks.length === 0) {
+		throw new BossProtocolError(action === "dispatch" ? "dispatch requires at least one actionable task" : "replan requires at least one actionable task");
+	}
+	const requiredFixes = Array.isArray(value.requiredFixes) ? value.requiredFixes.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 2_000)).slice(0, 32) : undefined;
+	return {
+		action,
+		summary,
+		tasks,
+		...(value.acceptanceSatisfied === undefined ? {} : { acceptanceSatisfied: value.acceptanceSatisfied === true }),
+		...(requiredFixes === undefined ? {} : { requiredFixes }),
+		...(normalizedTokenUsage(value.tokenUsage) === undefined ? {} : { tokenUsage: normalizedTokenUsage(value.tokenUsage) }),
+	};
+}
 
 const completedAndVerified = (store: MissionStoreAdapter, missionId: string): boolean => {
 	const tasks = store.listTasks(missionId);
@@ -386,6 +433,8 @@ const terminal = (store: MissionStoreAdapter, mission: MissionRecord, state: Bos
 			bossTerminalState: terminalState,
 			bossCycle: cycles,
 			bossRepairCycles: withTerminal.repairCycles,
+			bossProtocolFailures: withTerminal.protocolFailures,
+			bossActionablePlanFailures: withTerminal.actionablePlanFailures,
 			...(options.profileId === undefined ? {} : { bossProfileId: options.profileId }),
 			...(withTerminal.terminalProvenance === undefined ? {} : { bossTerminalProvenance: withTerminal.terminalProvenance }),
 		},
@@ -439,7 +488,7 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 			if (currentAssignment === undefined) return { error: new BossRuntimeError("unconfigured", "Boss assignment is unavailable") };
 			try {
 				return {
-					decision: normalizedDecision(await invokeBoss({
+					decision: normalizeBossDecision(await invokeBoss({
 						mission,
 						assignment: currentAssignment,
 						cycle,
@@ -447,7 +496,7 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 						...(extra.feedback === undefined ? {} : { feedback: extra.feedback }),
 						...(extra.taskOutcomes === undefined ? {} : { taskOutcomes: extra.taskOutcomes }),
 						...(extra.signal === undefined ? {} : { signal: extra.signal }),
-					})),
+					}), { phase }),
 				};
 			} catch (error) {
 				if (isBossCancellationCause(error, extra.signal ?? options.signal) || isBossSafetyStopCause(error)) return { error };
@@ -501,6 +550,34 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 			dimensions: { bossAssigned: true, ...(options.profileId === undefined ? {} : { bossProfileId: options.profileId }) },
 		});
 	}
+	if (mission.acceptanceCriteria.length === 0) {
+		const resolved = resolveMissionAcceptanceCriteria(mission.goal);
+		if (resolved.criteria.length > 0) {
+			mission = options.store.updateMission(mission.missionId, { acceptanceCriteria: resolved.criteria }, { actor: "boss", expectedRevision: mission.revision, metadata: { kind: "boss-acceptance-criteria", provenance: resolved.provenance } });
+			state = { ...state, acceptanceCriteriaProvenance: resolved.provenance };
+			mission = persistState(options.store, mission, state, { kind: "boss-acceptance-criteria", provenance: resolved.provenance });
+		}
+	} else if (state.acceptanceCriteriaProvenance === undefined) {
+		state = { ...state, acceptanceCriteriaProvenance: inferAcceptanceCriteriaProvenance(mission.goal, mission.acceptanceCriteria) };
+		mission = persistState(options.store, mission, state, { kind: "boss-acceptance-criteria", provenance: state.acceptanceCriteriaProvenance });
+	}
+	const budgetExhaustedReason = (cycles: number, detail: string): string => {
+		const tasks = options.store.listTasks(missionId).length;
+		const pin = state.bossAssignment?.remoteModelId ?? state.bossAssignment?.routeId ?? "none";
+		const last = state.lastDecision ? `${state.lastDecision.phase}/${state.lastDecision.action}` : "none";
+		return `${detail}; cycles=${cycles}; tasks=${tasks}; protocolFailures=${state.protocolFailures}; actionablePlanFailures=${state.actionablePlanFailures}; lastAction=${last}; pin=${String(pin).slice(0, 64)}; fallback=${state.fallbackHistory.length === 0 ? "none" : "yes"}`.slice(0, 240);
+	};
+	const recordProtocolFailure = (error: unknown): void => {
+		const summary = error instanceof Error ? error.message.slice(0, 240) : "Boss planning failed";
+		const actionable = error instanceof BossProtocolError && /requires at least one actionable task/u.test(error.message);
+		state = {
+			...state,
+			protocolFailures: state.protocolFailures + 1,
+			...(actionable ? { actionablePlanFailures: state.actionablePlanFailures + 1 } : {}),
+			lastProtocolError: summary,
+		};
+		mission = persistState(options.store, mission, state, { kind: "boss-protocol-failure", summary, actionable });
+	};
 	let feedback: unknown;
 	for (let cycle = state.cycle; cycle < maxCycles; cycle += 1) {
 		if (options.signal?.aborted) return stopCancelled(mission, "Mission cancelled before the next Boss cycle", cycle);
@@ -511,8 +588,9 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 			if (isBossCancellationCause(planned.error, options.signal)) return stopCancelled(mission, "Mission cancelled during Boss planning", cycle);
 			if (isBossSafetyStopCause(planned.error)) return stopSafety(mission, planned.error, cycle);
 			if (planned.error instanceof BossRuntimeError && planned.error.kind === "infrastructure") return terminal(options.store, mission, state, "BLOCKED", "Boss infrastructure is unavailable and no configured fallback remains", cycle, options, clock);
-			feedback = { kind: "boss-plan-failure", summary: planned.error instanceof Error ? planned.error.message.slice(0, 240) : "Boss planning failed" };
-			if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", "Boss planning did not produce a valid decision within the safety bound", cycle + 1, options, clock);
+			recordProtocolFailure(planned.error);
+			feedback = { kind: "boss-plan-failure", summary: planned.error instanceof Error ? planned.error.message.slice(0, 240) : "Boss planning failed", protocolFailures: state.protocolFailures, actionablePlanFailures: state.actionablePlanFailures };
+			if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(cycle + 1, "Boss planning did not produce a valid actionable plan"), cycle + 1, options, clock);
 			continue;
 		}
 		const plan = planned.decision;
@@ -578,7 +656,8 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 			if (isBossCancellationCause(evaluated.error, options.signal)) return stopCancelled(mission, "Mission cancelled during Boss evaluation", cycle + 1);
 			if (isBossSafetyStopCause(evaluated.error)) return stopSafety(mission, evaluated.error, cycle + 1);
 			if (evaluated.error instanceof BossRuntimeError && evaluated.error.kind === "infrastructure") return terminal(options.store, mission, state, "BLOCKED", "Boss infrastructure is unavailable during evaluation and no configured fallback remains", cycle + 1, options, clock);
-			if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", "Boss evaluation did not complete within the safety bound", cycle + 1, options, clock);
+			recordProtocolFailure(evaluated.error);
+			if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(cycle + 1, "Boss evaluation did not complete within the safety bound"), cycle + 1, options, clock);
 			continue;
 		}
 		const evaluation = evaluated.decision;
@@ -588,7 +667,7 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 		if (evaluation.action === "awaiting_user") return terminal(options.store, mission, state, "AWAITING_USER", evaluation.summary, cycle + 1, options, clock);
 		if (evaluation.action === "complete" && evaluation.acceptanceSatisfied === true && completedAndVerified(options.store, missionId)) return terminal(options.store, mission, state, "COMPLETED", evaluation.summary, cycle + 1, options, clock);
 		if (evaluation.action === "complete") feedback = { kind: "boss-completion-rejected", summary: "Evaluation did not meet the durable task and M7 gates" };
-		if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", "Mission safety budget exhausted before the goal and acceptance criteria were proven", cycle + 1, options, clock);
+		if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(cycle + 1, "Mission safety budget exhausted before the goal and acceptance criteria were proven"), cycle + 1, options, clock);
 	}
-	return terminal(options.store, mission, state, "AWAITING_USER", "Mission loop ended without a terminal acceptance decision", maxCycles, options, clock);
+	return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(maxCycles, "Mission loop ended without a terminal acceptance decision"), maxCycles, options, clock);
 }

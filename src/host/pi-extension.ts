@@ -77,8 +77,10 @@ import { executeMissionTask } from "../core/mission/index.js";
 import {
 	BossInfrastructureError,
 	BossProtocolError,
+	formatBossLoopDiagnostics,
 	isBossCancellationCause,
 	isBossSafetyStopCause,
+	normalizeBossDecision,
 	runMissionGoalLoop,
 	type BossDecision,
 	type BossInferenceRequest,
@@ -848,7 +850,10 @@ const BOSS_SYSTEM_PROMPT = [
 	"Recoverable worker failures, rejected verification, weak evidence, and recoverable provider failures require a repair or replan when one is possible.",
 	"Return exactly one JSON object and no markdown.",
 	"Schema: {action:'dispatch'|'replan'|'complete'|'blocked'|'awaiting_user',summary:string,acceptanceSatisfied?:boolean,requiredFixes?:string[],tasks:[{taskId?:string,roleId:string,executionClass:'investigation'|'implementation'|'verification',poolId?:'investigation'|'implementation'|'verification',objective:string,acceptanceCriteria?:string[]}]}",
+	"dispatch and plan-phase replan MUST include at least one concrete task with roleId, executionClass, objective, and acceptanceCriteria. Never return dispatch or plan-phase replan with an empty tasks array.",
+	"complete is legal only after durable task execution and M7 verification prove the Goal and Mission acceptance criteria. Do not complete to hide an empty plan.",
 	"Use blocked only for a genuine unresolved external dependency. Use awaiting_user only when a required decision or permission cannot safely be inferred.",
+	"During evaluate, replan may omit tasks to request another planning cycle; the next plan must then include replacement tasks.",
 ].join("\n");
 
 const bossInferencePrompt = (request: BossInferenceRequest): string => {
@@ -869,7 +874,7 @@ const bossInferencePrompt = (request: BossInferenceRequest): string => {
 	].join("\n");
 };
 
-const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>, signal?: AbortSignal): BossDecision => {
+const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>, signal?: AbortSignal, phase?: BossInferenceRequest["phase"]): BossDecision => {
 	if (signal?.aborted || response.stopReason === "aborted") {
 		const error = new Error("Boss inference was cancelled");
 		error.name = "AbortError";
@@ -893,16 +898,20 @@ const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerR
 	for (const candidate of candidates) {
 		try {
 			const parsed: unknown = JSON.parse(candidate);
-			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return withUsage(parsed as BossDecision);
-		} catch { /* try the bounded object slice below */ }
+			return withUsage(normalizeBossDecision(parsed, phase === undefined ? {} : { phase }));
+		} catch (error) {
+			if (error instanceof BossProtocolError) throw error;
+		}
 	}
 	const start = raw.indexOf("{");
 	const end = raw.lastIndexOf("}");
 	if (start >= 0 && end > start) {
 		try {
 			const parsed: unknown = JSON.parse(raw.slice(start, end + 1));
-			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return withUsage(parsed as BossDecision);
-		} catch { /* protocol error below */ }
+			return withUsage(normalizeBossDecision(parsed, phase === undefined ? {} : { phase }));
+		} catch (error) {
+			if (error instanceof BossProtocolError) throw error;
+		}
 	}
 	throw new BossProtocolError("Boss provider returned malformed JSON");
 };
@@ -923,7 +932,7 @@ const invokeBossInference = async (manager: PiManagerContract, providerRegistry:
 			...(request.assignment.thinkingEffort === "auto" ? {} : { reasoning: request.assignment.thinkingEffort }),
 			...(request.signal === undefined ? {} : { signal: request.signal }),
 		});
-		return parseBossInferenceResponse(response, request.signal);
+		return parseBossInferenceResponse(response, request.signal, request.phase);
 	} catch (error) {
 		if (error instanceof BossProtocolError) throw error;
 		if (isBossCancellationCause(error, request.signal) || request.signal?.aborted) {
@@ -2667,11 +2676,11 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const missionStatusLabel = (mission: MissionRecord): string =>
 		`${mission.missionId} [${mission.status}] rev ${mission.revision} — ${mission.goal.replace(/[\r\n\u2028\u2029]+/gu, " ")}`;
 
-	const missionCreatedMessage = (mission: MissionRecord): string => [
+	const missionCreatedMessage = (mission: MissionRecord, execution: "automatic" | "manual" = "manual"): string => [
 		"Mission created",
 		`Goal: ${mission.goal.replace(/[\r\n\u2028\u2029]+/gu, " ")}`,
 		`Status: ${mission.status}`,
-		`Next: open /missions ${mission.missionId} to add a Task`,
+		execution === "automatic" ? "Boss execution starting automatically..." : `Next: open /missions ${mission.missionId} to add a Task`,
 		`Mission ID: ${mission.missionId}`,
 	].join("\n");
 
@@ -3230,6 +3239,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			`goal: ${mission.goal}`,
 			`repository: ${mission.repository.cwd ?? "unknown"}${mission.repository.revision ? ` @ ${mission.repository.revision}` : ""}`,
 			`acceptance criteria: ${mission.acceptanceCriteria.length}`,
+			...formatBossLoopDiagnostics(mission, store.listTasks(mission.missionId).length),
 			`validated findings: ${mission.validatedFindings.length}`,
 			`completed work: ${mission.completedWork.length}`,
 			`next steps: ${mission.nextSteps.length}`,
@@ -3327,7 +3337,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		try {
 			const mission = createCanonicalMission(options.missionStore, goal, { repositoryCwd: ctx.cwd });
 			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
-			ctx.ui.notify(missionCreatedMessage(mission), "info");
+			ctx.ui.notify(missionCreatedMessage(mission, "automatic"), "info");
 			return configStore ? await runCanonicalMission(ctx, mission) : mission;
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
@@ -3610,7 +3620,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		try {
 			const mission = createCanonicalMission(store, invocation.goal, { repositoryCwd: ctx.cwd });
 			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
-			ctx.ui.notify(missionCreatedMessage(mission), "info");
+			ctx.ui.notify(missionCreatedMessage(mission, "automatic"), "info");
 			if (configStore) await runCanonicalMission(ctx, mission);
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
