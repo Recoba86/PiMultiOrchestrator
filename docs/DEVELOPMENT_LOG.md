@@ -4,12 +4,33 @@ Last updated: 2026-08-15
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
-## RC21 — Model Router dogfood repair candidate
+## RC21 — Model Router dogfood repair publication
 
-- **Date/status:** 2026-08-15; implementation complete locally, release/publication gates pending.
-- **Fixes:** host normalization now preserves nested catalog reasoning, thinking-level, vision, context, and max-output metadata; Pool effort choices no longer infer support from an unverified configured map; static external Pi providers use transient Pi auth for a bounded upstream `/v1/models` refresh without replacing or shrinking the provider; populated Model Router rows hide internal route IDs while Inspect retains them.
-- **Tests:** focused RC21 manager, Pool, and Pi host regressions pass, including added/removed/changed/LKG refresh, auth-header binding, true/false/unknown thinking semantics, nested metadata, route-ID privacy, no-change feedback, and static-provider non-mutation. Full `npm run check`, release verification, artifact, registry, GitHub, and public-install evidence is pending.
-- **Boundary:** no live Pi configuration, provider catalog, credential store, or source outside this repository was modified.
+- **Date/status:** 2026-08-15; `PUBLISHED / PRERELEASE` on npm and GitHub.
+- **Identity:** package `pi-multi-orchestrator@0.1.0-rc.21`, source commit
+  `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tree
+  `9baab4eb7d51c4598b8ea3aa4d5b12e9e2479512`, tag `v0.1.0-rc.21`, artifact
+  SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266`,
+  and bundle-root SHA-256
+  `7e2fd35553fd46f232d5f8e286ef272c1c8a2d018037c0b6b3763e4fab89c017`.
+- **Fixes:** host normalization now preserves nested catalog reasoning,
+  thinking-level, vision, context, and max-output metadata; Pool effort choices
+  no longer infer support from an unverified configured map; static external Pi
+  providers use transient Pi auth for a bounded upstream `/v1/models` refresh
+  without replacing or shrinking the provider; populated Model Router rows hide
+  internal route IDs while Inspect retains them.
+- **Release evidence:** clean `npm run check` passed `246/246` tests across 13
+  suites with zero failed/cancelled/skipped/todo; typecheck/build and `20/20`
+  integrity attacks passed. npm publication used `--tag next --access public
+  --ignore-scripts`; registry version/tag checks passed, `latest` remained
+  `0.1.0-rc.17`, and the downloaded registry tarball was byte-identical to the
+  frozen artifact. GitHub release `v0.1.0-rc.21` is an explicit prerelease.
+- **Public dogfood:** a disposable npm install loaded RC21 in Pi `0.84.2`,
+  registered the Model Router commands, and completed offline `/9router-status`
+  with no provider call.
+- **Boundary:** no live Pi configuration, provider catalog, credential store,
+  or model request was modified/performed. Publication used the already-frozen
+  artifact; no rebuild or repack occurred after freeze.
 
 ## RC20 — Thinking-aware Pool routing and live catalog refresh
 

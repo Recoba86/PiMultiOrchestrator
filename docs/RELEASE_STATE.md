@@ -12,17 +12,17 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.17` — npm `next`; RC21 publication is pending |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.21` — npm `next`; `latest` remains `0.1.0-rc.17` |
 | Product version | NONE assigned |
 | Development manifest version | `0.1.0-rc.21` — RC21 release candidate |
 | RC20 release | `0.1.0-rc.20` — Thinking-aware Pool routing and live catalog refresh; published prerelease |
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC21 implementation and focused gates pass; full release, registry, GitHub, and public Pi dogfood pending; not stable/production-ready |
-| Release tag | `v0.1.0-rc.20` → `8bcb4a61796623ea09bd1ed09c411656bd657138` |
-| Release commit | `8bcb4a61796623ea09bd1ed09c411656bd657138` |
-| GitHub release | [v0.1.0-rc.20](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.20) — prerelease |
+| Local technical release readiness | RC21 published and publicly dogfooded as a prerelease; not stable/production-ready |
+| Release tag | `v0.1.0-rc.21` → `68c0c0f82c5c82d7944512ea64aadd05a2e4569e` |
+| Release commit | `68c0c0f82c5c82d7944512ea64aadd05a2e4569e` |
+| GitHub release | [v0.1.0-rc.21](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.21) — prerelease |
 | Installable production release | NONE; RC20 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
@@ -30,14 +30,34 @@ This file records releasable product state. It does not promote development prog
 
 Milestone acceptance does not itself create a product release.
 
-## RC21 Model Router dogfood repair candidate
+## RC21 Model Router dogfood repair publication
 
-RC21 is the current release candidate. It repairs nested catalog metadata
+RC21 is the current public prerelease. It repairs nested catalog metadata
 normalization, conservative true/false/unknown thinking semantics, static Pi
 provider upstream refresh through Pi's existing auth bridge, LKG preservation,
-picker feedback/order, and normal-row route-ID privacy. The exact Git commit,
-immutable artifact SHA-256, npm `next`/`latest` verification, GitHub prerelease,
-and public Pi dogfood are recorded only after their respective gates pass.
+picker feedback/order, and normal-row route-ID privacy.
+
+- **Package:** `pi-multi-orchestrator@0.1.0-rc.21`, published with
+  `--tag next --access public --ignore-scripts`.
+- **Source binding:** commit
+  `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tree
+  `9baab4eb7d51c4598b8ea3aa4d5b12e9e2479512`, tag `v0.1.0-rc.21`.
+- **Artifact:** SHA-256
+  `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266`;
+  independent bundle-root SHA-256
+  `7e2fd35553fd46f232d5f8e286ef272c1c8a2d018037c0b6b3763e4fab89c017`.
+- **Registry:** npm reports version `0.1.0-rc.21`, `next` points to RC21,
+  `latest` remains `0.1.0-rc.17`, and the downloaded registry tarball matches
+  the frozen artifact byte-for-byte.
+- **GitHub:** [v0.1.0-rc.21](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.21)
+  is an explicit prerelease carrying the artifact and checksum.
+- **Verification:** `246/246` tests across 13 suites, zero
+  failed/cancelled/skipped/todo, typecheck/build, `20/20` integrity attacks,
+  and disposable public npm/Pi `0.84.2` install plus offline Model Router
+  command/status smoke all passed.
+- **Boundary:** no live Pi configuration, provider account, credential, or
+  model request was modified/performed. The publication used the frozen
+  artifact; no rebuild or repack occurred after freeze.
 
 ## RC20 public prerelease publication
 

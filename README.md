@@ -8,7 +8,9 @@ The current source/release line is RC21 (`0.1.0-rc.21`), built on the RC20
 provider-adoption boundary. RC21 repairs nested thinking metadata propagation,
 refreshes static external Pi 9Router catalogs from upstream with Pi auth, and
 keeps route IDs out of normal picker rows while retaining diagnostics. RC21 is
-the active prerelease candidate, not a stable or production release.
+published as a public prerelease on npm with `next`; `latest` remains
+`0.1.0-rc.17`. The immutable artifact SHA-256 is
+`67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266`.
 
 M0 through M10 are accepted. M11 remains implemented but not accepted. M12.1 adds explicit `@orchestrator <goal>` Mission entry from Pi's native input event, reusing the canonical MissionStore creation path, and clarifies Direct Workers versus canonical Mission/M7 verification. M12.2 adds bounded Hybrid Smart Routing: deterministic bilingual local signals, optional AI Triage for ambiguous prompts, and a user choice between a canonical Mission and the original normal prompt. M12.3 adds privacy-safe abstract Routing Memory, explicit Always rules, repeated-choice learning, conservative matching, AUTO_MISSION, NORMAL suppression, conflict/complexity safety, and Learned Behaviors management. RC13, RC15, and RC16 are historical; RC17 is the successor candidate after the final RC16 live M7 reviewer handoff blocked before structured submission. Routed workers consume packet-derived context, but worker and reviewer evidence are not automatically canonical truth.
 
@@ -43,7 +45,7 @@ Evidence and proof-of-concept boundaries are recorded in `docs/ARCHITECTURE.md`.
 
 Requires Node.js `>=22.19.0` and npm.
 
-## RC21 prerelease install
+## RC21 public prerelease install
 
 The `.tgz` is the immutable release artifact. Pi `0.84.1` does not unpack a
 local tarball passed directly to `pi install`; verify its checksum, extract it
@@ -66,6 +68,11 @@ open `/orchestrator` → **Models & 9Router** → **Refresh Models**. Enable a P
 route before adding it to a Pool; each Pool entry stores its own Thinking Effort
 (`Auto`, `Low`, `Medium`, `High`, `XHigh`, or `Max` when supported). Auto omits
 the PMO override and defers to Pi/provider defaults; it is not Off.
+
+The published artifact is bound to commit
+`68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, and the
+independent release-bundle root SHA-256
+`7e2fd35553fd46f232d5f8e286ef272c1c8a2d018037c0b6b3763e4fab89c017`.
 
 For the accepted RC17 publication, use the exact npm pin:
 
@@ -114,7 +121,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC21 is a prerelease candidate, not a stable or production release. See `docs/ROADMAP.md` for the release state.
+M1 through M12 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC21 is a public prerelease, not a stable or production release. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 
