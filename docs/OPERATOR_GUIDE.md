@@ -1,11 +1,12 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC30 is the current
-public `next`-tagged prerelease; RC28 remains a prior public immutable
-prerelease. RC29 (`0.1.0-rc.29`) remains a frozen unpublished verified
-candidate after a live Mission COMPLETED and must not be modified. None of
-these are an accepted milestone or a stable/production release. Local
-validation uses isolated roots and never installs into
+This guide describes the Control Center in Pi `0.84.1` / `0.84.2`. Local
+development identity is RC31 (`0.1.0-rc.31`, unpublished). RC30 is the
+current public `next`-tagged prerelease; RC28 remains a prior public
+immutable prerelease. RC29 (`0.1.0-rc.29`) remains a frozen unpublished
+verified candidate after a live Mission COMPLETED and must not be modified.
+None of these are an accepted milestone or a stable/production release.
+Local validation uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
 
 ## Open the Control Center
@@ -173,7 +174,10 @@ the same canonical loop. The Boss plans, automatically creates canonical Tasks,
 dispatches existing worker pools,
 consumes bounded results, invokes M7 Verification, and evaluates the goal and
 acceptance criteria. You do not need to add a Task by hand for that automatic
-path. Rejection or recoverable failure causes bounded
+path. While a Mission runs, Pi's live widget shows operational progress
+(Boss, Tasks, workers, tools, Evidence, M7, repair, terminal) from canonical
+events. Heartbeats keep a long provider call visible without spamming the
+log. Hidden model reasoning and secrets are never shown. Rejection or recoverable failure causes bounded
 replan/repair/reverification. A safety bound ends in explicit
 `AWAITING_USER`/review evidence rather than a false completion. User or
 AbortSignal cancellation ends as `cancelled` and does not complete, fall back,

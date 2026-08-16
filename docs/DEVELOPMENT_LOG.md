@@ -4,6 +4,24 @@ Last updated: 2026-08-17
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC31 — Live Mission Progress and M7 Repair Convergence (LOCAL UNPUBLISHED)
+
+- **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.
+  Development identity is `0.1.0-rc.31`. Not public, tagged, npm-published,
+  or a GitHub Release. Public RC30 remains immutable.
+- **ADR-051:** canonical Mission events → `projectMissionProgress` → Pi
+  `ctx.ui.setWidget` / `setStatus` / `setWorkingMessage`. Heartbeats update
+  the live surface. Resume reconstructs in-flight Missions only.
+- **ADR-052:** normalized M7 criterion matching, investigation no-mod
+  contract, synthesized `requiredFixes`, Boss complete precondition, repair
+  packets with rejection context, identical-fingerprint anti-repeat.
+- **Incident reconstructed:** `mission-ecdeb469-146f-4cc5-8726-3ebddf8789df`
+  (public RC30). Workers reported `0.1.0-rc.30`; M7 blocked because
+  reviewers used slug criterion names while marking criteria satisfied;
+  `requiredFixes` were empty; Boss requested `complete` while quality was
+  blocked; the same Task was re-dispatched four times.
+- **Publication boundary:** do not publish, tag, or GitHub-release RC31.
+
 ## RC30 — Public prerelease publication & release closure
 
 - **Date/status:** 2026-08-17; `PUBLIC PRERELEASE / RELEASE CLOSURE PASS`.

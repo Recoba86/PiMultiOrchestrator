@@ -37,6 +37,7 @@ const DEVELOPMENT_LINE_BY_VERSION: Readonly<Record<string, string>> = Object.fre
 	"0.1.0-rc.28": "RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics",
 	"0.1.0-rc.29": "RC29 — Mission Runtime Convergence",
 	"0.1.0-rc.30": "RC30 — Autonomous Boss-Led Mutation Recovery",
+	"0.1.0-rc.31": "RC31 — Live Mission Progress and M7 Repair Convergence",
 });
 
 export function developmentLineForVersion(version: string): string {

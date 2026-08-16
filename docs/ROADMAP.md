@@ -6,14 +6,18 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 ## Current planning boundary
 
-RC30 is the current public prerelease and adds autonomous Boss-led mutation
-recovery for local observable Implementation worktree edits when
-`submit_agent_result` is missing. RC29 (`0.1.0-rc.29`) remains a frozen
-unpublished verified candidate after live Mission
+RC31 (`0.1.0-rc.31`) is the current LOCAL / UNPUBLISHED / DOGFOOD
+development identity: Pi-native live Mission progress (ADR-051) and
+feedback-driven M7 repair convergence (ADR-052). It is not tagged,
+npm-published, or a GitHub Release. RC30 remains the current public
+prerelease and adds autonomous Boss-led mutation recovery for local
+observable Implementation worktree edits when `submit_agent_result` is
+missing. RC29 (`0.1.0-rc.29`) remains a frozen unpublished verified
+candidate after live Mission
 `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED and was not
-published. RC28 remains a prior public immutable prerelease. Identity:
-`0.1.0-rc.30`, source `ef344ad12abeace41e9ba4f88f552b6f67306107`, tag
-`v0.1.0-rc.30`, artifact SHA-256
+published. RC28 remains a prior public immutable prerelease. Public
+identity: `0.1.0-rc.30`, source `ef344ad12abeace41e9ba4f88f552b6f67306107`,
+tag `v0.1.0-rc.30`, artifact SHA-256
 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`.
 M10 remains the latest accepted development milestone; M11 remains
 implemented but not accepted. Live `routing.fallback.enabled` is true.
@@ -501,6 +505,26 @@ detached unpublished candidate SHA-256
 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`
 (source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`). Publication remains
 operator-owned. RC29 is an unpublished candidate.
+
+## RC31 — Live Mission Progress and M7 Repair Convergence
+
+Status: LOCAL / UNPUBLISHED / DOGFOOD; not accepted, stable, public, or
+production-ready. Identity: `0.1.0-rc.31`. Public RC30 remains immutable.
+
+Deliverables:
+
+- Pi-native live Mission progress from canonical events via
+  `ctx.ui.setWidget` (ADR-051), including heartbeat, resume reconstruction,
+  safe tool/event projection, and a terminal summary;
+- feedback-driven M7 repair: normalized criterion matching, investigation
+  no-mod contract, synthesized requiredFixes, Boss complete precondition,
+  repair packets with rejection context, identical-fingerprint anti-repeat
+  (ADR-052).
+
+Exit evidence: `test/mission-progress.test.ts`, `test/rc31-convergence.test.ts`,
+ADR-051, ADR-052, RC31-01/02, `npm test` / `npm run check`, local unpublished
+candidate, and live dogfood. Publication, tagging, and GitHub Release are
+not authorized.
 
 ## RC30 — Autonomous Boss-Led Mutation Recovery
 

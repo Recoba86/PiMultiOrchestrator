@@ -13,6 +13,8 @@ Implementation requires an explicit mission and the state/acceptance gates in
   authorized milestone.
 - `PROMOTED TO ROADMAP` — an authorized future direction is already named in
   the roadmap; this entry still does not authorize implementation by itself.
+- `PARTIALLY PROMOTED` — a bounded slice shipped in an authorized milestone;
+  remaining scope stays unauthorized.
 - `DEFERRED` — explicitly kept out of the current release/milestone scope.
 - `REJECTED` — explicitly declined; retain the reason when known.
 
@@ -42,13 +44,12 @@ automatic rollback of unknown mutations.
 
 ## Mission Cockpit / live Mission observability
 
-**Status:** `UNDER DISCUSSION`
+**Status:** `PARTIALLY PROMOTED`
 
-A richer live Mission view for the current stage, Boss, workers, elapsed time,
-authoritative tokens/cost when available, verification state, repair/replan
-cycle, and route/provider activity. Existing observability requirements and
-the RC25 Mission analytics boundary support the idea; the backlog entry does
-not claim that a full cockpit is shipped.
+RC31 / ADR-051 shipped Pi-native live Mission progress from canonical events
+via `ctx.ui.setWidget`. That is operational execution state in the same Pi
+session, not a full cockpit. Remaining cockpit ideas (dedicated Control
+Center Mission pane, richer token/cost live charts) stay unauthorized.
 
 Evidence: [PRODUCT_SPEC.md](PRODUCT_SPEC.md) `OBS-001`,
 [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) `OBS-01`, and the existing

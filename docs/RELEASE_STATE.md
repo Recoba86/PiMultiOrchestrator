@@ -13,8 +13,9 @@ This file records releasable product state. It does not promote development prog
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.30` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.30` public prerelease |
-| Development manifest version | `0.1.0-rc.30` — RC30 Autonomous Boss-Led Mutation Recovery; public prerelease; RC29 frozen unpublished candidate remains unmodified |
+| Product version | `0.1.0-rc.30` public prerelease (immutable) |
+| Development manifest version | `0.1.0-rc.31` — RC31 Live Mission Progress and M7 Repair Convergence; LOCAL / UNPUBLISHED / DOGFOOD; public RC30 remains unmodified |
+| RC31 development line | ADR-051 Pi-native live Mission progress; ADR-052 feedback-driven M7 repair convergence; `0.1.0-rc.31`; not tagged, npm-published, or a GitHub Release |
 | RC30 development line | ADR-050 autonomous mutation recovery; `0.1.0-rc.30`; public prerelease SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`; source `ef344ad12abeace41e9ba4f88f552b6f67306107`; tag `v0.1.0-rc.30`; live implementation Mission `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED |
 | RC29 development line | ADR-046/048/049 plus live Mission COMPLETED; `0.1.0-rc.29`; unpublished candidate SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not tagged or npm-published |
 | RC28 release line | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
@@ -27,7 +28,7 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC30 public prerelease on `0.1.0-rc.30` after recovery dogfood and one live implementation COMPLETED; RC29 unpublished verified candidate remains frozen and was not published; RC28 remains a prior public immutable prerelease |
+| Local technical release readiness | RC31 local unpublished dogfood on `0.1.0-rc.31`; RC30 remains the public prerelease; RC29 unpublished verified candidate remains frozen and was not published; RC28 remains a prior public immutable prerelease |
 | Release tag | `v0.1.0-rc.30` → `ef344ad12abeace41e9ba4f88f552b6f67306107` |
 | Release commit | `ef344ad12abeace41e9ba4f88f552b6f67306107` |
 | Release artifact | `pi-multi-orchestrator-0.1.0-rc.30.tgz`; SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc` |
@@ -38,6 +39,13 @@ This file records releasable product state. It does not promote development prog
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC31 Live Mission Progress and M7 Repair Convergence (LOCAL UNPUBLISHED)
+
+RC31 is the current local unpublished development identity at
+`0.1.0-rc.31`. It is **not** tagged, npm-published, a GitHub Release, or
+accepted. Public RC30 remains the current public prerelease and is
+immutable. npm `next` and `latest` are unchanged by this line.
 
 ## RC30 Autonomous Boss-led mutation recovery (PUBLIC PRERELEASE)
 

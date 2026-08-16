@@ -252,6 +252,9 @@ export interface WorkerProgressEvent {
 	readonly routeId?: StableId;
 	readonly remoteModelId?: string;
 	readonly toolName?: string;
+	readonly target?: string;
+	readonly toolStatus?: "ok" | "blocked" | "fail";
+	readonly safetyBlockCode?: string;
 	readonly failureAction?: FailureAction;
 	readonly failure?: FailureClassification;
 }

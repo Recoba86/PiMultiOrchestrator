@@ -60,9 +60,10 @@ import {
 	 type ResultProtocolSpec,
 	 type SubagentExecutionRequest,
 	 type SubagentExecutor,
-	 type SubagentRunResult,
-	 type RouteAttemptAdapter,
+	type SubagentRunResult,
+	type RouteAttemptAdapter,
 	type ResolvedWorkerRoute,
+	type WorkerProgressEvent,
 } from "../core/workers/index.js";
 import type { FailureClassification, RoutingRequest } from "../core/routing/index.js";
 import type {
@@ -71,9 +72,17 @@ import type {
 	MissionRecord,
 	MissionStatus,
 	MissionStoreAdapter,
+	TaskRecord,
 } from "../core/mission/types.js";
 import { createCanonicalMission, createMissionStore } from "../core/mission/index.js";
 import { executeMissionTask } from "../core/mission/index.js";
+import {
+	applyMissionProgressToUi,
+	createMissionProgressSession,
+	type LiveProgressOverlay,
+	type LiveToolProjection,
+	type ProgressUi,
+} from "../core/mission/progress.js";
 import {
 	BossInfrastructureError,
 	BossProtocolError,
@@ -97,7 +106,7 @@ import {
 import { BOSS_SYSTEM_PROMPT, bossInferencePrompt } from "../core/mission/boss-prompt.js";
 import { formatBossProfileOverview } from "../core/mission/boss-profile-view.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
-import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
+import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationResultV1, type VerificationRunRecord } from "../core/quality/index.js";
 import {
 	RECOVERY_BOSS_PROMPT,
 	RECOVERY_DECISION_TOOL_NAME,
@@ -294,6 +303,7 @@ export interface PiHostOptions {
 	readonly triageClient?: TriageClient;
 	/** Local-only project trust state; never part of portable ConfigStore data. */
 	readonly trustStore?: TrustStore;
+	readonly workerProgress?: { current?: (event: import("../core/workers/types.js").WorkerProgressEvent) => void };
 }
 
 export interface PiProviderRegistry {
@@ -331,6 +341,7 @@ export interface PiHost {
 	reconcile(): Promise<ReconcileResult>;
 	setProviderRegistry(registry: PiProviderRegistry): void;
 	registerCommands(): void;
+	resumeLiveProgress(ctx: ExtensionContext): void;
 	dispose(): void;
 }
 
@@ -965,6 +976,7 @@ async function createHostSubagentExecutor(
 	resultProtocolFactory?: (request: SubagentExecutionRequest) => ResultProtocolSpec,
 	trustStore?: TrustStore,
 	providerRegistry?: () => PiProviderRegistry | undefined,
+	onProgress?: (event: import("../core/workers/types.js").WorkerProgressEvent) => void,
 ): Promise<SubagentExecutor> {
 	const loaded = await configStore.load();
 	const initialPolicy = loaded.snapshot?.config.routing ?? createDefaultConfig().routing;
@@ -1008,7 +1020,7 @@ async function createHostSubagentExecutor(
 			recordFailure: (routeId: StableId, failure: FailureClassification, at: Date) => healthStore.recordFailure(routeId, failure, { now: at }),
 		} : {}),
 	};
-	return createSubagentExecutor({ routeAdapter, ...(trustStore === undefined ? {} : { safety: { trustStore } }), ...(resultProtocolFactory === undefined ? {} : { resultProtocolFactory }) });
+	return createSubagentExecutor({ routeAdapter, ...(trustStore === undefined ? {} : { safety: { trustStore } }), ...(resultProtocolFactory === undefined ? {} : { resultProtocolFactory }), ...(onProgress === undefined ? {} : { onProgress }) });
 }
 
 /**
@@ -1080,6 +1092,101 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const analytics = analyticsStore ? new AnalyticsQueryService(analyticsStore) : undefined;
 	const recommendationApplication = analyticsStore ? new RecommendationApplicationService(analyticsStore, poolManager) : undefined;
 	const sanitizer = new SecretSanitizer();
+	const progressSession = options.missionStore
+		? createMissionProgressSession({ store: options.missionStore, sanitizer })
+		: undefined;
+	let liveMissionId: string | undefined;
+	let liveOverlay: LiveProgressOverlay = {};
+	let liveUi: ProgressUi | undefined;
+	let liveTimer: ReturnType<typeof setInterval> | undefined;
+	let liveFingerprint: string | undefined;
+	const stopLiveHeartbeat = (): void => {
+		if (liveTimer === undefined) return;
+		clearInterval(liveTimer);
+		liveTimer = undefined;
+	};
+	const paintLive = (): void => {
+		if (!liveMissionId || !liveUi || !progressSession) return;
+		const view = progressSession.project(liveMissionId, liveOverlay);
+		const liveSurface = liveUi.hasLiveSurface !== false && typeof liveUi.setWidget === "function";
+		if (liveSurface) {
+			applyMissionProgressToUi(liveUi, view);
+			liveFingerprint = view.fingerprint;
+			return;
+		}
+		if (view.fingerprint === liveFingerprint) return;
+		liveFingerprint = view.fingerprint;
+		applyMissionProgressToUi(liveUi, view);
+	};
+	const startLiveProgress = (ctx: { ui: ExtensionContext["ui"]; hasUI?: boolean }, missionId: string): void => {
+		liveMissionId = missionId;
+		liveUi = {
+			hasLiveSurface: ctx.hasUI !== false,
+			setWidget: (key, content) => ctx.ui.setWidget?.(key, content),
+			setStatus: (key, text) => ctx.ui.setStatus?.(key, text),
+			setWorkingMessage: (message) => ctx.ui.setWorkingMessage?.(message),
+			notify: (message, type) => ctx.ui.notify(message, type),
+			...(ctx.hasUI === false ? { append: (lines: readonly string[]) => { try { process.stderr.write(`${lines.join("\n")}\n`); } catch { /* print-mode fallback is best-effort */ } } } : {}),
+		};
+		liveOverlay = {};
+		liveFingerprint = undefined;
+		paintLive();
+		stopLiveHeartbeat();
+		liveTimer = setInterval(paintLive, 3_000);
+		liveTimer.unref?.();
+	};
+	const liveOverlayOmit = (...keys: readonly (keyof LiveProgressOverlay)[]): LiveProgressOverlay => {
+		const next = { ...liveOverlay } as Record<string, unknown>;
+		for (const key of keys) delete next[key];
+		return next as LiveProgressOverlay;
+	};
+	const handleWorkerProgress = (event: WorkerProgressEvent): void => {
+		const now = new Date().toISOString();
+		if (event.type === "attempt_started" || event.type === "fallback") {
+			liveOverlay = {
+				...liveOverlayOmit("boss", "m7"),
+				worker: {
+					startedAt: event.type === "attempt_started" ? now : liveOverlay.worker?.startedAt ?? now,
+					...(event.routeId === undefined ? {} : { routeId: event.routeId }),
+					...(event.remoteModelId === undefined ? {} : { remoteModelId: event.remoteModelId }),
+					...(event.attemptId === undefined ? {} : { attemptId: event.attemptId }),
+					...(event.type === "fallback" && liveOverlay.worker?.routeId ? { fallbackFrom: liveOverlay.worker.routeId } : {}),
+					...(event.failureAction === "RETRY_SAME_ROUTE" ? { retry: true } : {}),
+				},
+				...(event.remoteModelId === undefined ? {} : { lastWorker: event.remoteModelId }),
+			};
+		} else if (event.type === "tool_started" || event.type === "tool_finished") {
+			const tool: LiveToolProjection = {
+				toolName: event.toolName ?? "tool",
+				status: event.type === "tool_started" ? "ok" : event.toolStatus ?? "ok",
+				...(event.target === undefined ? {} : { target: event.target }),
+				...(event.safetyBlockCode === undefined ? {} : { safetyBlockCode: event.safetyBlockCode }),
+			};
+			const tools = [...(liveOverlay.tools ?? [])];
+			if (event.type === "tool_finished") {
+				const index = tools.findLastIndex((item) => item.toolName === tool.toolName && item.target === tool.target);
+				if (index >= 0) tools[index] = tool;
+				else tools.push(tool);
+			} else {
+				tools.push(tool);
+			}
+			liveOverlay = { ...liveOverlay, tools: tools.slice(-12) };
+		} else if (event.type === "attempt_finished") {
+			liveOverlay = liveOverlayOmit("worker");
+		}
+		paintLive();
+	};
+	if (options.workerProgress) options.workerProgress.current = handleWorkerProgress;
+	const resumeLiveProgress = (ctx: ExtensionContext): void => {
+		const store = options.missionStore;
+		if (!store || !progressSession) return;
+		const missions = [...store.listMissions()];
+		const active = [...missions].reverse().find((mission) => mission.status === "running" || mission.status === "active" || mission.status === "planned");
+		if (active) {
+			startLiveProgress(ctx, String(active.missionId));
+			return;
+		}
+	};
 	const recordAnalytics = (event: AnalyticsEventV1): void => {
 		try { const result = analyticsStore?.append(event); if (result && typeof (result as Promise<unknown>).then === "function") void (result as Promise<unknown>).catch(() => undefined); } catch { /* analytics is non-critical */ }
 	};
@@ -2744,6 +2851,20 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		return get ? get.call(qualityStore, taskId) : undefined;
 	};
 
+	const repairFeedbackFrom = (task: TaskRecord): VerificationResultV1 | undefined => {
+		const decision = options.missionStore?.listQualityDecisions(String(task.missionId), String(task.taskId)).at(-1);
+		if (!decision || decision.verdict === "pass") return undefined;
+		return {
+			verdict: decision.verdict,
+			criterionResults: decision.criterionResults,
+			mechanicalChecks: decision.mechanicalChecks,
+			findings: decision.findings,
+			requiredFixes: decision.requiredFixes,
+			risks: decision.risks,
+			summary: decision.reviewerSummary,
+		};
+	};
+
 	const qualityList = <T>(name: string, missionId: string, taskId?: string): readonly T[] => {
 		const list = qualityGetter<readonly T[]>(name);
 		if (!list) return [];
@@ -2817,6 +2938,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const executor = subagentExecutor;
 		const broker = options.contextBroker;
 		const service = qualityService;
+		startLiveProgress(ctx, String(mission.missionId));
 		try {
 			const routes = await bossRouteCandidates(config, profile);
 			const result = await runMissionGoalLoop({
@@ -2826,7 +2948,16 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				profileId: profile.id,
 				...(analyticsStore ? { analytics: analyticsStore } : {}),
 				...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
-				invoke: (request) => invokeBossInference(manager, providerRegistry, request),
+				invoke: async (request) => {
+					liveOverlay = { ...liveOverlayOmit("worker", "m7"), boss: { startedAt: new Date().toISOString(), ...(request.assignment.remoteModelId === undefined ? {} : { remoteModelId: request.assignment.remoteModelId }) } };
+					paintLive();
+					try {
+						return await invokeBossInference(manager, providerRegistry, request);
+					} finally {
+						liveOverlay = liveOverlayOmit("boss");
+						paintLive();
+					}
+				},
 				dispatch: async (task, context): Promise<BossTaskOutcome> => {
 					if (ctx.signal?.aborted) {
 						const cancelled = new Error("Mission worker dispatch was cancelled");
@@ -2834,6 +2965,16 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 						throw cancelled;
 					}
 					if (task.executionClass === "implementation" && options.trustStore && !options.trustStore.isTrusted(ctx.cwd)) throw new ProjectTrustRequiredError();
+					liveOverlay = {
+						...liveOverlayOmit("boss", "m7"),
+						worker: {
+							startedAt: new Date().toISOString(),
+							routeId: context.assignment.routeId,
+							...(context.assignment.remoteModelId === undefined ? {} : { remoteModelId: context.assignment.remoteModelId }),
+						},
+						...(context.assignment.remoteModelId === undefined ? {} : { lastWorker: context.assignment.remoteModelId }),
+					};
+					paintLive();
 					try {
 						return await dispatchImplementationWithRecovery({
 							execution: {
@@ -2845,9 +2986,18 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 								cwd: ctx.cwd,
 								...(analyticsStore ? { analytics: analyticsStore } : {}),
 								...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
-								...(task.status === "execution_completed" ? { allowQualityRepair: true } : {}),
+								...((() => {
+									const repair = repairFeedbackFrom(task);
+									const quality = taskQualityStatus(String(task.taskId));
+									return {
+										...((task.status === "execution_completed" || quality?.status === "blocked" || quality?.status === "rejected") ? { allowQualityRepair: true } : {}),
+										...(repair === undefined ? {} : { repairFeedback: repair }),
+									};
+								})()),
 							},
 							assess: async ({ prompt }) => {
+								liveOverlay = { ...liveOverlay, recovery: { action: "assess" } };
+								paintLive();
 								const run = await executor.run({
 									roleId: "recovery-assessor",
 									poolId: "investigation",
@@ -2861,6 +3011,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 								}
 							},
 							decide: async ({ assessment, projection }) => {
+								liveOverlay = { ...liveOverlay, recovery: { action: "decide", summary: assessment.recommendedPlan.slice(0, 160) } };
+								paintLive();
 								try {
 									return await invokeRecoveryDecision(
 										manager,
@@ -2879,6 +3031,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					} catch (error) {
 						if (isBossCancellationCause(error, ctx.signal) || isBossSafetyStopCause(error)) throw error;
 						return { taskId: String(task.taskId), status: "failed", summary: error instanceof Error ? error.message.slice(0, 240) : "Worker execution failed" };
+					} finally {
+						liveOverlay = liveOverlayOmit("worker", "recovery");
+						paintLive();
 					}
 				},
 				verify: async (task, outcome): Promise<BossVerificationOutcome> => {
@@ -2892,8 +3047,12 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					if (!targetRunId) return { taskId: String(task.taskId), verdict: "blocked", summary: "M7 verification target is missing" };
 					const targetAttempt = store.getAttempt(targetRunId);
 					const verification = service.startVerification({ missionId: mission.missionId, taskId: task.taskId, targetRunId, round: taskQualityStatus(String(task.taskId))?.qualityRound ?? 0, ...(targetAttempt?.routeId === undefined ? {} : { implementationRouteId: targetAttempt.routeId }) });
+					liveOverlay = { ...liveOverlayOmit("worker", "boss"), m7: { startedAt: new Date().toISOString() } };
+					paintLive();
 					try {
 						const executed = await executeReviewer(ctx, String(mission.missionId), String(task.taskId), targetRunId, [], targetAttempt?.routeId);
+						if (executed.result.finalRemoteModelId) liveOverlay = { ...liveOverlay, m7: { startedAt: liveOverlay.m7?.startedAt ?? new Date().toISOString(), remoteModelId: executed.result.finalRemoteModelId } };
+						paintLive();
 						recordReviewerRun(verification.verificationId, executed.result);
 						if (executed.result.terminalStatus === "cancelled" || ctx.signal?.aborted) {
 							service.failVerification(verification.verificationId, "interrupted", executed.result.summary);
@@ -2905,22 +3064,32 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 							service.failVerification(verification.verificationId, executed.result.potentialMutationObserved ? "interrupted" : "blocked", executed.result.summary);
 							return { taskId: String(task.taskId), verdict: "blocked", summary: executed.result.summary.slice(0, 2_000) };
 						}
-						const completed = service.completeVerification(verification.verificationId, executed.result.protocolResult ?? executed.result.structuredResult, task.acceptanceCriteria);
+						const completed = service.completeVerification(verification.verificationId, executed.result.protocolResult ?? executed.result.structuredResult, task.acceptanceCriteria, {
+							executionClass: task.executionClass,
+							...(targetAttempt === undefined ? {} : { mutationObserved: targetAttempt.mutationObserved === true }),
+						});
 						recordAnalytics({ eventId: `quality-${completed.decision.decisionId}`, occurredAt: completed.decision.createdAt, eventType: "quality", missionId: String(mission.missionId), taskId: String(task.taskId), runId: targetRunId, verificationId: verification.verificationId, qualityRound: completed.run.round, poolId: "verification", ...(completed.run.reviewerRouteId === undefined ? {} : { routeId: completed.run.reviewerRouteId }), outcome: completed.decision.verdict, qualityOutcome: completed.decision.verdict, firstPass: completed.decision.verdict === "pass" && completed.run.round === 0, repairRound: completed.run.round });
 						return { taskId: String(task.taskId), verdict: completed.decision.verdict, summary: completed.decision.reviewerSummary, requiredFixes: completed.decision.requiredFixes };
 					} catch (error) {
 						if (isBossCancellationCause(error, ctx.signal) || isBossSafetyStopCause(error)) throw error;
 						try { service.failVerification(verification.verificationId, "blocked", "M7 reviewer protocol or infrastructure was unavailable"); } catch { /* preserve the original bounded outcome */ }
 						return { taskId: String(task.taskId), verdict: "blocked", summary: error instanceof Error ? error.message.slice(0, 240) : "M7 verification failed" };
+					} finally {
+						liveOverlay = liveOverlayOmit("m7");
+						paintLive();
 					}
 				},
 			});
 			appendMissionPointer(result.mission);
 			const statusLabel = result.terminal === "SAFETY_STOP" ? "blocked (safety stop)" : result.status;
 			ctx.ui.notify(`Mission ${result.mission.missionId}: ${statusLabel} after ${result.cycles} Boss cycle${result.cycles === 1 ? "" : "s"}`, result.status === "completed" ? "info" : "warning");
+			paintLive();
+			stopLiveHeartbeat();
 			return result.mission;
 		} catch (error) {
 			ctx.ui.notify(`Mission Boss runtime stopped without a completion claim: ${error instanceof Error ? error.message.slice(0, 240) : "runtime error"}`, "warning");
+			paintLive();
+			stopLiveHeartbeat();
 			return store.getMission(mission.missionId) ?? mission;
 		}
 	};
@@ -3376,6 +3545,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			}));
 			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission), "info");
+			startLiveProgress(ctx, String(mission.missionId));
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
 		}
@@ -3390,6 +3560,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const mission = createCanonicalMission(options.missionStore, goal, { repositoryCwd: ctx.cwd });
 			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission, "automatic"), "info");
+			startLiveProgress(ctx, String(mission.missionId));
 			return configStore ? await runCanonicalMission(ctx, mission) : mission;
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
@@ -3673,6 +3844,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const mission = createCanonicalMission(store, invocation.goal, { repositoryCwd: ctx.cwd });
 			if (!appendMissionPointer(mission)) ctx.ui.notify("Mission created; the session pointer could not be saved.", "warning");
 			ctx.ui.notify(missionCreatedMessage(mission, "automatic"), "info");
+			startLiveProgress(ctx, String(mission.missionId));
 			if (configStore) await runCanonicalMission(ctx, mission);
 		} catch (error) {
 			notifyError(ctx, "Mission creation failed", error);
@@ -4112,6 +4284,15 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const dispose = (): void => {
 		if (disposed) return;
 		disposed = true;
+		stopLiveHeartbeat();
+		if (options.workerProgress?.current === handleWorkerProgress) delete options.workerProgress.current;
+		try {
+			liveUi?.setWidget?.("pmo-mission-progress", undefined);
+			liveUi?.setStatus?.("pmo-mission", undefined);
+			liveUi?.setWorkingMessage?.(undefined);
+		} catch { /* presentation cleanup is best-effort */ }
+		liveUi = undefined;
+		liveMissionId = undefined;
 		lifetime.abort();
 		if (ownership === "owned" && ownedProviderIsCurrent()) pi.unregisterProvider(providerId);
 		const close = (options.missionStore as { readonly close?: unknown } | undefined)?.close;
@@ -4136,7 +4317,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		}
 	};
 
-	return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.routingMemoryStore ? { routingMemoryStore: options.routingMemoryStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, setProviderRegistry, registerCommands, dispose };
+	return { manager, poolManager, ...(healthStore ? { healthStore } : {}), ...(options.missionStore ? { missionStore: options.missionStore } : {}), ...(qualityStore ? { qualityStore } : {}), ...(qualityService ? { qualityService } : {}), ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(options.smartRoutingStore ? { smartRoutingStore: options.smartRoutingStore } : {}), ...(options.routingMemoryStore ? { routingMemoryStore: options.routingMemoryStore } : {}), ...(options.trustStore ? { trustStore: options.trustStore } : {}), reconcile, setProviderRegistry, registerCommands, resumeLiveProgress, dispose };
 }
 
 export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Promise<void> {
@@ -4217,9 +4398,10 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 		missionStore = undefined;
 		contextBroker = undefined;
 	}
+	const workerProgress: { current?: (event: WorkerProgressEvent) => void } = {};
 	let subagentExecutor: SubagentExecutor | undefined;
 	try {
-		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => request.roleId === "recovery-assessor" ? createRecoveryAssessmentProtocol() : createAgentResultProtocol(), trustStore, () => providerRegistryRef.current);
+		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => request.roleId === "recovery-assessor" ? createRecoveryAssessmentProtocol() : createAgentResultProtocol(), trustStore, () => providerRegistryRef.current, (event) => workerProgress.current?.(event));
 	} catch {
 		// Keep the M2/M3/M4 host available when no configured route can yet be resolved.
 		subagentExecutor = undefined;
@@ -4266,7 +4448,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 			},
 		});
 	}
-	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, routingMemoryStore, healthStore, trustStore, providerRegistry, providerRegistryRef, credentialSetup, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
+	const host = createPiHost(pi, { manager, poolManager, configStore, smartRoutingStore, routingMemoryStore, healthStore, trustStore, providerRegistry, providerRegistryRef, credentialSetup, workerProgress, ...(analyticsStore ? { analyticsStore } : {}), ...(recommendationAnalyst ? { recommendationAnalyst } : {}), ...(missionStore ? { missionStore, qualityStore: missionStore, qualityService: new QualityService(missionStore) } : {}), ...(contextBroker ? { contextBroker } : {}), ...(subagentExecutor ? { subagentExecutor } : {}), ...(qualityExecutor ? { qualityExecutor } : {}) });
 	try {
 		await manager.loadStatus();
 		const result = await host.reconcile();
@@ -4287,6 +4469,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 			if (result.error) {
 				pi.events.emit("pi-multi-orchestrator:error", { stage: "provider-reconcile", error: "9Router provider activation unavailable" });
 			}
+			host.resumeLiveProgress(ctx);
 		} catch {
 			// Keep commands available for repair/status even when startup storage or
 			// catalog state is unavailable. No exception text can contain secrets.

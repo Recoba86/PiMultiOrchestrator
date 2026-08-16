@@ -7,7 +7,8 @@ import { inferAcceptanceCriteriaProvenance, resolveMissionAcceptanceCriteria } f
 import { bossInvocationDiagnostic, sanitizeBossInvocationDiagnostic, type BossInvocationDiagnostic } from "./boss-response.js";
 import { projectBossCanonicalState } from "./boss-projection.js";
 import { capabilityMismatchReason, evaluateMissionCapability } from "./capability-preflight.js";
-import { completedAndVerified, resolveOrCreateMissionTask } from "./task-identity.js";
+import { completedAndVerified, resolveOrCreateMissionTask, activeMissionTasks } from "./task-identity.js";
+import { qualityRejectionFingerprint } from "./repair-fingerprint.js";
 import type { MissionId, MissionRecord, MissionStoreAdapter, MissionStatus, TaskRecord } from "./types.js";
 
 export interface BossRouteCandidate extends BossRouteV1 {
@@ -105,6 +106,8 @@ export interface BossMissionState {
 	readonly lastProtocolError?: string;
 	readonly lastInvocation?: BossInvocationDiagnostic;
 	readonly lastFeedback?: unknown;
+	readonly lastRejectionFingerprint?: string;
+	readonly repeatedRejectionCount?: number;
 	readonly productiveCycles?: number;
 	readonly acceptanceCriteriaProvenance?: "explicit" | "labelled-goal" | "derived-from-goal";
 	readonly terminal?: BossTerminalState;
@@ -317,6 +320,8 @@ const readState = (mission: MissionRecord): BossMissionState => {
 		...(typeof value.lastProtocolError === "string" && value.lastProtocolError.trim() ? { lastProtocolError: value.lastProtocolError.trim().slice(0, 240) } : {}),
 		...(lastInvocation === undefined ? {} : { lastInvocation }),
 		...(boundedFeedback === undefined ? {} : { lastFeedback: boundedFeedback }),
+		...(typeof value.lastRejectionFingerprint === "string" && value.lastRejectionFingerprint.trim() ? { lastRejectionFingerprint: value.lastRejectionFingerprint.trim().slice(0, 64) } : {}),
+		...(typeof value.repeatedRejectionCount === "number" && Number.isSafeInteger(value.repeatedRejectionCount) && value.repeatedRejectionCount >= 0 ? { repeatedRejectionCount: value.repeatedRejectionCount } : {}),
 		...(value.acceptanceCriteriaProvenance === "explicit" || value.acceptanceCriteriaProvenance === "labelled-goal" || value.acceptanceCriteriaProvenance === "derived-from-goal" ? { acceptanceCriteriaProvenance: value.acceptanceCriteriaProvenance } : {}),
 		...(normalizedTokenUsage(value.tokenUsage) === undefined ? {} : { tokenUsage: normalizedTokenUsage(value.tokenUsage) }),
 		...(value.terminal === "COMPLETED" || value.terminal === "BLOCKED" || value.terminal === "AWAITING_USER" || value.terminal === "CANCELLED" || value.terminal === "SAFETY_STOP" ? { terminal: value.terminal } : {}),
@@ -332,6 +337,44 @@ const planWithState = (mission: MissionRecord, state: BossMissionState): unknown
 
 const persistState = (store: MissionStoreAdapter, mission: MissionRecord, state: BossMissionState, metadata: Record<string, unknown>): MissionRecord =>
 	store.updateMission(mission.missionId, { plan: planWithState(mission, state) }, { actor: "boss", expectedRevision: mission.revision, metadata });
+
+const latestDecisionFor = (store: MissionStoreAdapter, missionId: string, taskId: string) =>
+	store.listQualityDecisions(missionId, taskId).at(-1);
+
+const rejectionFingerprintFor = (store: MissionStoreAdapter, missionId: string, taskId: string, repairInstruction?: string): string | undefined => {
+	const decision = latestDecisionFor(store, missionId, taskId);
+	if (!decision || decision.verdict === "pass") return undefined;
+	const evidence = store.listEvidence(missionId).filter((item) => item.taskId !== undefined && String(item.taskId) === taskId).at(-1);
+	return qualityRejectionFingerprint({
+		taskId,
+		verdict: decision.verdict,
+		requiredFixes: decision.requiredFixes,
+		notVerified: decision.criterionResults.filter((item) => item.status === "not_verified").map((item) => item.criterion),
+		...(evidence?.kind === undefined ? {} : { evidenceKind: evidence.kind }),
+		...(repairInstruction === undefined ? {} : { repairInstruction }),
+	});
+};
+
+export function qualityPrecludesComplete(store: MissionStoreAdapter, missionId: string): { readonly summary: string; readonly requiredFixes: readonly string[]; readonly fingerprint?: string } | undefined {
+	const active = activeMissionTasks(store, missionId);
+	if (active.length === 0) return { summary: "Completion is impossible because no durable verified tasks exist", requiredFixes: [] };
+	for (const task of active) {
+		const quality = store.getTaskQualityStatus(task.taskId);
+		if (task.status === "execution_completed" && quality?.status === "passed") continue;
+		const decision = latestDecisionFor(store, missionId, String(task.taskId));
+		const requiredFixes = decision?.requiredFixes ?? [];
+		const summary = quality?.status === "blocked"
+			? `Completion is impossible while task ${task.taskId} quality is blocked and M7 has not passed`
+			: `Completion is impossible until task ${task.taskId} is executed and M7-verified`;
+		const fingerprint = rejectionFingerprintFor(store, missionId, String(task.taskId), task.objective);
+		return {
+			summary,
+			requiredFixes,
+			...(fingerprint === undefined ? {} : { fingerprint }),
+		};
+	}
+	return undefined;
+}
 
 export function formatBossLoopDiagnostics(mission: MissionRecord, taskCount: number): readonly string[] {
 	const state = readState(mission);
@@ -692,8 +735,17 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 		mission = persistState(options.store, mission, state, { kind: "boss-plan", cycle, routeId: assignment.routeId, action: plan.action });
 		if (plan.action === "blocked") return terminal(options.store, mission, state, "BLOCKED", plan.summary, cycle + 1, options, clock);
 		if (plan.action === "awaiting_user") return terminal(options.store, mission, state, "AWAITING_USER", plan.summary, cycle + 1, options, clock);
-		if (plan.action === "complete" && plan.acceptanceSatisfied === true && completedAndVerified(options.store, missionId)) return terminal(options.store, mission, state, "COMPLETED", plan.summary, cycle + 1, options, clock);
-		if (plan.action === "complete") feedback = { kind: "boss-completion-rejected", summary: "Completion was requested before all tasks and verification gates passed" };
+		if (plan.action === "complete") {
+			const precluded = qualityPrecludesComplete(options.store, missionId);
+			if (!precluded && plan.acceptanceSatisfied === true && completedAndVerified(options.store, missionId)) return terminal(options.store, mission, state, "COMPLETED", plan.summary, cycle + 1, options, clock);
+			feedback = {
+				kind: "boss-completion-rejected",
+				summary: precluded?.summary ?? "Completion was requested before all tasks and verification gates passed",
+				requiredFixes: precluded?.requiredFixes ?? [],
+				...(precluded?.fingerprint === undefined ? {} : { rejectionFingerprint: precluded.fingerprint }),
+			};
+			mission = persistState(options.store, mission, state, { kind: "boss-completion-rejected", summary: String((feedback as { summary: string }).summary), requiredFixes: precluded?.requiredFixes ?? [] });
+		}
 		const taskOutcomes: BossTaskOutcome[] = [];
 		const verificationOutcomes: BossVerificationOutcome[] = [];
 		for (const spec of plan.tasks.slice(0, maxTasks)) {
@@ -704,6 +756,13 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 				taskOutcomes.push({ taskId: String(task.taskId), status: "succeeded", summary: "already completed and verified" });
 				verificationOutcomes.push({ taskId: String(task.taskId), verdict: "pass", summary: "already verified" });
 				continue;
+			}
+			const plannedFingerprint = rejectionFingerprintFor(options.store, missionId, String(task.taskId), spec.objective);
+			if (plannedFingerprint && state.lastRejectionFingerprint === plannedFingerprint && (state.repeatedRejectionCount ?? 0) >= 2) {
+				const decision = latestDecisionFor(options.store, missionId, String(task.taskId));
+				mission = persistState(options.store, mission, state, { kind: "boss-repeat-rejected", fingerprint: plannedFingerprint, repeatedRejectionCount: state.repeatedRejectionCount, taskId: String(task.taskId) });
+				const fix = decision?.requiredFixes[0] ?? decision?.reviewerSummary ?? "M7 rejected the same evidence strategy";
+				return terminal(options.store, mission, state, "AWAITING_USER", `Identical M7 rejection and repair strategy were not re-dispatched. Last required fix: ${fix}`.slice(0, 240), cycle + 1, options, clock);
 			}
 			const context: BossLoopContext = { cycle, assignment, ...(feedback === undefined ? {} : { feedback }) };
 			let outcome: BossTaskOutcome;
@@ -728,6 +787,18 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 						try { options.store.promoteEvidence(evidence.evidenceId, { actor: "boss", target: "completedWork" }); } catch { /* stale evidence remains proposed */ }
 					}
 					mission = options.store.getMission(missionId) ?? mission;
+				} else if (verification.verdict === "blocked" || verification.verdict === "reject") {
+					const fp = rejectionFingerprintFor(options.store, missionId, String(task.taskId), spec.objective);
+					if (fp) {
+						const count = state.lastRejectionFingerprint === fp ? (state.repeatedRejectionCount ?? 1) + 1 : 1;
+						state = { ...state, lastRejectionFingerprint: fp, repeatedRejectionCount: count };
+						if (count >= 2) {
+							mission = persistState(options.store, mission, state, { kind: "boss-repeat-rejected", fingerprint: fp, repeatedRejectionCount: count, taskId: String(task.taskId) });
+							const decision = latestDecisionFor(options.store, missionId, String(task.taskId));
+							const fix = decision?.requiredFixes[0] ?? verification.summary;
+							return terminal(options.store, mission, state, "AWAITING_USER", `Identical M7 rejection and repair strategy repeated. Last required fix: ${fix}`.slice(0, 240), cycle + 1, options, clock);
+						}
+					}
 				}
 			} catch (error) {
 				if (isBossCancellationCause(error, options.signal)) return stopCancelled(mission, "Mission cancelled during verification progression", cycle + 1);
@@ -753,7 +824,13 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 				dimensions: { bossVerificationOutcome: verification.verdict, ...(options.profileId === undefined ? {} : { bossProfileId: options.profileId }) },
 			});
 		}
-		feedback = { kind: "boss-cycle-results", plan: { action: plan.action, summary: plan.summary }, taskOutcomes, verificationOutcomes };
+		feedback = {
+			kind: "boss-cycle-results",
+			plan: { action: plan.action, summary: plan.summary },
+			taskOutcomes,
+			verificationOutcomes,
+			...(isRecord(feedback) && feedback.kind === "boss-completion-rejected" ? { completionRejected: feedback } : {}),
+		};
 		if (options.signal?.aborted) return stopCancelled(mission, "Mission cancelled before Boss evaluation", cycle + 1);
 		const evaluated = await invokeWithFallback("evaluate", cycle, { feedback, taskOutcomes, ...(options.signal === undefined ? {} : { signal: options.signal }) });
 		if (evaluated.decision === undefined) {
@@ -771,8 +848,17 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 		mission = persistState(options.store, mission, state, { kind: "boss-evaluation", cycle, routeId: assignment.routeId, action: evaluation.action, verification: verificationOutcomes.map((item) => item.verdict) });
 		if (evaluation.action === "blocked") return terminal(options.store, mission, state, "BLOCKED", evaluation.summary, cycle + 1, options, clock);
 		if (evaluation.action === "awaiting_user") return terminal(options.store, mission, state, "AWAITING_USER", evaluation.summary, cycle + 1, options, clock);
-		if (evaluation.action === "complete" && evaluation.acceptanceSatisfied === true && completedAndVerified(options.store, missionId)) return terminal(options.store, mission, state, "COMPLETED", evaluation.summary, cycle + 1, options, clock);
-		if (evaluation.action === "complete") feedback = { kind: "boss-completion-rejected", summary: "Evaluation did not meet the durable task and M7 gates" };
+		if (evaluation.action === "complete") {
+			const precluded = qualityPrecludesComplete(options.store, missionId);
+			if (!precluded && evaluation.acceptanceSatisfied === true && completedAndVerified(options.store, missionId)) return terminal(options.store, mission, state, "COMPLETED", evaluation.summary, cycle + 1, options, clock);
+			feedback = {
+				kind: "boss-completion-rejected",
+				summary: precluded?.summary ?? "Evaluation did not meet the durable task and M7 gates",
+				requiredFixes: precluded?.requiredFixes ?? [],
+				...(precluded?.fingerprint === undefined ? {} : { rejectionFingerprint: precluded.fingerprint }),
+			};
+			mission = persistState(options.store, mission, state, { kind: "boss-completion-rejected", summary: String((feedback as { summary: string }).summary), requiredFixes: precluded?.requiredFixes ?? [] });
+		}
 		state = {
 			...state,
 			cycle: cycle + 1,

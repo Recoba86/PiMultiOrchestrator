@@ -828,7 +828,7 @@ describe("Pi 9Router host adapter", () => {
 			ui: { select: async () => selections.shift(), confirm: async () => true, notify: (message: string) => notifications.push(message) },
 		} as unknown as ExtensionCommandContext);
 		assert.match(notifications[0] ?? "", /latest accepted milestone: M10/u);
-		assert.match(notifications[0] ?? "", /RC30 .*implemented-but-not-accepted/u);
+		assert.match(notifications[0] ?? "", /RC31 .*implemented-but-not-accepted/u);
 		assert.doesNotMatch(notifications[0] ?? "", /M8\.5|M9 control center implementation pending Planner acceptance/u);
 		assert.ok(notifications.some((message) => /UNTRUSTED/.test(message)));
 		assert.equal(trustStore.isTrusted(project), true);
@@ -1029,6 +1029,62 @@ describe("Pi 9Router host adapter", () => {
 			assert.deepEqual(menuMission.acceptanceCriteria, ["tests pass", "review complete"]);
 			const menuNotice = notifications.find((message) => message.includes("Menu-created mission"));
 			assert.match(menuNotice ?? "", /Next: open \/missions .* to add a Task/u);
+		} finally {
+			store.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("paints live Mission progress onto Pi setWidget immediately and reconstructs it on resume", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-rc31-live-progress-"));
+		let entryId = 0;
+		const store = createMissionStore({ root, id: () => `live-${++entryId}` });
+		try {
+			const pi = piFixture();
+			const host = createPiHost(pi.pi, { manager: managerFixture(projection()), missionStore: store });
+			host.registerCommands();
+			const widgets: string[][] = [];
+			const ctx = {
+				cwd: "/private/tmp/pi-rc31-live-progress",
+				isIdle: () => true,
+				ui: {
+					notify: () => undefined,
+					setWidget: (_key: string, content?: string[]) => { if (content) widgets.push([...content]); },
+					setStatus: () => undefined,
+					setWorkingMessage: () => undefined,
+				},
+			} as unknown as ExtensionContext;
+			const handleInput = pi.inputHandlers[0];
+			assert.ok(handleInput);
+			assert.deepEqual(await handleInput({ type: "input", text: "hello without orchestrator", source: "interactive" }, ctx), { action: "continue" });
+			assert.equal(widgets.length, 0);
+			assert.deepEqual(await handleInput({ type: "input", text: "@orchestrator inspect the public version", source: "interactive" }, ctx), { action: "handled" });
+			assert.ok(widgets.length > 0);
+			const created = widgets[0]?.join("\n") ?? "";
+			assert.match(created, /Mission created/);
+			assert.match(created, /inspect the public version/);
+			assert.match(created, /ID: /);
+
+			const mission = store.listMissions()[0];
+			assert.ok(mission);
+			store.transitionMission(mission.missionId, "planned");
+			store.transitionMission(mission.missionId, "active");
+			store.transitionMission(mission.missionId, "running", { actor: "boss", metadata: { kind: "boss-assignment", remoteModelId: "ag/gemini-3.7-flash-high" } });
+			const resumed: string[][] = [];
+			const resumedHost = createPiHost(piFixture().pi, { manager: managerFixture(projection()), missionStore: store });
+			resumedHost.resumeLiveProgress({
+				cwd: ctx.cwd,
+				isIdle: () => true,
+				ui: {
+					notify: () => undefined,
+					setWidget: (_key: string, content?: string[]) => { if (content) resumed.push([...content]); },
+					setStatus: () => undefined,
+					setWorkingMessage: () => undefined,
+				},
+			} as unknown as ExtensionContext);
+			assert.match(resumed.at(-1)?.join("\n") ?? "", /Boss · Gemini/);
+			resumedHost.dispose();
+			host.dispose();
 		} finally {
 			store.close();
 			await rm(root, { recursive: true, force: true });

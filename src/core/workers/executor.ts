@@ -301,6 +301,7 @@ export class SubagentExecutor {
 		const profile = workerProfileFor(options.request.poolId, resultProtocol.toolName);
 		const observations: ToolObservation[] = [];
 		const observationByCall = new Map<string, ToolObservationMutable>();
+		const targetByCall = new Map<string, string>();
 		let providerSucceeded = false;
 		let outcome: import("./types.js").AttemptTerminalOutcome = "child_runtime_error";
 		let failure: FailureClassification | undefined;
@@ -337,7 +338,9 @@ export class SubagentExecutor {
 						completed: false,
 					};
 					observationByCall.set(event.toolCallId, observation);
-					this.emit({ type: "tool_started", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId, toolName: event.toolName });
+					const target = progressTarget(event.args);
+					if (target) targetByCall.set(event.toolCallId, target);
+					this.emit({ type: "tool_started", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId, toolName: event.toolName, ...(target === undefined ? {} : { target }) });
 				} else if (event.type === "tool_execution_end") {
 					const endedAt = this.clock().toISOString();
 					const observation = observationByCall.get(event.toolCallId) ?? {
@@ -352,7 +355,19 @@ export class SubagentExecutor {
 					observation.isError = event.isError;
 					observationByCall.set(event.toolCallId, observation);
 					observations.push(observation);
-					this.emit({ type: "tool_finished", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId, toolName: event.toolName });
+					const target = targetByCall.get(event.toolCallId);
+					const blocked = event.isError && handle?.lastSafetyBlock?.toolName === event.toolName;
+					this.emit({
+						type: "tool_finished",
+						runId: options.runId,
+						attemptId: options.attemptId,
+						routeId: options.route.routeId,
+						remoteModelId: options.route.remoteModelId,
+						toolName: event.toolName,
+						...(target === undefined ? {} : { target }),
+						toolStatus: blocked ? "blocked" : event.isError ? "fail" : "ok",
+						...(blocked && handle?.lastSafetyBlock?.code ? { safetyBlockCode: handle.lastSafetyBlock.code } : {}),
+					});
 				}
 			});
 			const promptResult = await this.promptWithControl(handle.session, childPrompt(options.request, resultProtocol.toolName), options.request.timeoutMs ?? this.routeAdapter.policy.timeoutMs, options.signal);
@@ -758,6 +773,16 @@ function cancelledResult(runId: string, request: SubagentExecutionRequest, attem
 function nextId(prefix: string): string {
 	sequence += 1;
 	return `${prefix}-${Date.now().toString(36)}-${sequence.toString(36)}`;
+}
+
+function progressTarget(args: unknown): string | undefined {
+	if (!args || typeof args !== "object") return undefined;
+	const record = args as Record<string, unknown>;
+	for (const key of ["path", "file_path", "target", "command"] as const) {
+		const value = record[key];
+		if (typeof value === "string" && value.trim()) return value.trim().slice(0, 160);
+	}
+	return undefined;
 }
 
 const cwdLocks = new Map<string, Promise<void>>();

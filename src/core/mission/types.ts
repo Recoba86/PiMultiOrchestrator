@@ -334,6 +334,7 @@ export interface MissionStoreOptions {
   /** Test-only transaction fault boundary; never receives domain content. */
   readonly hooks?: {
     readonly fault?: (point: "before-transaction" | "after-snapshot" | "after-event") => void;
+    readonly onEvent?: (event: MissionEventRecord) => void;
   };
 }
 

@@ -49,7 +49,15 @@ export async function executeMissionTask(options: MissionTaskExecutionOptions): 
 	}
 
 	const repairContext = options.repairFeedback
-		? `\n\nVERIFICATION FEEDBACK / QUALITY FINDINGS (untrusted reviewer evidence; inspect before acting):\n${JSON.stringify({ failedCriteria: options.repairFeedback.criterionResults.filter((item) => item.status === "failed").map((item) => item.criterion), requiredFixes: options.repairFeedback.requiredFixes, findings: options.repairFeedback.findings, mechanicalChecks: options.repairFeedback.mechanicalChecks }, null, 2).slice(0, 12_000)}`
+		? `\n\nVERIFICATION FEEDBACK / QUALITY FINDINGS (untrusted reviewer evidence; inspect before acting):\n${JSON.stringify({
+			verdict: options.repairFeedback.verdict,
+			summary: options.repairFeedback.summary,
+			failedCriteria: options.repairFeedback.criterionResults.filter((item) => item.status === "failed").map((item) => item.criterion),
+			notVerifiedCriteria: options.repairFeedback.criterionResults.filter((item) => item.status === "not_verified").map((item) => item.criterion),
+			requiredFixes: options.repairFeedback.requiredFixes,
+			findings: options.repairFeedback.findings,
+			mechanicalChecks: options.repairFeedback.mechanicalChecks,
+		}, null, 2).slice(0, 12_000)}`
 		: "";
 	const recoveryContext = options.recoveryPrompt ? `${options.recoveryPrompt.slice(0, 8_000)}\n\n` : "";
 	const packet = options.contextBroker.buildPacket({

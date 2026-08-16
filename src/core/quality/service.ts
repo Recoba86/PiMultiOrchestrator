@@ -29,7 +29,7 @@ export class QualityService {
 		return run;
 	}
 
-	completeVerification(verificationId: string, result: unknown, acceptanceCriteria: readonly string[] = []): { readonly run: VerificationRunRecord; readonly decision: QualityDecisionRecord; readonly status: TaskQualityStatus } {
+	completeVerification(verificationId: string, result: unknown, acceptanceCriteria: readonly string[] = [], context: { readonly executionClass?: string; readonly mutationObserved?: boolean } = {}): { readonly run: VerificationRunRecord; readonly decision: QualityDecisionRecord; readonly status: TaskQualityStatus } {
 		const run = this.store.getVerificationRun(verificationId);
 		if (!run) throw new Error("verification run not found");
 		if (run.status !== "running") throw new QualityError("duplicate-result", "Verification run is already terminal");
@@ -42,7 +42,14 @@ export class QualityService {
 			} catch { /* preserve the typed protocol error */ }
 			throw new QualityError("invalid-result", "Verification result is invalid");
 		}
-		const gate = evaluateQualityGate({ acceptanceCriteria, mechanicalChecks: parsed.mechanicalChecks, reviewerResult: parsed, policy: this.gatePolicy });
+		const gate = evaluateQualityGate({
+			acceptanceCriteria,
+			mechanicalChecks: parsed.mechanicalChecks,
+			reviewerResult: parsed,
+			policy: this.gatePolicy,
+			...(context.executionClass === undefined ? {} : { executionClass: context.executionClass }),
+			...(context.mutationObserved === undefined ? {} : { mutationObserved: context.mutationObserved }),
+		});
 		const completed = this.store.finalizeQualityVerification({ verificationId, decision: { missionId: run.missionId, taskId: run.taskId, verificationId, targetRunId: run.targetRunId, ...(run.targetPacketId === undefined ? {} : { targetPacketId: run.targetPacketId }), round: run.round, gate, reviewerSummary: parsed.summary, findings: parsed.findings, requiredFixes: parsed.requiredFixes, risks: parsed.risks, ...(run.reviewerRouteId === undefined ? {} : { reviewerRouteId: run.reviewerRouteId }) } });
 		try { this.store.recordCheckpoint?.(run.missionId, "gate-evaluated"); } catch { /* checkpoint failure cannot rewrite a persisted decision */ }
 		return completed;

@@ -183,9 +183,26 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 		}) as TaskRecord;
 	}
 	private event(missionId: string, revision: number, kind: string, actor = "system", payload?: unknown, taskId?: string, attemptId?: string): void {
+		const eventId = `event-${this.makeId()}-${++this.eventSequence}`;
+		const createdAt = nowIso(this.clock);
 		this.db.prepare("INSERT INTO mission_events(event_id,mission_id,revision,kind,actor,task_id,attempt_id,payload_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)")
-			.run(`event-${this.makeId()}-${++this.eventSequence}`, missionId, revision, kind, actor, taskId ?? null, attemptId ?? null, payload === undefined ? null : this.bounded(payload, "event.payload"), nowIso(this.clock));
+			.run(eventId, missionId, revision, kind, actor, taskId ?? null, attemptId ?? null, payload === undefined ? null : this.bounded(payload, "event.payload"), createdAt);
 		this.hooks.fault?.("after-event");
+		try {
+			this.hooks.onEvent?.({
+				eventId: eventId as MissionEventRecord["eventId"],
+				missionId: missionId as MissionId,
+				revision,
+				kind,
+				actor: actor as MissionEventRecord["actor"],
+				createdAt,
+				...(taskId === undefined ? {} : { taskId: taskId as MissionEventRecord["taskId"] }),
+				...(attemptId === undefined ? {} : { attemptId: attemptId as MissionEventRecord["attemptId"] }),
+				...(payload === undefined ? {} : { payload }),
+			} as MissionEventRecord);
+		} catch {
+			// Presentation observers cannot affect canonical persistence.
+		}
 	}
 	private snapshot(mission: MissionRecord): string { const value = this.bounded(mission, "mission"); this.hooks.fault?.("after-snapshot"); return value; }
 	private bump(missionId: string, patch: MissionPatch, options: MissionTransitionOptions | undefined, kind: string): MissionRecord {
@@ -504,6 +521,16 @@ export {
 export { evaluateMissionCapability, capabilityMismatchReason } from "./capability-preflight.js";
 export { taskIdentityKey, resolveOrCreateMissionTask, activeMissionTasks, completedAndVerified } from "./task-identity.js";
 export { projectBossCanonicalState } from "./boss-projection.js";
+export { qualityRejectionFingerprint } from "./repair-fingerprint.js";
+export { qualityPrecludesComplete } from "./boss.js";
+export {
+	applyMissionProgressToUi,
+	createMissionProgressSession,
+	formatElapsed,
+	prettyModel,
+	projectMissionProgress,
+	renderMissionProgress,
+} from "./progress.js";
 export { BOSS_SYSTEM_PROMPT, bossInferencePrompt } from "./boss-prompt.js";
 export {
 	BOSS_DECISION_TOOL_NAME,

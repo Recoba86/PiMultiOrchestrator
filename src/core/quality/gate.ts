@@ -42,9 +42,52 @@ export function parseVerificationResult(input: unknown): VerificationResultV1 {
 	return { verdict: value.verdict, criterionResults, mechanicalChecks, findings: list(value.findings, "findings"), requiredFixes: list(value.requiredFixes, "requiredFixes"), risks: list(value.risks, "risks"), summary: boundedText(value.summary, "summary") };
 }
 
-export function evaluateQualityGate(input: { readonly acceptanceCriteria: readonly string[]; readonly mechanicalChecks: readonly MechanicalCheck[]; readonly reviewerResult: VerificationResultV1; readonly policy?: Partial<QualityGatePolicy> }): QualityGateResult {
+const criterionKey = (value: string): string =>
+	value.normalize("NFKC").toLowerCase().replace(/[\u200b\ufeff\u2060]/gu, "").replace(/[.:;!?]+$/gu, "").replace(/\s+/gu, " ").trim();
+
+const isNoModificationCriterion = (value: string): boolean =>
+	/\bno(?:\s+repository)?\s+files?\s+(?:are\s+)?modif|\bdo not\s+(?:modify|change|edit|write)|\bwithout modifying|\bno modifications?\b|\bensure no .*\bmodif/iu.test(value);
+
+export function alignCriterionResults(acceptanceCriteria: readonly string[], results: readonly CriterionResult[]): readonly CriterionResult[] {
+	const criteria = acceptanceCriteria.map((item) => item.trim()).filter(Boolean);
+	if (criteria.length === 0) return results;
+	const byKey = new Map<string, CriterionResult>();
+	for (const result of results) {
+		const key = criterionKey(result.criterion);
+		if (key && !byKey.has(key)) byKey.set(key, result);
+	}
+	const named = criteria.map((criterion) => {
+		const hit = byKey.get(criterionKey(criterion));
+		return hit ? { ...hit, criterion } : undefined;
+	});
+	if (named.every((item) => item !== undefined)) return named;
+	if (named.every((item) => item === undefined) && results.length === criteria.length) {
+		return criteria.map((criterion, index) => ({ ...results[index]!, criterion }));
+	}
+	return criteria.map((criterion, index) => named[index] ?? { criterion, status: "not_verified" as const, evidenceSummary: "reviewer did not report this acceptance criterion" });
+}
+
+export function evaluateQualityGate(input: {
+	readonly acceptanceCriteria: readonly string[];
+	readonly mechanicalChecks: readonly MechanicalCheck[];
+	readonly reviewerResult: VerificationResultV1;
+	readonly policy?: Partial<QualityGatePolicy>;
+	readonly executionClass?: string;
+	readonly mutationObserved?: boolean;
+}): QualityGateResult {
 	const policy: QualityGatePolicy = { missingCriterion: input.policy?.missingCriterion ?? "blocked", requireMechanicalChecks: input.policy?.requireMechanicalChecks ?? false };
-	const criteria = [...input.reviewerResult.criterionResults];
+	const aligned = alignCriterionResults(input.acceptanceCriteria, input.reviewerResult.criterionResults);
+	const criteria = aligned.map((result) => {
+		if (
+			result.status === "not_verified"
+			&& input.executionClass === "investigation"
+			&& input.mutationObserved === false
+			&& isNoModificationCriterion(result.criterion)
+		) {
+			return { ...result, status: "satisfied" as const, evidenceSummary: `${result.evidenceSummary}; orchestrator observed no mutation on the worker Attempt` };
+		}
+		return result;
+	});
 	const byName = new Map(criteria.map((criterion) => [criterion.criterion, criterion]));
 	const reasons: string[] = [];
 	for (const criterion of input.acceptanceCriteria.map((item) => item.trim()).filter(Boolean)) {
@@ -63,13 +106,17 @@ export function evaluateQualityGate(input: { readonly acceptanceCriteria: readon
 	if (failedCriterion || mechanicalChecks.some((check) => check.outcome === "failed")) verdict = "reject";
 	else if (missingCriterion || reasons.includes("verification evidence is missing") || mechanicalChecks.some((check) => check.outcome === "timed_out") || (policy.requireMechanicalChecks && mechanicalChecks.length === 0)) verdict = policy.missingCriterion === "reject" && missingCriterion ? "reject" : "blocked";
 	else if (verdict === "pass" && criteria.some((criterion) => criterion.mandatory === true && criterion.status !== "satisfied")) verdict = "blocked";
+	else if (reasons.length === 0 && verdict === "blocked" && criteria.length > 0 && criteria.every((criterion) => criterion.status === "satisfied")) verdict = "pass";
+	const requiredFixes = input.reviewerResult.requiredFixes.length > 0
+		? input.reviewerResult.requiredFixes
+		: reasons.filter((reason) => reason.startsWith("criterion not verified") || reason.startsWith("criterion failed")).map((reason) => `Use the exact acceptance-criterion text and supply admissible evidence for: ${reason.replace(/^criterion (?:not verified|failed): /u, "")}`);
 	return {
 		verdict,
 		reasons,
 		criterionResults: criteria,
 		mechanicalChecks,
 		findings: input.reviewerResult.findings,
-		requiredFixes: input.reviewerResult.requiredFixes,
+		requiredFixes,
 		risks: input.reviewerResult.risks,
 		reviewerSummary: input.reviewerResult.summary,
 	};

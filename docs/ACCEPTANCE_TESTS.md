@@ -1284,12 +1284,12 @@ requirements and remain future work.
 
 - **Level:** U
 - **Setup:** load `PACKAGE_INFO` from compiled `dist`/`dist-test` output.
-- **Pass:** version equals `package.json` (`0.1.0-rc.30`); development line is
-  `RC30 — Autonomous Boss-Led Mutation Recovery`; RC23 titles
+- **Pass:** version equals `package.json` (`0.1.0-rc.31`); development line is
+  `RC31 — Live Mission Progress and M7 Repair Convergence`; RC23 titles
   are absent; `latestAcceptedMilestone` is M10; `productionReady` is false;
   an unmapped version would report `stale-development-line:<version>` rather
   than an older RC title. The `0.1.0-rc.26`, `0.1.0-rc.27`, `0.1.0-rc.28`,
-  and `0.1.0-rc.29` map entries remain historical.
+  `0.1.0-rc.29`, and `0.1.0-rc.30` map entries remain historical.
   `@orchestrator` and Smart Routing Run as Mission
   still enter the same canonical Boss loop.
 
@@ -1400,6 +1400,33 @@ requirements and remain future work.
   completion. Resume from persisted `lastFeedback`/cycle does not recreate
   completed Tasks or re-enter terminal Missions. Boss prompts include the
   canonical projection and class-specific M7 prompts are used.
+
+### RC31-01 — Live Mission progress projects canonical events into Pi UI
+
+- **Level:** U/I, fake runtime
+- **Pass:** Mission creation immediately paints a live widget. Boss
+  assignment/plan, Task creation, worker start/route, retry/fallback, safe
+  tool start/end, safety-block, Evidence, M7 start/pass/blocked reason,
+  Boss replan, completion rejection, recovery, and finalization all render.
+  Heartbeat appears during a quiet long-running operation and stops when
+  the operation changes. COMPLETED and AWAITING_USER summaries render.
+  Restart reconstructs the current in-flight Mission without duplicating
+  events. Hidden thinking and secrets/raw provider data never render.
+  Ordinary non-orchestrated Pi input does not paint the Mission widget.
+
+### RC31-02 — Feedback-driven M7 repair and anti-repeat
+
+- **Level:** U/I, fake runtime
+- **Pass:** M7 `blocked` plus `requiredFixes` reach Boss. Blocked quality
+  prevents naive Boss `complete` in control logic; the completion gate
+  remains the final defense. A targeted repair packet contains the required
+  fix and differs materially from the original packet. The worker receives
+  prior rejection context. New Evidence can satisfy M7. Identical
+  rejection+strategy is fingerprinted and is not blindly re-dispatched;
+  a materially different repair is allowed. Quality pass allows Boss
+  complete. Quality failure never becomes M4 infrastructure fallback.
+  ADR-049 result-capability fallback and RC30 mutation recovery remain
+  green. Live progress displays rejection/repair accurately.
 
 ### RC30-01 — Autonomous mutation recovery for local Implementation misses
 

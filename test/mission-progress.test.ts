@@ -1,0 +1,310 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it } from "node:test";
+
+import { createMissionStore } from "../src/core/mission/index.js";
+import {
+	applyMissionProgressToUi,
+	createMissionProgressSession,
+	projectMissionProgress,
+	renderMissionProgress,
+	type LiveProgressOverlay,
+	type MissionProgressView,
+	type ProgressUi,
+} from "../src/core/mission/progress.js";
+import { SecretSanitizer } from "../src/core/security/index.js";
+import type { MissionEventRecord, MissionRecord, MissionStoreAdapter, TaskRecord } from "../src/core/mission/types.js";
+
+async function withStore<T>(run: (store: MissionStoreAdapter) => T | Promise<T>): Promise<T> {
+	const root = await mkdtemp(join(tmpdir(), "pmo-progress-"));
+	try {
+		return await run(createMissionStore({ root, clock: () => new Date("2026-08-17T00:00:00.000Z"), id: (() => {
+			let n = 0;
+			return () => String(++n);
+		})() }));
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+}
+
+const textOf = (view: MissionProgressView): string => renderMissionProgress(view).join("\n");
+
+const fakeUi = (): ProgressUi & { widgets: string[][]; statuses: string[]; working: string[]; notifications: string[] } => {
+	const widgets: string[][] = [];
+	const statuses: string[] = [];
+	const working: string[] = [];
+	const notifications: string[] = [];
+	return {
+		widgets,
+		statuses,
+		working,
+		notifications,
+		setWidget: (_key, content) => { if (content) widgets.push([...content]); },
+		setStatus: (_key, text) => { if (text) statuses.push(text); },
+		setWorkingMessage: (message) => { if (message) working.push(message); },
+		notify: (message) => { notifications.push(message); },
+	};
+};
+
+describe("live Mission progress projection", () => {
+	it("renders live state immediately after Mission creation", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-live", goal: "report the public PMO version without changing files" });
+		const view = projectMissionProgress({ store, missionId: String(mission.missionId), now: new Date("2026-08-17T00:00:05.000Z") });
+		const text = textOf(view);
+		assert.match(text, /Mission running|Mission created|Status: draft/i);
+		assert.match(text, /m-live/);
+		assert.match(text, /report the public PMO version/i);
+		assert.match(text, /0\/4|Cycle 0/);
+	}));
+
+	it("renders Boss assignment and plan", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-boss", goal: "inspect" });
+		store.transitionMission(mission.missionId, "planned");
+		store.transitionMission(mission.missionId, "active");
+		store.transitionMission(mission.missionId, "running", {
+			actor: "boss",
+			metadata: { kind: "boss-start", routeId: "boss-a", remoteModelId: "ag/gemini-3.7-flash-high" },
+		});
+		store.updateMission(mission.missionId, {}, {
+			actor: "boss",
+			metadata: { kind: "boss-assignment", routeId: "boss-a", remoteModelId: "ag/gemini-3.7-flash-high", weight: 1 },
+		});
+		store.updateMission(mission.missionId, {}, {
+			actor: "boss",
+			metadata: { kind: "boss-plan", cycle: 0, routeId: "boss-a", action: "dispatch" },
+		});
+		const text = textOf(projectMissionProgress({ store, missionId: "m-boss" }));
+		assert.match(text, /Boss/i);
+		assert.match(text, /Gemini 3\.7 Flash/i);
+		assert.match(text, /Plan created|dispatch/i);
+	}));
+
+	it("renders Task creation, worker start, route, retry, and fallback", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-worker", goal: "inspect" });
+		const task = store.createTask({ missionId: mission.missionId, roleId: "investigator", executionClass: "investigation", objective: "find public version" });
+		store.saveTaskPacket(task.taskId, { objective: "find public version" }, task.revision);
+		store.createAttempt({ taskId: task.taskId, routeId: "inv-a", remoteModelId: "ocg/deepseek-v4-flash" });
+		store.updateMission(mission.missionId, {}, {
+			actor: "boss",
+			metadata: { kind: "boss-fallback", fromRouteId: "inv-a", toRouteId: "inv-b", reason: "timeout" },
+		});
+		const live: LiveProgressOverlay = {
+			worker: { routeId: "inv-b", remoteModelId: "gcli/grok-4.6-high", attemptId: "attempt-retry", startedAt: "2026-08-17T00:00:10.000Z", retry: true, fallbackFrom: "ocg/deepseek-v4-flash" },
+		};
+		const text = textOf(projectMissionProgress({ store, missionId: "m-worker", live, now: new Date("2026-08-17T00:00:18.000Z") }));
+		assert.match(text, /Task/i);
+		assert.match(text, /investigation/i);
+		assert.match(text, /packet revision 1/i);
+		assert.match(text, /DeepSeek V4 Flash/i);
+		assert.match(text, /Grok 4\.6 High/i);
+		assert.match(text, /retry|fallback/i);
+	}));
+
+	it("renders safe tool activity and a non-terminating safety block", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-tools", goal: "inspect" });
+		const live: LiveProgressOverlay = {
+			tools: [
+				{ toolName: "read", target: "package.json", status: "ok" },
+				{ toolName: "read", target: "docs/RELEASE_STATE.md", status: "ok" },
+				{ toolName: "find", target: ".", status: "blocked", safetyBlockCode: "PROTECTED_PATH_DESCENDANT" },
+				{ toolName: "submit_agent_result", status: "ok" },
+			],
+		};
+		const text = textOf(projectMissionProgress({ store, missionId: String(mission.missionId), live }));
+		assert.match(text, /read package\.json/i);
+		assert.match(text, /read RELEASE_STATE\.md/i);
+		assert.match(text, /find blocked: protected path/i);
+		assert.match(text, /Structured result submitted/i);
+		assert.doesNotMatch(text, /terminate display|fatal/i);
+	}));
+
+	it("renders Evidence, M7 start, pass, blocked reason, Boss replan, and completion rejection", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-m7", goal: "inspect" });
+		const task = store.createTask({ missionId: mission.missionId, roleId: "investigator", executionClass: "investigation", objective: "version" });
+		const attempt = store.createAttempt({ taskId: task.taskId, routeId: "inv-a", remoteModelId: "ocg/deepseek-v4-flash" });
+		store.finishAttempt(attempt.attemptId, "succeeded", { terminalState: "completed" });
+		const evidence = store.admitEvidence({ missionId: mission.missionId, taskId: task.taskId, attemptId: attempt.attemptId, kind: "investigation-result", content: { summary: "public version is 0.1.0-rc.30" } });
+		store.promoteEvidence(evidence.evidenceId);
+		store.createVerificationRun({ missionId: mission.missionId, taskId: task.taskId, targetRunId: attempt.attemptId, round: 0, reviewerRouteId: "ver-a", reviewerRemoteModelId: "gcli/grok-4.6-high" });
+		store.recordQualityDecision({
+			missionId: mission.missionId,
+			taskId: task.taskId,
+			verificationId: store.listVerificationRuns(mission.missionId)[0]!.verificationId,
+			targetRunId: attempt.attemptId,
+			round: 0,
+			gate: { verdict: "blocked", reasons: ["insufficient proof of public release version"], criterionResults: [], mechanicalChecks: [], findings: [], requiredFixes: ["Show public registry/release state"] },
+			reviewerSummary: "insufficient proof of public release version",
+			requiredFixes: ["Show public registry/release state"],
+		});
+		store.updateMission(mission.missionId, {}, {
+			actor: "boss",
+			metadata: { kind: "boss-evaluation", cycle: 0, routeId: "boss-a", action: "complete" },
+		});
+		store.updateMission(mission.missionId, {}, {
+			actor: "boss",
+			metadata: { kind: "boss-completion-rejected", summary: "Evaluation did not meet the durable task and M7 gates" },
+		});
+		store.updateMission(mission.missionId, {}, {
+			actor: "boss",
+			metadata: { kind: "boss-plan", cycle: 1, routeId: "boss-a", action: "replan" },
+		});
+		const text = textOf(projectMissionProgress({ store, missionId: "m-m7" }));
+		assert.match(text, /Evidence accepted/i);
+		assert.match(text, /M7/i);
+		assert.match(text, /Grok 4\.6 High/i);
+		assert.match(text, /BLOCKED/i);
+		assert.match(text, /insufficient proof of public release version/i);
+		assert.match(text, /complete/i);
+		assert.match(text, /rejected|did not meet the durable/i);
+		assert.match(text, /replan|Targeted repair|Reviewing M7/i);
+	}));
+
+	it("renders recovery and finalization events", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-rec", goal: "implement" });
+		const task = store.createTask({ missionId: mission.missionId, roleId: "implementer", executionClass: "implementation", objective: "edit helper" });
+		store.admitEvidence({
+			missionId: mission.missionId,
+			taskId: task.taskId,
+			kind: "recovery-assessment",
+			content: { recoveryRequired: true, mutationClass: "local_observable" },
+		});
+		const live: LiveProgressOverlay = {
+			recovery: { action: "REPAIR_EXISTING_WORK", summary: "continue current worktree" },
+			finalization: { outcome: "captured", attemptId: "attempt-final" },
+		};
+		const text = textOf(projectMissionProgress({ store, missionId: "m-rec", live }));
+		assert.match(text, /recovery assessment/i);
+		assert.match(text, /REPAIR_EXISTING_WORK/i);
+		assert.match(text, /finalization/i);
+	}));
+
+	it("shows heartbeat during a quiet long-running operation and stops it when the operation changes", () => {
+		const events: MissionEventRecord[] = [{
+			eventId: "event-1" as MissionEventRecord["eventId"],
+			missionId: "m-hb" as MissionRecord["missionId"],
+			revision: 1,
+			kind: "boss-plan",
+			actor: "boss",
+			payload: { kind: "boss-plan", action: "dispatch", remoteModelId: "ocg/deepseek-v4-flash" },
+			createdAt: "2026-08-17T00:00:00.000Z",
+		}];
+		const live: LiveProgressOverlay = {
+			worker: { remoteModelId: "ocg/deepseek-v4-flash", startedAt: "2026-08-17T00:00:00.000Z" },
+		};
+		const quiet = projectMissionProgress({
+			events,
+			mission: { missionId: "m-hb", status: "running", goal: "inspect", createdAt: "2026-08-17T00:00:00.000Z", revision: 1 } as MissionRecord,
+			now: new Date("2026-08-17T00:00:37.000Z"),
+			quietAfterMs: 5_000,
+			live,
+		});
+		assert.match(textOf(quiet), /DeepSeek V4 Flash still running… 37s/);
+		const changed = projectMissionProgress({
+			events,
+			mission: { missionId: "m-hb", status: "running", goal: "inspect", createdAt: "2026-08-17T00:00:00.000Z", revision: 1 } as MissionRecord,
+			now: new Date("2026-08-17T00:00:40.000Z"),
+			quietAfterMs: 5_000,
+			live: { m7: { remoteModelId: "gcli/grok-4.6-high", startedAt: "2026-08-17T00:00:38.000Z" } },
+		});
+		const changedText = textOf(changed);
+		assert.doesNotMatch(changedText, /DeepSeek V4 Flash still running/);
+		assert.match(changedText, /M7 verification in progress… 2s/);
+	});
+
+	it("renders COMPLETED and AWAITING_USER summaries", () => {
+		const completed = projectMissionProgress({
+			events: [
+				{ eventId: "e1" as MissionEventRecord["eventId"], missionId: "m-c" as MissionRecord["missionId"], revision: 2, kind: "mission_completed", actor: "boss", payload: { kind: "boss-terminal", status: "COMPLETED", cycles: 2 }, createdAt: "2026-08-17T00:01:42.000Z" },
+			],
+			mission: { missionId: "m-c", status: "completed", goal: "inspect", createdAt: "2026-08-17T00:00:00.000Z", revision: 2 } as MissionRecord,
+			tasks: [{ taskId: "t1" } as TaskRecord],
+			counts: { attempts: 2, evidence: 2, m7Pass: 1, m7Rounds: 1 },
+			live: { lastWorker: "ocg/deepseek-v4-flash" },
+			now: new Date("2026-08-17T00:01:42.000Z"),
+		});
+		assert.match(textOf(completed), /Mission COMPLETED · 1m 42s/);
+		assert.match(textOf(completed), /Boss cycles: 2/);
+		assert.match(textOf(completed), /Final worker: DeepSeek V4 Flash/);
+
+		const waiting = projectMissionProgress({
+			events: [
+				{ eventId: "e2" as MissionEventRecord["eventId"], missionId: "m-w" as MissionRecord["missionId"], revision: 8, kind: "mission_awaiting-review", actor: "boss", payload: { kind: "boss-terminal", status: "AWAITING_USER", cycles: 4, reason: "M7 rejected the same evidence strategy repeatedly." }, createdAt: "2026-08-17T00:04:00.000Z" },
+			],
+			mission: { missionId: "m-w", status: "awaiting-review", goal: "inspect", createdAt: "2026-08-17T00:00:00.000Z", revision: 8 } as MissionRecord,
+			counts: { attempts: 4, m7Blocks: 4, m7Rounds: 4 },
+			now: new Date("2026-08-17T00:04:00.000Z"),
+		});
+		assert.match(textOf(waiting), /Mission AWAITING_USER/);
+		assert.match(textOf(waiting), /M7 rejected the same evidence strategy repeatedly/);
+		assert.match(textOf(waiting), /Boss cycles: 4/);
+	});
+
+	it("reconstructs current Mission on replay without duplicating live events", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-replay", goal: "inspect" });
+		store.transitionMission(mission.missionId, "planned");
+		store.transitionMission(mission.missionId, "active");
+		store.transitionMission(mission.missionId, "running", { actor: "boss", metadata: { kind: "boss-assignment", remoteModelId: "ag/gemini-3.7-flash-high" } });
+		const session = createMissionProgressSession({ store });
+		const replayed = session.replay("m-replay");
+		const live = session.project("m-replay");
+		assert.deepEqual(renderMissionProgress(replayed), renderMissionProgress(live));
+		const ui = fakeUi();
+		applyMissionProgressToUi(ui, replayed);
+		applyMissionProgressToUi(ui, live);
+		assert.equal(ui.widgets.length, 2);
+		assert.deepEqual(ui.widgets[0], ui.widgets[1]);
+		assert.equal(ui.notifications.length, 0);
+	}));
+
+	it("never renders hidden thinking or secrets or raw provider payloads", async () => withStore((store) => {
+		const sanitizer = new SecretSanitizer();
+		sanitizer.register("sk-secret-token-value");
+		const mission = store.createMission({ missionId: "m-priv", goal: "inspect sk-secret-token-value" });
+		store.updateMission(mission.missionId, {}, {
+			actor: "boss",
+			metadata: {
+				kind: "boss-plan",
+				action: "dispatch",
+				thinking: "hidden chain of thought should stay private",
+				reasoning: "more hidden reasoning",
+				providerPayload: { headers: { authorization: "Bearer sk-secret-token-value" }, body: "<raw>" },
+			},
+		});
+		const text = textOf(projectMissionProgress({ store, missionId: "m-priv", sanitizer }));
+		assert.doesNotMatch(text, /hidden chain of thought/i);
+		assert.doesNotMatch(text, /more hidden reasoning/i);
+		assert.doesNotMatch(text, /sk-secret-token-value/);
+		assert.doesNotMatch(text, /Bearer /);
+		assert.doesNotMatch(text, /<raw>/);
+		assert.match(text, /\[REDACTED\]/);
+	}));
+
+	it("uses bounded append/notify when Pi has no live widget surface", () => {
+		const view = projectMissionProgress({
+			mission: { missionId: "m-print", status: "running", goal: "inspect", createdAt: "2026-08-17T00:00:00.000Z", revision: 1 } as MissionRecord,
+			now: new Date("2026-08-17T00:00:05.000Z"),
+		});
+		const appended: string[][] = [];
+		const ui: ProgressUi = {
+			hasLiveSurface: false,
+			setWidget: () => { throw new Error("print-mode setWidget is a no-op and must not be treated as live"); },
+			notify: (message) => { appended.push(message.split("\n")); },
+			append: (lines) => { appended.push([...lines]); },
+		};
+		applyMissionProgressToUi(ui, view);
+		applyMissionProgressToUi(ui, view);
+		assert.ok(appended.length >= 1);
+		assert.match(appended[0]?.join("\n") ?? "", /Mission running|Status: running/i);
+	});
+
+	it("leaves normal non-orchestrated Pi UX unchanged until a Mission is attached", () => {
+		const ui = fakeUi();
+		const empty = projectMissionProgress({ events: [], mission: undefined });
+		applyMissionProgressToUi(ui, empty);
+		assert.equal(ui.widgets.length, 0);
+		assert.equal(ui.notifications.length, 0);
+		assert.equal(ui.working.length, 0);
+	});
+});
