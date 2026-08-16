@@ -56,7 +56,7 @@ Public RC27 is immutable. The RC28 source-bound artifact is not rewritten.
 - **Dogfood recorded:** RC28 Mission
   `mission-04452706-5486-4131-8565-dcec84f52beb` as hollow-delivery
   `AWAITING_USER` with 0 Tasks. Host-shaped harness COMPLETED is not live Pi
-  COMPLETED.
+  COMPLETED. Source verification: `npm test` `313/313`, `npm run check` PASS.
 
 ## RC28 Real Boss Invocation Compatibility (unpublished candidate)
 

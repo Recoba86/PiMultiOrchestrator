@@ -26,6 +26,7 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   capability preflight; identity reuse; active-only completion; bounded Boss
   projection; persisted feedback; class-specific M7 prompts; host-shaped
   durable-state harness.
+- **Verification:** `npm run check` PASS; `npm test` `313/313`.
 - **Publication:** none. RC29 as `0.1.0-rc.29` is not prepared until a real
   isolated Pi Mission using this runtime reaches COMPLETED.
 

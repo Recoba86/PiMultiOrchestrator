@@ -129,6 +129,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   prompts; terminal Missions do not resume. ADR-046. Host-shaped harness
   inspects durable store rows through Goal→Task→M7→COMPLETED, reject→repair,
   multi-task, resume, and capability mismatch.
+- **Verification:** `npm run check` PASS. `npm test` `313/313`. Typecheck and
+  build PASS. Live `~/.pi/agent/` was not modified. No tag, npm publication,
+  or GitHub Release.
 - **Publication boundary:** public RC27 remains immutable. The RC28
   source-bound artifact identity is not rewritten. Live `~/.pi/agent/` was
   not modified. `0.1.0-rc.29` is not prepared until a real isolated Pi
