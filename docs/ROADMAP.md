@@ -13,9 +13,13 @@ Mission runtime convergence. It is not public, accepted, pre-release ready,
 or a production release. M10 remains the latest accepted development
 milestone; M11 remains implemented but not accepted. A real isolated Pi
 Mission COMPLETED on this runtime is required before calling RC29
-pre-release ready. The 2026-08-16 local dogfood stopped after one Luna
-`infrastructure_stopped` Attempt because live worker
-`routing.fallback.enabled` is false; see
+pre-release ready. Live `routing.fallback.enabled` is now true with
+`routing.maxAttempts=3`. The 2026-08-16 end-to-end dogfood then stopped
+at DeepSeek `invalid_child_result` after timeout → same-route retry;
+retry→finalization forensics classified that as accepted protocol stop,
+not missing M4 fallback. See
+[worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md)
+and
 [worker-infrastructure-fallback-forensics.md](worker-infrastructure-fallback-forensics.md).
 Future ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md),
 whose presence does not authorize implementation.

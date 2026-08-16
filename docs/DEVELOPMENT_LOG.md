@@ -4,6 +4,32 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — Retry → worker finalization → fallback boundary audit
+
+- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.
+  Development identity is `0.1.0-rc.29`. Not public, tagged, npm-published,
+  accepted, pre-release ready, or a GitHub Release. Public RC28 remains immutable.
+- **Mission:** `mission-0bfe84d8-6848-404b-94b4-81cc1bff502e` /
+  Task `task-ec717c46-cb36-4d27-9d8d-f10a46d4c11f` /
+  Attempt `attempt-cbfaa8bf-4715-4509-9c8f-6be2b25031dd`.
+- **Sequence:** DeepSeek work #1 60s `timeout` → M4 `RETRY_SAME_ROUTE` →
+  work #2 provider success → no durable `submit_agent_result` →
+  `invalid_child_result` / mutation 0 / Evidence 0 / no cross-route fallback.
+- **Finding:** Classification **C**. Isolated fake-adapter reproduction of
+  timeout → retry → omit shows finalization **does** run on the retry child
+  (`promptCount=3`, `resultFinalization.attempted=true`, `fallbackCount=0`).
+  That rules out an executor skip-after-retry bug. Live
+  `resultFinalization` is in-memory only and was lost; the 16 ms
+  `lastSuccessAt`→Attempt-end gap cannot be a finalization LLM turn.
+  Accepted WORK-06 / ADR-048 / FB-005: protocol miss after the one
+  bounded finalization is terminal for M4 and returns to Boss; it is not
+  `FALLBACK_NEXT_ROUTE`. `routing.maxAttempts` is the same-route
+  infrastructure retry budget (`maxAttempts-1`); there is no independent
+  `maxSameRouteRetries` field.
+- **Correction:** none in runtime. No live Mission rerun.
+- **Evidence:** `docs/worker-retry-finalization-fallback-forensics.md`;
+  `test/worker-result-finalization.test.ts` timeout-retry cases.
+
 ## RC29 — Enable worker fallback & real end-to-end dogfood (BLOCKED)
 
 - **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.

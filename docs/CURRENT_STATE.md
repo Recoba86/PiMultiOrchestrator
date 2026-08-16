@@ -155,10 +155,16 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   `invalid_child_result` / mutation 0 / `result_json=null` after a 60s
   timeout then same-route provider success. Evidence 0, M7 0. Cross-route
   fallback did not run because the terminal class is not infrastructure.
-  No second Mission, no runtime patch, no RC29 candidate.
-- **Verification:** prior source `npm test` `313/313` and `npm run check` PASS
-  on the pre-identity-bump repair. Live `~/.pi/agent/` was not modified by
-  that repair. No tag, npm publication, or GitHub Release for RC29.
+  Retry→finalization forensics (classification C): finalization is not
+  skipped after `RETRY_SAME_ROUTE`; missing structured result after the
+  bounded capture opportunity is accepted terminal protocol, not M4
+  fallback. No runtime patch. Evidence:
+  [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md).
+  No second Mission, no RC29 candidate.
+- **Verification:** `node --test dist-test/test/worker-result-finalization.test.js`
+  23/23 PASS, including timeout → `RETRY_SAME_ROUTE` → omit/finalize.
+  This audit did not modify live `~/.pi/agent/` routing, pools, or
+  MissionStore. No tag, npm publication, or GitHub Release for RC29.
 - **Publication boundary:** public RC28 remains immutable. RC29 is not tagged,
   not npm-published, and not a GitHub Release until an authorized later
   operator publication step. A real isolated Pi Mission COMPLETED remains
@@ -885,8 +891,11 @@ isolated Pi Mission using this runtime has not yet reached COMPLETED. After
 enabling live `routing.fallback.enabled`, Mission
 `mission-0bfe84d8-6848-404b-94b4-81cc1bff502e` reached `AWAITING_USER`
 because the DeepSeek worker Attempt ended `invalid_child_result` (no
-structured result, no Evidence, M7 never started). `0.1.0-rc.29` must not
-be prepared from fixture COMPLETED alone.
+structured result, no Evidence, M7 never started). Retry→finalization
+forensics classified that miss as accepted protocol stop (C), not an
+executor skip after retry. `0.1.0-rc.29` must not be prepared from
+fixture COMPLETED alone. See
+[worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md).
 
 ### Deferred capabilities beyond the current RC25 loop
 

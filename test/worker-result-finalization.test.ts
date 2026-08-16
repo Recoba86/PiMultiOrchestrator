@@ -160,6 +160,67 @@ describe("RC29 two-phase worker result finalization", () => {
 		}
 	});
 
+	it("runs finalization after timeout same-route retry when retry work omits the result", async () => {
+		const root = await tmp();
+		try {
+			const seen: string[] = [];
+			const tracker = createTracker();
+			const routingPolicy: RoutingPolicy = { ...policy, maxAttempts: 3, timeoutMs: 40, fallback: { enabled: true } };
+			const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)], routingPolicy);
+			let creates = 0;
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+				create: async (options) => {
+					creates += 1;
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, creates === 1 ? "hang" : "omit-then-missing", tracker);
+				},
+			});
+			const result = await executor.run({ ...request(root, "investigation"), timeoutMs: 40 });
+			assert.equal(creates, 2);
+			assert.deepEqual(seen, [id("route-a"), id("route-a")]);
+			assert.equal(result.attempts.length, 2);
+			assert.equal(result.attempts[0]?.outcome, "timed_out");
+			assert.equal(result.attempts[0]?.selectionKind, "scheduled");
+			assert.equal(result.attempts[0]?.failureAction, "RETRY_SAME_ROUTE");
+			assert.equal(result.attempts[1]?.selectionKind, "retry");
+			assert.equal(result.attempts[1]?.resultFinalization?.required, true);
+			assert.equal(result.attempts[1]?.resultFinalization?.attempted, true);
+			assert.equal(result.attempts[1]?.resultFinalization?.outcome, "missing");
+			assert.equal(tracker.promptCount, 3);
+			assert.deepEqual(tracker.finalizationTools, ["submit_agent_result"]);
+			assert.equal(result.terminalStatus, "invalid_child_result");
+			assert.equal(result.fallbackCount, 0);
+			assert.equal(result.structuredResult, undefined);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("completes after timeout same-route retry when retry finalization captures the result", async () => {
+		const root = await tmp();
+		try {
+			const tracker = createTracker();
+			const routingPolicy: RoutingPolicy = { ...policy, maxAttempts: 3, timeoutMs: 40, fallback: { enabled: true } };
+			const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)], routingPolicy);
+			let creates = 0;
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+				create: async (options) => {
+					creates += 1;
+					return fakeSessionHandle(options.resultProtocol, creates === 1 ? "hang" : "omit-then-finalize", tracker);
+				},
+			});
+			const result = await executor.run({ ...request(root, "investigation"), timeoutMs: 40 });
+			assert.equal(creates, 2);
+			assert.equal(result.attempts[0]?.failureAction, "RETRY_SAME_ROUTE");
+			assert.equal(result.attempts[1]?.resultFinalization?.outcome, "succeeded");
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(result.fallbackCount, 0);
+			assert.equal(result.structuredResult?.summary, "finalized");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("does not run finalization after a work-phase infrastructure failure", async () => {
 		const root = await tmp();
 		try {
@@ -444,6 +505,7 @@ function fakeSessionHandle(
 	let listener: ((event: unknown) => void) | undefined;
 	let activeTools = ["read", "grep", "find", "ls", submitTool.name];
 	let safetyTerminated = mode === "safety-stop";
+	let turn = 0;
 	const emitRead = () => {
 		listener?.({ type: "tool_execution_start", toolCallId: "read-1", toolName: "read" });
 		listener?.({ type: "tool_execution_end", toolCallId: "read-1", toolName: "read", isError: false });
@@ -475,10 +537,11 @@ function fakeSessionHandle(
 		},
 		prompt: async (text?: string) => {
 			tracker.promptCount += 1;
-			if (tracker.promptCount === 1) tracker.workTools = [...activeTools];
+			turn += 1;
+			if (turn === 1) tracker.workTools = [...activeTools];
 			if (mode === "hang") await new Promise<void>(() => undefined);
 			if (mode === "rate") throw Object.assign(new Error("rate"), { status: 429 });
-			if (tracker.promptCount === 1) {
+			if (turn === 1) {
 				if (mode.startsWith("mutate-")) emitEdit();
 				else emitRead();
 				if (mode === "complete") {

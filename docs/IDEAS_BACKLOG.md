@@ -16,6 +16,24 @@ Implementation requires an explicit mission and the state/acceptance gates in
 - `DEFERRED` — explicitly kept out of the current release/milestone scope.
 - `REJECTED` — explicitly declined; retain the reason when known.
 
+## Metadata-only worker finalization Attempt diagnostics
+
+**Status:** `PROPOSED`
+
+`WorkerFinalizationReport` (`required` / `attempted` / `succeeded` /
+`outcome` / optional `toolsExposed` / `stopReason`) is currently
+in-memory on the executor Attempt and is lost when the Pi process exits.
+MissionStore `finishAttempt` persists `terminalState`, mutation, and
+result only. Live diagnosis of whether the bounded finalization turn ran
+therefore cannot be done from the durable store.
+
+A later mission may persist those metadata-only fields on the Attempt or
+as an analytics event. It must not persist raw completions, transcripts,
+or hidden reasoning. Presence here does not authorize implementation.
+
+Evidence: [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md),
+ADR-048.
+
 ## Mission Cockpit / live Mission observability
 
 **Status:** `UNDER DISCUSSION`
