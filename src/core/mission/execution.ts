@@ -144,5 +144,7 @@ function workerRouteDiagnostics(attempt: SubagentAttempt): Record<string, unknow
 		finalizationSucceeded: finalization?.succeeded === true,
 		finalizationOutcome: finalization?.outcome ?? "not_required",
 		...(finalization?.stopReason === undefined ? {} : { stopReason: finalization.stopReason }),
+		...(attempt.safetyBlockTool === undefined ? {} : { safetyBlockTool: attempt.safetyBlockTool }),
+		...(attempt.safetyBlockCode === undefined ? {} : { safetyBlockCode: attempt.safetyBlockCode }),
 	};
 }

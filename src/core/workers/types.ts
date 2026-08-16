@@ -147,6 +147,8 @@ export interface SubagentAttempt {
 	readonly configuredWeight?: number;
 	readonly poolPosition?: number;
 	readonly resultFinalization?: WorkerFinalizationReport;
+	readonly safetyBlockTool?: string;
+	readonly safetyBlockCode?: string;
 }
 
 export type SubagentTerminalStatus =
@@ -235,6 +237,7 @@ export interface ChildSessionHandle {
 	readonly protocolState: ProtocolCaptureState;
 	readonly dispose: () => void;
 	readonly safetyTerminated?: boolean;
+	readonly lastSafetyBlock?: { readonly toolName: string; readonly code?: string };
 }
 
 export interface ChildSessionFactory {

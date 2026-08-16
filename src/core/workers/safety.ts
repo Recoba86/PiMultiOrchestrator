@@ -100,6 +100,17 @@ export function workerSafetyBlockMessage(toolName: string, result: SafetyResult)
 	return `Worker safety blocked ${toolName}: ${result.code ?? "POLICY_DENIAL"}`;
 }
 
+const READ_ONLY_WORKER_TOOLS = new Set(["read", "grep", "find", "ls"]);
+const RECOVERABLE_BLOCK_CODES = new Set(["TOOL_NOT_ACTIVE", "PROFILE_TOOL_NOT_ALLOWED", "PROFILE_MUTATION_DENIED"]);
+
+/** Blocked reads and missing tools must not kill the child; mutating command denials still stop. */
+export function shouldTerminateWorkerOnSafetyBlock(toolName: string, safety: SafetyResult): boolean {
+	if (safety.decision === "ALLOW") return false;
+	if (READ_ONLY_WORKER_TOOLS.has(toolName) || isWorkerResultToolName(toolName)) return false;
+	if (safety.code !== undefined && RECOVERABLE_BLOCK_CODES.has(safety.code)) return false;
+	return true;
+}
+
 function recordString(value: unknown, key: string): string | undefined {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
 	const candidate = (value as Record<string, unknown>)[key];

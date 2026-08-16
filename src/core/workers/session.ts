@@ -7,7 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import { createProtocolCaptureState, createProtocolOnlyCaptureTool } from "./result-tool.js";
-import { createWorkerSafetyGuard, workerSafetyBlockMessage } from "./safety.js";
+import { createWorkerSafetyGuard, shouldTerminateWorkerOnSafetyBlock, workerSafetyBlockMessage } from "./safety.js";
 import { isWorkerResultToolName, toolProfileForWorker, workerProfileFor } from "./profiles.js";
 import { WorkerError, type ChildSessionFactory, type ChildSessionHandle, type ChildSessionOptions } from "./types.js";
 import { isSupportedThinkingEffort } from "../thinking.js";
@@ -101,27 +101,34 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 		...(options.safety === undefined ? {} : options.safety),
 	});
 	let safetyTerminated = false;
+	let lastSafetyBlock: { readonly toolName: string; readonly code?: string } | undefined;
 	const previousBeforeToolCall = session.agent.beforeToolCall;
 	session.agent.beforeToolCall = async (context, signal) => {
 		const safety = guard.authorize(context.toolCall.name, context.args);
 		if (safety.decision !== "ALLOW") {
-			safetyTerminated = true;
-			return { block: true, reason: workerSafetyBlockMessage(context.toolCall.name, safety), terminate: true };
+			lastSafetyBlock ??= { toolName: context.toolCall.name, ...(safety.code === undefined ? {} : { code: safety.code }) };
+			if (shouldTerminateWorkerOnSafetyBlock(context.toolCall.name, safety)) {
+				safetyTerminated = true;
+				return { block: true, reason: workerSafetyBlockMessage(context.toolCall.name, safety), terminate: true };
+			}
+			return { block: true, reason: workerSafetyBlockMessage(context.toolCall.name, safety) };
 		}
 		return previousBeforeToolCall?.(context, signal);
 	};
 	let disposed = false;
-	return {
+	const handle = {
 		session,
 		toolNames: activeToolNames,
 		protocolState,
 		get safetyTerminated() { return safetyTerminated; },
+		get lastSafetyBlock() { return lastSafetyBlock; },
 		dispose: () => {
 			if (disposed) return;
 			disposed = true;
 			session.dispose();
 		},
 	};
+	return handle as ChildSessionHandle;
 }
 
 function childSystemPrompt(options: ChildSessionOptions): string {

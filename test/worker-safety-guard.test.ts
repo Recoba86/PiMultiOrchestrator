@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { WorkerSafetyGuard } from "../src/core/workers/safety.js";
+import { shouldTerminateWorkerOnSafetyBlock, WorkerSafetyGuard } from "../src/core/workers/safety.js";
 
 test("worker safety guard blocks untrusted and escaping filesystem mutations before execution", async () => {
 	const root = await mkdtemp(join(tmpdir(), "pmo-worker-guard-"));
@@ -55,6 +55,38 @@ test("worker profiles cannot expand into mutation or unsafe shell execution", as
 		const bounded = new WorkerSafetyGuard({ projectRoot: root, profile: "implementation", trusted: true, requestedTools: ["grep", "find"] });
 		assert.equal(bounded.authorize("grep", { path: ".", pattern: "secret" }).code, "PROTECTED_PATH_DESCENDANT");
 		assert.equal(bounded.authorize("find", { path: ".", pattern: "*.ts" }).code, "PROTECTED_PATH_DESCENDANT");
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("blocked read-only or inactive tools do not terminate the worker session", async () => {
+	const root = await mkdtemp(join(tmpdir(), "pmo-worker-block-continue-"));
+	try {
+		const investigation = new WorkerSafetyGuard({
+			projectRoot: root,
+			profile: "investigation",
+			trusted: false,
+			requestedTools: ["read", "grep", "find", "ls"],
+		});
+		const grepDot = investigation.authorize("grep", { path: ".", pattern: "prerelease" });
+		assert.equal(grepDot.decision, "BLOCK");
+		assert.equal(shouldTerminateWorkerOnSafetyBlock("grep", grepDot), false);
+		const findDot = investigation.authorize("find", { path: ".", pattern: "*.md" });
+		assert.equal(findDot.decision, "BLOCK");
+		assert.equal(shouldTerminateWorkerOnSafetyBlock("find", findDot), false);
+		const bash = investigation.authorize("bash", { command: "git tag" });
+		assert.equal(bash.code, "TOOL_NOT_ACTIVE");
+		assert.equal(shouldTerminateWorkerOnSafetyBlock("bash", bash), false);
+		const implementation = new WorkerSafetyGuard({
+			projectRoot: root,
+			profile: "implementation",
+			trusted: true,
+			requestedTools: ["bash"],
+		});
+		const destructive = implementation.authorize("bash", { command: "git reset --hard HEAD" });
+		assert.equal(destructive.code, "DESTRUCTIVE_GIT");
+		assert.equal(shouldTerminateWorkerOnSafetyBlock("bash", destructive), true);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

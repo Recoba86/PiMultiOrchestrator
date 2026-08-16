@@ -473,6 +473,8 @@ export class SubagentExecutor {
 			configuredWeight: options.configuredWeight,
 			poolPosition: options.poolPosition,
 			resultFinalization,
+			...(handle?.lastSafetyBlock?.toolName === undefined ? {} : { safetyBlockTool: handle.lastSafetyBlock.toolName }),
+			...(handle?.lastSafetyBlock?.code === undefined ? {} : { safetyBlockCode: handle.lastSafetyBlock.code }),
 		};
 		this.emit({ type: "attempt_finished", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId });
 		return { attempt, outcome, failure, result, providerSucceeded, potentialMutation: potentialMutationObserved, protocolViolation };
