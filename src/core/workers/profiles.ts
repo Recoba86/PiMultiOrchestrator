@@ -8,7 +8,7 @@ export const WORKER_TOOL_PROFILES: Readonly<Record<PoolId, readonly WorkerToolNa
 	verification: ["read", "grep", "find", "ls"],
 };
 
-export type WorkerProfileId = PoolId | "recommendation-analyst";
+export type WorkerProfileId = PoolId | "recommendation-analyst" | "recovery-assessor";
 
 export const WORKER_RESULT_TOOL_NAMES = [
 	"submit_agent_result",
@@ -24,13 +24,18 @@ export function isWorkerResultToolName(toolName: string): toolName is WorkerResu
 }
 
 const READ_ONLY_TOOLS: readonly WorkerToolName[] = ["read", "grep", "find", "ls"];
+const RECOVERY_ASSESSOR_TOOLS: readonly WorkerToolName[] = ["read", "ls"];
 
 export function workerProfileFor(poolId: PoolId, resultToolName?: string): WorkerProfileId {
-	return resultToolName === "submit_recommendation_analysis" ? "recommendation-analyst" : poolId;
+	if (resultToolName === "submit_recommendation_analysis") return "recommendation-analyst";
+	if (resultToolName === "submit_recovery_assessment") return "recovery-assessor";
+	return poolId;
 }
 
 export function toolProfileForWorker(profile: WorkerProfileId): readonly WorkerToolName[] {
-	return profile === "recommendation-analyst" ? READ_ONLY_TOOLS : WORKER_TOOL_PROFILES[profile];
+	if (profile === "recommendation-analyst") return READ_ONLY_TOOLS;
+	if (profile === "recovery-assessor") return RECOVERY_ASSESSOR_TOOLS;
+	return WORKER_TOOL_PROFILES[profile];
 }
 
 export function toolProfileForPool(poolId: PoolId): readonly WorkerToolName[] {

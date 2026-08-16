@@ -28,7 +28,7 @@ import {
 	shouldRunResultFinalization,
 	skippedSafetyFinalization,
 } from "./finalization.js";
-import { isPotentiallyMutatingTool, toolProfileForPool } from "./profiles.js";
+import { isPotentiallyMutatingTool, toolProfileForPool, toolProfileForWorker, workerProfileFor } from "./profiles.js";
 import {
 	WORKER_PROTOCOL_VERSION,
 	WorkerError,
@@ -298,6 +298,7 @@ export class SubagentExecutor {
 	}): Promise<SingleAttempt> {
 		const startedAt = this.clock().toISOString();
 		const resultProtocol = this.resultProtocolFactory?.(options.request) ?? createAgentResultProtocol();
+		const profile = workerProfileFor(options.request.poolId, resultProtocol.toolName);
 		const observations: ToolObservation[] = [];
 		const observationByCall = new Map<string, ToolObservationMutable>();
 		let providerSucceeded = false;
@@ -316,7 +317,7 @@ export class SubagentExecutor {
 				cwd: options.request.cwd,
 				route: options.route,
 				request: options.request,
-				toolNames: toolProfileForPool(options.request.poolId),
+				toolNames: toolProfileForWorker(profile),
 				resultProtocol,
 				...(this.safety === undefined ? {} : { safety: this.safety }),
 				...(options.signal === undefined ? {} : { signal: options.signal }),

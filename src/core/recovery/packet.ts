@@ -5,6 +5,7 @@ export function recoveryAssessmentPrompt(input: AssessmentPromptInput): string {
 	const files = input.projection.files.map((file) => `${file.status} ${file.path}`).join("\n") || "(no changed files listed)";
 	return [
 		"READ-ONLY recovery assessment. Do not modify files, run mutating commands, or restart the Task.",
+		"Inspect with ls and read only. Do not use grep or find; protected paths such as .git will block recursive search.",
 		`Original objective: ${input.objective.slice(0, 4_000)}`,
 		`Acceptance criteria: ${input.acceptanceCriteria.join("; ").slice(0, 2_000)}`,
 		`Failed attempt: ${input.failedAttemptId}`,
@@ -21,7 +22,8 @@ export function continuationRecoveryPrompt(input: ContinuationPacketInput): stri
 	return [
 		"THE CURRENT WORKTREE IS THE STARTING STATE.",
 		"Do not perform the Task from zero.",
-		"First inspect existing changes. Preserve correct work. Complete or repair only what remains.",
+		"First inspect existing changes with ls and read. Do not grep or find from `.`; `.git` is protected.",
+		"Preserve correct work. Complete or repair only what remains.",
 		`Boss recovery action: ${input.action}`,
 		`Original objective: ${input.objective.slice(0, 4_000)}`,
 		`Acceptance criteria: ${input.acceptanceCriteria.join("; ").slice(0, 2_000)}`,

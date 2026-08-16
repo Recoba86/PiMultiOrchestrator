@@ -22,7 +22,7 @@ import {
 	recoveryAssessmentPrompt,
 	shouldEnterAutonomousRecovery,
 } from "../src/core/recovery/index.js";
-import { isWorkerResultToolName, toolProfileForPool } from "../src/core/workers/profiles.js";
+import { isWorkerResultToolName, toolProfileForPool, toolProfileForWorker, workerProfileFor } from "../src/core/workers/profiles.js";
 import type { SubagentRunResult, StructuredChildResult, ToolObservation } from "../src/core/workers/types.js";
 
 const tmp = () => mkdtemp(join(tmpdir(), "pmo-rc30-recovery-"));
@@ -168,6 +168,7 @@ describe("RC30 autonomous mutation recovery", () => {
 		assert.equal(protocol.toolName, RECOVERY_ASSESSMENT_TOOL_NAME);
 		assert.equal(isWorkerResultToolName(protocol.toolName), true);
 		assert.deepEqual(toolProfileForPool("investigation"), ["read", "grep", "find", "ls"]);
+		assert.deepEqual(toolProfileForWorker(workerProfileFor("investigation", protocol.toolName)), ["read", "ls"]);
 		const parsed = parseRecoveryAssessment(assessmentPayload);
 		assert.equal(parsed.recoverable, true);
 		assert.equal(parsed.humanRequired, false);
@@ -185,6 +186,7 @@ describe("RC30 autonomous mutation recovery", () => {
 		assert.match(prompt, /READ-ONLY/u);
 		assert.match(prompt, /src\/app\.ts/u);
 		assert.match(prompt, /submit_recovery_assessment/u);
+		assert.match(prompt, /ls and read/u);
 		assert.doesNotMatch(prompt, /edit the files/iu);
 	});
 
