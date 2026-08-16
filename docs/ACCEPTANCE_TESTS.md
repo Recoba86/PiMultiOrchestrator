@@ -647,7 +647,7 @@ M8 acceptance note: STATE-8 records `134/134 PASS` and the actual Pi/fake-gatewa
 
 - **Level:** I, fixture-v1
 - **Action:** exercise provider failure before tools, read-only failure, quota/rate failure, edit/write/bash followed by timeout/failure, cancellation, and exact route changes.
-- **Pass:** M4 alone decides retry/fallback; safe pre-tool/read-only failures may fall back; potential mutation returns `partial_mutation_requires_review` and never starts the next route; cancellation stops without fallback/health penalty; every child uses the exact selected remote ID.
+- **Pass:** M4 alone decides retry/fallback; safe pre-tool/read-only failures may fall back; potential mutation returns `partial_mutation_requires_review` and never starts the next route; cancellation stops without fallback/health penalty; every child uses the exact selected remote ID. Local Implementation mutation without a structured result may enter ADR-050 recovery above M4; that is not M4 cross-route replay.
 
 ### WORK-08 — Parent delegation and Pi proof
 
@@ -1284,11 +1284,12 @@ requirements and remain future work.
 
 - **Level:** U
 - **Setup:** load `PACKAGE_INFO` from compiled `dist`/`dist-test` output.
-- **Pass:** version equals `package.json` (`0.1.0-rc.29`); development line is
-  `RC29 — Mission Runtime Convergence`; RC23 titles
+- **Pass:** version equals `package.json` (`0.1.0-rc.30`); development line is
+  `RC30 — Autonomous Boss-Led Mutation Recovery`; RC23 titles
   are absent; `latestAcceptedMilestone` is M10; `productionReady` is false;
   an unmapped version would report `stale-development-line:<version>` rather
-  than an older RC title. The `0.1.0-rc.26`, `0.1.0-rc.27`, and `0.1.0-rc.28` map entries remain historical.
+  than an older RC title. The `0.1.0-rc.26`, `0.1.0-rc.27`, `0.1.0-rc.28`,
+  and `0.1.0-rc.29` map entries remain historical.
   `@orchestrator` and Smart Routing Run as Mission
   still enter the same canonical Boss loop.
 
@@ -1399,6 +1400,19 @@ requirements and remain future work.
   completion. Resume from persisted `lastFeedback`/cycle does not recreate
   completed Tasks or re-enter terminal Missions. Boss prompts include the
   canonical projection and class-specific M7 prompts are used.
+
+### RC30-01 — Autonomous mutation recovery for local Implementation misses
+
+- **Level:** U/I, fake runtime
+- **Pass:** valid `submit_agent_result` after mutation does not enter recovery.
+  `mutation=false` plus exhausted finalization remains ADR-049 cross-route
+  fallback. `mutation=true` local file edits without a structured result enter
+  autonomous recovery, run a read-only `submit_recovery_assessment`, and
+  continue or repair the same Task from the current worktree. Unsafe
+  push/publication/unknown mutation requires `REQUEST_HUMAN`. Recovery cannot
+  recurse past one sequence per Task. SAFETY_STOP and CANCELLED stay
+  non-recoverable. Successful continuation admits Evidence, M7 can pass, and
+  the Mission can COMPLETE.
 
 ### RC26-04 — Persisted Pi install evidence is machine-neutral
 

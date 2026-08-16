@@ -267,6 +267,15 @@ select `FALLBACK_NEXT_ROUTE` as `result_capability` for another eligible
 route on the same Task. MissionStore persists metadata-only finalization
 diagnostics on the attempt event payload.
 
+RC30 adds Boss-led autonomous mutation recovery above M4. After an
+Implementation Worker mutates the local worktree and still misses
+`submit_agent_result`, PMO preserves the worktree, runs a read-only
+`submit_recovery_assessment`, takes a Boss `submit_recovery_decision`, and
+continues the same Task from the current worktree. ADR-049 CLASS A
+(`mutation=false`) fallback is unchanged. Unsafe external or unknown
+mutations escalate to the human. Recovery is bounded to one sequence per
+Task and never replays publication, push, or irreversible external writes.
+
 ### 5.12 `tui`
 
 Renders the twelve Control Center sections using Pi TUI components and calls application operations. Components do not read files, query SQLite, resolve secrets, or call 9Router directly. Each screen receives view data plus explicit commands so non-TUI tests can exercise the same operations.

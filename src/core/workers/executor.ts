@@ -16,6 +16,7 @@ import {
 import { POOL_IDS } from "../pools/index.js";
 import { createAgentResultProtocol, parseStructuredChildResult, readProtocolCapture } from "./result-tool.js";
 import { parseVerificationResult } from "../quality/gate.js";
+import { parseRecoveryAssessment } from "../recovery/assessment.js";
 import { defaultChildSessionFactory } from "./session.js";
 import { extractWorkerUsage } from "./usage.js";
 import {
@@ -742,6 +743,8 @@ function readProtocolResult(protocol: ResultProtocolSpec, state: ProtocolCapture
 			return readProtocolCapture(state, parseVerificationResult);
 		case "submit_recommendation_analysis":
 			return state.captured;
+		case "submit_recovery_assessment":
+			return readProtocolCapture(state, parseRecoveryAssessment);
 		default:
 			return undefined;
 	}

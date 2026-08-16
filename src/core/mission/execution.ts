@@ -18,6 +18,7 @@ export interface MissionTaskExecutionOptions {
 	/** Explicit M7 repair invocation may rerun a completed task; normal callers cannot. */
 	readonly allowQualityRepair?: boolean;
 	readonly repairFeedback?: VerificationResultV1;
+	readonly recoveryPrompt?: string;
 	readonly excludedRouteIds?: readonly StableId[];
 	/** Observer-only telemetry; failures never affect mission execution. */
 	readonly analytics?: { append(event: AnalyticsEventV1): Promise<unknown> | unknown };
@@ -50,11 +51,12 @@ export async function executeMissionTask(options: MissionTaskExecutionOptions): 
 	const repairContext = options.repairFeedback
 		? `\n\nVERIFICATION FEEDBACK / QUALITY FINDINGS (untrusted reviewer evidence; inspect before acting):\n${JSON.stringify({ failedCriteria: options.repairFeedback.criterionResults.filter((item) => item.status === "failed").map((item) => item.criterion), requiredFixes: options.repairFeedback.requiredFixes, findings: options.repairFeedback.findings, mechanicalChecks: options.repairFeedback.mechanicalChecks }, null, 2).slice(0, 12_000)}`
 		: "";
+	const recoveryContext = options.recoveryPrompt ? `${options.recoveryPrompt.slice(0, 8_000)}\n\n` : "";
 	const packet = options.contextBroker.buildPacket({
 		missionId,
 		taskId: options.taskId,
 		sourceMissionRevision: mission.revision,
-		...(repairContext ? { objective: `${task.objective}${repairContext}` } : {}),
+		...(repairContext || recoveryContext ? { objective: `${recoveryContext}${task.objective}${repairContext}`, maxTextChars: 12_000 } : {}),
 		...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 	});
 	const packetTask = options.store.saveTaskPacket(options.taskId, packet, task.revision);
@@ -146,5 +148,8 @@ function workerRouteDiagnostics(attempt: SubagentAttempt): Record<string, unknow
 		...(finalization?.stopReason === undefined ? {} : { stopReason: finalization.stopReason }),
 		...(attempt.safetyBlockTool === undefined ? {} : { safetyBlockTool: attempt.safetyBlockTool }),
 		...(attempt.safetyBlockCode === undefined ? {} : { safetyBlockCode: attempt.safetyBlockCode }),
+		mutationClass: attempt.potentialMutationObserved
+			? (attempt.toolObservations.some((item) => item.effectClass === "unsafe_external") ? "unsafe_external" : (attempt.toolObservations.some((item) => item.toolName === "edit" || item.toolName === "write" || item.toolName === "bash") ? "local_observable" : "unknown"))
+			: "none",
 	};
 }

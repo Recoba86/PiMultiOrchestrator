@@ -29,6 +29,16 @@ forbidden. This entry does not authorize additional transcript persistence.
 Evidence: [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md),
 ADR-048.
 
+## Autonomous Boss-led mutation recovery
+
+**Status:** `PROMOTED TO ROADMAP`
+
+Authorized as RC30 / ADR-050. Local observable Implementation mutation
+without `submit_agent_result` recovers through a read-only assessment and a
+Boss continuation on the same Task. Unsafe external side effects still
+require a human. This entry does not authorize publication or automatic
+rollback of unknown mutations.
+
 ## Mission Cockpit / live Mission observability
 
 **Status:** `UNDER DISCUSSION`

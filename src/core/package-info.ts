@@ -36,6 +36,7 @@ const DEVELOPMENT_LINE_BY_VERSION: Readonly<Record<string, string>> = Object.fre
 	"0.1.0-rc.27": "RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair",
 	"0.1.0-rc.28": "RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics",
 	"0.1.0-rc.29": "RC29 — Mission Runtime Convergence",
+	"0.1.0-rc.30": "RC30 — Autonomous Boss-Led Mutation Recovery",
 });
 
 export function developmentLineForVersion(version: string): string {

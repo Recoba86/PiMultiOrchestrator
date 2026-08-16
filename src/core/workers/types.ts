@@ -80,6 +80,7 @@ export interface ToolObservation {
 	readonly toolCallId: string;
 	readonly toolName: string;
 	readonly potentialMutation: boolean;
+	readonly effectClass?: "local_write" | "unsafe_external" | "unknown";
 	readonly startedAt: string;
 	readonly endedAt?: string;
 	readonly completed: boolean;

@@ -14,7 +14,8 @@ This file records releasable product state. It does not promote development prog
 | Public stable release | NONE |
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.28` — npm `next`; `latest` remains `0.1.0-rc.17` |
 | Product version | `0.1.0-rc.28` public prerelease |
-| Development manifest version | `0.1.0-rc.29` — RC29 Mission Runtime Convergence; UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; not public |
+| Development manifest version | `0.1.0-rc.30` — RC30 Autonomous Boss-Led Mutation Recovery; local unpublished; RC29 frozen candidate remains unmodified |
+| RC30 development line | ADR-050 autonomous mutation recovery; `0.1.0-rc.30`; not tagged or npm-published |
 | RC29 development line | ADR-046/048/049 plus live Mission COMPLETED; `0.1.0-rc.29`; unpublished candidate SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not tagged or npm-published |
 | RC28 release line | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release line | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
@@ -26,7 +27,7 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC29 unpublished verified candidate on `0.1.0-rc.29` after live Mission COMPLETED and detached `release:verify` PASS; RC28 remains the verified public prerelease |
+| Local technical release readiness | RC30 local unpublished development on `0.1.0-rc.30`; RC29 unpublished verified candidate remains frozen; RC28 remains the verified public prerelease |
 | Release tag | `v0.1.0-rc.28` → `aad28c33260326665ec17e347d50fe985b18a953` |
 | Release commit | `aad28c33260326665ec17e347d50fe985b18a953` |
 | Release artifact | `pi-multi-orchestrator-0.1.0-rc.28.tgz`; SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |

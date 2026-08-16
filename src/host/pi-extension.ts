@@ -55,6 +55,7 @@ import {
 } from "../core/ninerouter/index.js";
 import {
 	createSubagentExecutor,
+	createAgentResultProtocol,
 	WorkerError,
 	 type ResultProtocolSpec,
 	 type SubagentExecutionRequest,
@@ -97,6 +98,15 @@ import { BOSS_SYSTEM_PROMPT, bossInferencePrompt } from "../core/mission/boss-pr
 import { formatBossProfileOverview } from "../core/mission/boss-profile-view.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
+import {
+	RECOVERY_BOSS_PROMPT,
+	RECOVERY_DECISION_TOOL_NAME,
+	createRecoveryAssessmentProtocol,
+	createRecoveryDecisionTool,
+	dispatchImplementationWithRecovery,
+	parseRecoveryAssessment,
+	parseRecoveryAssistantResponse,
+} from "../core/recovery/index.js";
 import { reviewerPromptForExecutionClass } from "../core/quality/reviewer-prompt.js";
 import {
 	AnalyticsQueryService,
@@ -910,6 +920,40 @@ const invokeBossInference = async (manager: PiManagerContract, providerRegistry:
 		if (error instanceof BossInfrastructureError) throw error;
 		wrapBossRequestFailure(error, resolvedIdentity);
 	}
+};
+
+const recoveryBossPrompt = (task: { readonly objective: string; readonly acceptanceCriteria: readonly string[] }, assessment: { readonly recommendedPlan: string; readonly continuationInstruction: string; readonly recoverable: boolean }, projection: { readonly changedFileCount: number; readonly files: readonly { readonly path: string; readonly status: string }[] }): string =>
+	[
+		`Task objective: ${task.objective.slice(0, 4_000)}`,
+		`Acceptance criteria: ${task.acceptanceCriteria.join("; ").slice(0, 2_000)}`,
+		`Changed file count: ${projection.changedFileCount}`,
+		`Changed files: ${projection.files.map((file) => `${file.status} ${file.path}`).join("; ").slice(0, 4_000)}`,
+		`Assessment recoverable: ${assessment.recoverable}`,
+		`Recommended plan: ${assessment.recommendedPlan.slice(0, 2_000)}`,
+		`Continuation instruction: ${assessment.continuationInstruction.slice(0, 2_000)}`,
+		"Choose CONTINUE_EXISTING_WORK or REPAIR_EXISTING_WORK for local recoverable edits. REQUEST_HUMAN only for unsafe or unknown side effects.",
+	].join("\n");
+
+const invokeRecoveryDecision = async (
+	manager: PiManagerContract,
+	providerRegistry: PiProviderRegistry | undefined,
+	assignment: BossInferenceRequest["assignment"],
+	task: { readonly objective: string; readonly acceptanceCriteria: readonly string[] },
+	assessment: { readonly recommendedPlan: string; readonly continuationInstruction: string; readonly recoverable: boolean },
+	projection: { readonly changedFileCount: number; readonly files: readonly { readonly path: string; readonly status: string }[] },
+	signal?: AbortSignal,
+): Promise<ReturnType<typeof parseRecoveryAssistantResponse>> => {
+	const route = await resolveHostRoute(manager, assignment.routeId, providerRegistry);
+	const response = await route.modelRuntime.completeSimple(route.model, {
+		systemPrompt: RECOVERY_BOSS_PROMPT,
+		messages: [{ role: "user", content: recoveryBossPrompt(task, assessment, projection), timestamp: Date.now() }],
+		tools: [createRecoveryDecisionTool() as never],
+	}, {
+		toolChoice: { type: "function", function: { name: RECOVERY_DECISION_TOOL_NAME } },
+		...(assignment.thinkingEffort === "auto" ? {} : { reasoning: assignment.thinkingEffort }),
+		...(signal === undefined ? {} : { signal }),
+	} as unknown as Parameters<typeof route.modelRuntime.completeSimple>[2]);
+	return parseRecoveryAssistantResponse(response);
 };
 
 /** Build the M5 adapter from the already-authoritative M3/M4 stores. */
@@ -2783,7 +2827,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				...(analyticsStore ? { analytics: analyticsStore } : {}),
 				...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
 				invoke: (request) => invokeBossInference(manager, providerRegistry, request),
-				dispatch: async (task): Promise<BossTaskOutcome> => {
+				dispatch: async (task, context): Promise<BossTaskOutcome> => {
 					if (ctx.signal?.aborted) {
 						const cancelled = new Error("Mission worker dispatch was cancelled");
 						cancelled.name = "AbortError";
@@ -2791,10 +2835,47 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					}
 					if (task.executionClass === "implementation" && options.trustStore && !options.trustStore.isTrusted(ctx.cwd)) throw new ProjectTrustRequiredError();
 					try {
-						const executed = await executeMissionTask({ store, contextBroker: broker, executor, missionId: mission.missionId, taskId: task.taskId, cwd: ctx.cwd, ...(analyticsStore ? { analytics: analyticsStore } : {}), ...(ctx.signal === undefined ? {} : { signal: ctx.signal }), ...(task.status === "execution_completed" ? { allowQualityRepair: true } : {}) });
-						const updated = store.getTask(task.taskId) ?? executed.task;
-						if (executed.run.terminalStatus === "cancelled" || ctx.signal?.aborted) return { taskId: String(task.taskId), status: "cancelled", summary: executed.run.summary.slice(0, 2_000) };
-						return { taskId: String(task.taskId), status: executed.run.terminalStatus === "completed" && updated.status === "execution_completed" ? "succeeded" : "failed", summary: executed.run.summary.slice(0, 2_000) };
+						return await dispatchImplementationWithRecovery({
+							execution: {
+								store,
+								contextBroker: broker,
+								executor,
+								missionId: mission.missionId,
+								taskId: task.taskId,
+								cwd: ctx.cwd,
+								...(analyticsStore ? { analytics: analyticsStore } : {}),
+								...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
+								...(task.status === "execution_completed" ? { allowQualityRepair: true } : {}),
+							},
+							assess: async ({ prompt }) => {
+								const run = await executor.run({
+									roleId: "recovery-assessor",
+									poolId: "investigation",
+									task: prompt,
+									cwd: ctx.cwd,
+								}, ctx.signal);
+								try {
+									return parseRecoveryAssessment(run.protocolResult);
+								} catch {
+									return undefined;
+								}
+							},
+							decide: async ({ assessment, projection }) => {
+								try {
+									return await invokeRecoveryDecision(
+										manager,
+										providerRegistry,
+										context.assignment,
+										{ objective: task.objective, acceptanceCriteria: task.acceptanceCriteria },
+										assessment,
+										projection,
+										ctx.signal,
+									);
+								} catch {
+									return { action: "REQUEST_HUMAN", summary: "Boss recovery decision was unavailable" };
+								}
+							},
+						});
 					} catch (error) {
 						if (isBossCancellationCause(error, ctx.signal) || isBossSafetyStopCause(error)) throw error;
 						return { taskId: String(task.taskId), status: "failed", summary: error instanceof Error ? error.message.slice(0, 240) : "Worker execution failed" };
@@ -4138,7 +4219,7 @@ export default async function piMultiOrchestratorExtension(pi: ExtensionAPI): Pr
 	}
 	let subagentExecutor: SubagentExecutor | undefined;
 	try {
-		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, undefined, trustStore, () => providerRegistryRef.current);
+		subagentExecutor = await createHostSubagentExecutor(manager, poolManager, configStore, healthStore, (request) => request.roleId === "recovery-assessor" ? createRecoveryAssessmentProtocol() : createAgentResultProtocol(), trustStore, () => providerRegistryRef.current);
 	} catch {
 		// Keep the M2/M3/M4 host available when no configured route can yet be resolved.
 		subagentExecutor = undefined;

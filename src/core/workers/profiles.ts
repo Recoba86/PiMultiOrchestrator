@@ -14,6 +14,7 @@ export const WORKER_RESULT_TOOL_NAMES = [
 	"submit_agent_result",
 	"submit_verification_result",
 	"submit_recommendation_analysis",
+	"submit_recovery_assessment",
 ] as const;
 
 export type WorkerResultToolName = (typeof WORKER_RESULT_TOOL_NAMES)[number];

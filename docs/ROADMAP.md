@@ -8,13 +8,16 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 RC28 is the current public prerelease and adds live Boss invocation
 compatibility, classified failure diagnostics, and infrastructure-fallback
-semantics. RC29 (`0.1.0-rc.29`) is an unpublished verified candidate after
-live Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED. It
-is not public, accepted, tagged, npm-published, or a production release.
+semantics. RC29 (`0.1.0-rc.29`) is a frozen unpublished verified candidate
+after live Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED.
+Source currently develops RC30 (`0.1.0-rc.30`) Autonomous Boss-Led Mutation
+Recovery locally; it is not public, accepted, tagged, npm-published, or a
+production release. The frozen RC29 artifact must not be modified.
 M10 remains the latest accepted development milestone; M11 remains
 implemented but not accepted. Live `routing.fallback.enabled` is true.
 Acceptance dogfood used `routing.maxAttempts=1`; ADR-049 adds non-mutating
-result-capability fallback. See
+result-capability fallback; ADR-050 adds Boss-led recovery for local
+Implementation mutation without a structured result. See
 [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md)
 and
 [worker-infrastructure-fallback-forensics.md](worker-infrastructure-fallback-forensics.md).
@@ -496,6 +499,31 @@ detached unpublished candidate SHA-256
 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`
 (source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`). Publication remains
 operator-owned. RC29 is an unpublished candidate.
+
+## RC30 — Autonomous Boss-Led Mutation Recovery
+
+Status: IN PROGRESS / LOCAL UNPUBLISHED. Development identity:
+`0.1.0-rc.30`. Not public, accepted, tagged, npm-published, or production-ready.
+The frozen RC29 artifact `pi-multi-orchestrator-0.1.0-rc.29.tgz` is not
+modified.
+
+Deliverables:
+
+- CLASS A (`mutation=false`) keeps ADR-049 result-capability fallback;
+- CLASS B local observable Implementation mutation without a structured
+  result enters Boss-led autonomous recovery on the same Task;
+- read-only `submit_recovery_assessment` plus Boss `submit_recovery_decision`;
+- continuation from the current worktree (`CONTINUE_EXISTING_WORK` /
+  `REPAIR_EXISTING_WORK`); `ROLLBACK_AND_RETRY` only when a safe local
+  rollback is proven; `REQUEST_HUMAN` for CLASS C / unknown / failed
+  inspection / exhausted budget;
+- one autonomous recovery sequence per logical Task;
+- SAFETY_STOP and CANCELLED remain non-recoverable.
+
+Exit evidence: `test/mutation-recovery.test.ts`, ADR-050, RC30-01, `npm test`
+/ `npm run check`, controlled sandbox recovery dogfood, one normal
+implementation Mission COMPLETED, and an unpublished RC30 candidate. Do not
+publish, tag, or GitHub-release.
 
 ## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
 

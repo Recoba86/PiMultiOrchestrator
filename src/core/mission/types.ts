@@ -46,6 +46,7 @@ export type EvidenceKind =
   | "test-result"
   | "artifact"
   | "command-result"
+  | "recovery-assessment"
   | "other";
 
 export type CheckpointKind =
