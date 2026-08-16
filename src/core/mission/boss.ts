@@ -638,10 +638,16 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 		const last = state.lastDecision ? `${state.lastDecision.phase}/${state.lastDecision.action}` : "none";
 		return `${detail}; cycles=${cycles}; tasks=${tasks}; protocolFailures=${state.protocolFailures}; actionablePlanFailures=${state.actionablePlanFailures}; lastAction=${last}; pin=${String(pin).slice(0, 64)}; fallback=${state.fallbackHistory.length === 0 ? "none" : "yes"}`.slice(0, 240);
 	};
-	const recordProtocolFailure = (error: unknown): void => {
+	let repeatedProtocolErrorCount = 0;
+	const recordProtocolFailure = (error: unknown): { readonly repeated: boolean } => {
 		const summary = error instanceof Error ? error.message.slice(0, 240) : "Boss planning failed";
 		const actionable = error instanceof BossProtocolError && /requires at least one actionable task/u.test(error.message);
 		const invocation = invocationFromError(error, { stage: "decision-protocol", failureClass: "decision_protocol", fallbackAttempted: false });
+		if (state.lastProtocolError === summary) {
+			repeatedProtocolErrorCount += 1;
+		} else {
+			repeatedProtocolErrorCount = 1;
+		}
 		state = {
 			...state,
 			protocolFailures: state.protocolFailures + 1,
@@ -650,6 +656,7 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 			...(invocation === undefined ? {} : { lastInvocation: invocation }),
 		};
 		mission = persistState(options.store, mission, state, { kind: "boss-protocol-failure", summary, actionable, stage: invocation?.stage, failureClass: invocation?.failureClass });
+		return { repeated: repeatedProtocolErrorCount >= Math.min(maxCycles, 4) };
 	};
 	let feedback: unknown = state.lastFeedback;
 	for (let cycle = state.cycle; cycle < maxCycles; cycle += 1) {
@@ -661,10 +668,22 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 			if (isBossCancellationCause(planned.error, options.signal)) return stopCancelled(mission, "Mission cancelled during Boss planning", cycle);
 			if (isBossSafetyStopCause(planned.error)) return stopSafety(mission, planned.error, cycle);
 			if (planned.error instanceof BossRuntimeError && planned.error.kind === "infrastructure") return terminal(options.store, mission, state, "BLOCKED", infrastructureTerminalReason(planned.error, "plan"), cycle, options, clock);
-			recordProtocolFailure(planned.error);
-			feedback = { kind: "boss-plan-failure", summary: planned.error instanceof Error ? planned.error.message.slice(0, 240) : "Boss planning failed", protocolFailures: state.protocolFailures, actionablePlanFailures: state.actionablePlanFailures };
+			const failureOutcome = recordProtocolFailure(planned.error);
+			const errorSummary = planned.error instanceof Error ? planned.error.message.slice(0, 240) : "Boss planning failed";
+			feedback = {
+				kind: "boss-plan-failure",
+				summary: errorSummary,
+				violation: errorSummary,
+				contract: "submit_boss_decision",
+				reminder: "Call the submit_boss_decision tool with action, summary, and tasks.",
+				protocolFailures: state.protocolFailures,
+				actionablePlanFailures: state.actionablePlanFailures,
+			};
 			state = { ...state, lastFeedback: feedback };
 			mission = persistState(options.store, mission, state, { kind: "boss-plan-failure-feedback" });
+			if (failureOutcome.repeated) {
+				return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(cycle + 1, `Boss planning repeated identical protocol failure: ${errorSummary}`), cycle + 1, options, clock);
+			}
 			if (cycle + 1 >= maxCycles) return terminal(options.store, mission, state, "AWAITING_USER", budgetExhaustedReason(cycle + 1, "Boss planning did not produce a valid actionable plan"), cycle + 1, options, clock);
 			continue;
 		}

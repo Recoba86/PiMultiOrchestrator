@@ -505,3 +505,11 @@ export { evaluateMissionCapability, capabilityMismatchReason } from "./capabilit
 export { taskIdentityKey, resolveOrCreateMissionTask, activeMissionTasks, completedAndVerified } from "./task-identity.js";
 export { projectBossCanonicalState } from "./boss-projection.js";
 export { BOSS_SYSTEM_PROMPT, bossInferencePrompt } from "./boss-prompt.js";
+export {
+	BOSS_DECISION_TOOL_NAME,
+	BOSS_DECISION_TOOL_SCHEMA,
+	createBossDecisionTool,
+	parseBossAssistantResponse,
+	extractBossAssistantText,
+	type BossDecisionToolDeclaration,
+} from "./boss-response.js";

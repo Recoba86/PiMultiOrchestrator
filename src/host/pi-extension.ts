@@ -86,7 +86,13 @@ import {
 	type BossTaskOutcome,
 	type BossVerificationOutcome,
 } from "../core/mission/boss.js";
-import { bossInfrastructureError, parseBossAssistantResponse, wrapBossRequestFailure } from "../core/mission/boss-response.js";
+import {
+	BOSS_DECISION_TOOL_NAME,
+	bossInfrastructureError,
+	createBossDecisionTool,
+	parseBossAssistantResponse,
+	wrapBossRequestFailure,
+} from "../core/mission/boss-response.js";
 import { BOSS_SYSTEM_PROMPT, bossInferencePrompt } from "../core/mission/boss-prompt.js";
 import { formatBossProfileOverview } from "../core/mission/boss-profile-view.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
@@ -886,10 +892,12 @@ const invokeBossInference = async (manager: PiManagerContract, providerRegistry:
 		const response = await route.modelRuntime.completeSimple(route.model, {
 			systemPrompt: BOSS_SYSTEM_PROMPT,
 			messages: [{ role: "user", content: bossInferencePrompt(request), timestamp: Date.now() }],
+			tools: [createBossDecisionTool() as never],
 		}, {
+			toolChoice: { type: "function", function: { name: BOSS_DECISION_TOOL_NAME } },
 			...(request.assignment.thinkingEffort === "auto" ? {} : { reasoning: request.assignment.thinkingEffort }),
 			...(request.signal === undefined ? {} : { signal: request.signal }),
-		});
+		} as unknown as Parameters<typeof route.modelRuntime.completeSimple>[2]);
 		return parseBossInferenceResponse(response, request.signal, request.phase, resolvedIdentity);
 	} catch (error) {
 		if (error instanceof BossProtocolError) throw error;

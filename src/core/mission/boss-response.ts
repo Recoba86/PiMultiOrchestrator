@@ -76,11 +76,67 @@ export function bossInvocationDiagnostic(error: unknown): BossInvocationDiagnost
 const withDiagnostic = (error: BossInfrastructureError | BossProtocolError, diagnostic: BossInvocationDiagnostic): BossInfrastructureError | BossProtocolError =>
 	attachBossDiagnostic(error, diagnostic);
 
-export function extractBossAssistantText(content: unknown): { readonly text: string; readonly textBlocks: number; readonly thinkingBlocks: number; readonly toolCalls: number } {
+export const BOSS_DECISION_TOOL_NAME = "submit_boss_decision";
+
+export const BOSS_DECISION_TOOL_SCHEMA = {
+	type: "object",
+	additionalProperties: false,
+	required: ["action", "summary", "tasks"],
+	properties: {
+		action: {
+			type: "string",
+			enum: ["dispatch", "replan", "complete", "blocked", "awaiting_user"],
+			description: "The primary orchestrator action for this cycle",
+		},
+		summary: {
+			type: "string",
+			minLength: 1,
+			description: "One bounded sentence summarizing why this action was chosen",
+		},
+		tasks: {
+			type: "array",
+			description: "Array of bounded tasks to execute for dispatch or replan",
+			items: {
+				type: "object",
+				additionalProperties: false,
+				required: ["roleId", "executionClass", "objective"],
+				properties: {
+					taskId: { type: "string", description: "Stable task ID if repairing an existing task" },
+					roleId: { type: "string", minLength: 1, description: "Role that will execute this task" },
+					executionClass: { type: "string", enum: ["investigation", "implementation", "verification"] },
+					poolId: { type: "string", enum: ["investigation", "implementation", "verification"] },
+					objective: { type: "string", minLength: 1, description: "Specific bounded task objective" },
+					acceptanceCriteria: { type: "array", items: { type: "string" }, description: "Specific verifiable criteria" },
+				},
+			},
+		},
+		acceptanceSatisfied: { type: "boolean", description: "Set true only when complete and all criteria are verified" },
+		requiredFixes: { type: "array", items: { type: "string" }, description: "Specific fixes required on replan" },
+	},
+} as const;
+
+export interface BossDecisionToolDeclaration {
+	readonly name: string;
+	readonly description: string;
+	readonly parameters: Record<string, unknown>;
+	readonly constrainedSampling?: { readonly type: "json_schema"; readonly strict: "prefer" | "require" };
+}
+
+export function createBossDecisionTool(): BossDecisionToolDeclaration {
+	return {
+		name: BOSS_DECISION_TOOL_NAME,
+		description: "Submit the canonical Boss orchestrator decision for this Mission cycle. Capture-only control-plane tool; performs no filesystem, network, shell, or Mission mutation.",
+		parameters: BOSS_DECISION_TOOL_SCHEMA as unknown as Record<string, unknown>,
+		constrainedSampling: { type: "json_schema", strict: "prefer" },
+	};
+}
+
+export function extractBossAssistantText(content: unknown): { readonly text: string; readonly textBlocks: number; readonly thinkingBlocks: number; readonly toolCalls: number; readonly decisionToolCall?: Record<string, unknown> } {
 	if (!Array.isArray(content)) return { text: "", textBlocks: 0, thinkingBlocks: 0, toolCalls: 0 };
 	let textBlocks = 0;
 	let thinkingBlocks = 0;
 	let toolCalls = 0;
+	let decisionToolCall: Record<string, unknown> | undefined;
 	const parts: string[] = [];
 	for (const block of content) {
 		if (!isRecord(block) || typeof block.type !== "string") continue;
@@ -90,6 +146,9 @@ export function extractBossAssistantText(content: unknown): { readonly text: str
 		}
 		if (block.type === "toolCall") {
 			toolCalls += 1;
+			if (block.name === BOSS_DECISION_TOOL_NAME && isRecord(block.arguments)) {
+				decisionToolCall ??= block.arguments as Record<string, unknown>;
+			}
 			continue;
 		}
 		if (block.type === "text" && typeof block.text === "string") {
@@ -97,7 +156,13 @@ export function extractBossAssistantText(content: unknown): { readonly text: str
 			parts.push(block.text);
 		}
 	}
-	return { text: parts.join("\n").trim(), textBlocks, thinkingBlocks, toolCalls };
+	return {
+		text: parts.join("\n").trim(),
+		textBlocks,
+		thinkingBlocks,
+		toolCalls,
+		...(decisionToolCall === undefined ? {} : { decisionToolCall }),
+	};
 }
 
 const tokenUsageFromResponse = (response: unknown): BossDecision["tokenUsage"] => {
@@ -252,6 +317,26 @@ export function parseBossAssistantResponse(
 			...base,
 		});
 	}
+	const tokenUsage = tokenUsageFromResponse(response);
+	if (extracted.decisionToolCall !== undefined) {
+		try {
+			const normalized = normalizeBossDecision(extracted.decisionToolCall, options.phase === undefined ? {} : { phase: options.phase });
+			return tokenUsage === undefined ? normalized : { ...normalized, tokenUsage };
+		} catch (error) {
+			if (error instanceof BossProtocolError) {
+				throw withDiagnostic(error, {
+					stage: "decision-protocol",
+					failureClass: "decision_protocol",
+					hasText: true,
+					normalized: false,
+					code: "decision_protocol",
+					...(stopReason === undefined ? {} : { stopReason }),
+					...identity,
+				});
+			}
+			throw error;
+		}
+	}
 	if (stopReason !== undefined && !USABLE_STOP_REASONS.has(stopReason) && !extracted.text) {
 		throw bossInfrastructureError("Boss response used an unsupported completion shape", {
 			stage: "response",
@@ -282,7 +367,7 @@ export function parseBossAssistantResponse(
 		});
 	}
 	try {
-		return parseDecisionText(extracted.text, options.phase, tokenUsageFromResponse(response));
+		return parseDecisionText(extracted.text, options.phase, tokenUsage);
 	} catch (error) {
 		if (error instanceof BossProtocolError) {
 			if (stopReason === "length" && error.message === "Boss provider returned malformed JSON") {
