@@ -26,6 +26,10 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   progress. Combined Mission `mission-5b5d4a11-8d0b-4974-9809-0bf64496cf01`
   COMPLETED in 1 Boss cycle with M7 `pass` (Grok 4.6 High). No repeated
   M7 rejection. Hidden reasoning was not rendered.
+- **Unpublished candidate:** `/Users/amin/Documents/Witamin-Game/pi-multi-orchestrator-release-rc31-local/pi-multi-orchestrator-0.1.0-rc.31.tgz`
+  SHA-256 `fb7aa4208470e731d84dae386f973ce5bc9c13cc2f506241a922f857e081a519`;
+  source `0bc66b81b36e52a748c4fe2ef94b3c9465e197a7`. Detached
+  `npm run release:verify` PASS (`405/405`, integrity `20/20`, privacy clean).
 - **Publication boundary:** do not publish, tag, or GitHub-release RC31.
 
 ## RC30 — Public prerelease publication & release closure

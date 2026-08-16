@@ -15,7 +15,7 @@ This file records releasable product state. It does not promote development prog
 | Public prerelease | `pi-multi-orchestrator@0.1.0-rc.30` — npm `next`; `latest` remains `0.1.0-rc.17` |
 | Product version | `0.1.0-rc.30` public prerelease (immutable) |
 | Development manifest version | `0.1.0-rc.31` — RC31 Live Mission Progress and M7 Repair Convergence; LOCAL / UNPUBLISHED / DOGFOOD; public RC30 remains unmodified |
-| RC31 development line | ADR-051 Pi-native live Mission progress; ADR-052 feedback-driven M7 repair convergence; `0.1.0-rc.31`; not tagged, npm-published, or a GitHub Release |
+| RC31 development line | ADR-051 Pi-native live Mission progress; ADR-052 feedback-driven M7 repair convergence; `0.1.0-rc.31`; unpublished candidate SHA-256 `fb7aa4208470e731d84dae386f973ce5bc9c13cc2f506241a922f857e081a519`; source `0bc66b81b36e52a748c4fe2ef94b3c9465e197a7`; not tagged, npm-published, or a GitHub Release |
 | RC30 development line | ADR-050 autonomous mutation recovery; `0.1.0-rc.30`; public prerelease SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`; source `ef344ad12abeace41e9ba4f88f552b6f67306107`; tag `v0.1.0-rc.30`; live implementation Mission `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED |
 | RC29 development line | ADR-046/048/049 plus live Mission COMPLETED; `0.1.0-rc.29`; unpublished candidate SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not tagged or npm-published |
 | RC28 release line | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
@@ -50,7 +50,11 @@ immutable. npm `next` and `latest` are unchanged by this line.
 Live dogfood Mission `mission-5b5d4a11-8d0b-4974-9809-0bf64496cf01`
 reached durable `COMPLETED` with M7 pass in one Boss cycle. Phase A
 Mission `mission-423167a5-7c71-46bc-bad8-cbcaaff9b5ab` proved live
-progress in the same Pi session.
+progress in the same Pi session. Unpublished candidate
+`/Users/amin/Documents/Witamin-Game/pi-multi-orchestrator-release-rc31-local/pi-multi-orchestrator-0.1.0-rc.31.tgz`
+SHA-256 `fb7aa4208470e731d84dae386f973ce5bc9c13cc2f506241a922f857e081a519`,
+source `0bc66b81b36e52a748c4fe2ef94b3c9465e197a7`. Detached
+`npm run release:verify` PASS (`405/405`, integrity `20/20`).
 
 ## RC30 Autonomous Boss-led mutation recovery (PUBLIC PRERELEASE)
 
