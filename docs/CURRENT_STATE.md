@@ -127,6 +127,25 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   invisibly, then `awaiting-review`. Workers had already reported
   `0.1.0-rc.30`; M7 blocked on slug criterion names and empty
   `requiredFixes`.
+- **Tests:** `405/405 PASS`; `npm run check` PASS; `git diff --check` PASS.
+- **Phase A live UX (print-mode stderr + TUI widget):** Mission
+  `mission-423167a5-7c71-46bc-bad8-cbcaaff9b5ab` showed Boss → Task →
+  Worker live; workers hit `transport_error` on an open-circuit
+  investigation route and the Mission terminals `AWAITING_USER` after
+  the cycle budget. This is live-UX proof, not convergence proof.
+- **Combined dogfood (same semantic goal as the incident):** Mission
+  `mission-5b5d4a11-8d0b-4974-9809-0bf64496cf01` durable `COMPLETED` in
+  1m 17s. Boss cycles 1. Task
+  `task-6a83026d-55ea-45c1-af1c-0f60a4e11518` investigation
+  `execution_completed` / quality `passed`. Attempt
+  `attempt-06ee845e-08c8-47d9-b4d5-85d77835ebc7` on
+  `ag/gemini-3.7-flash-high`, `mutation_observed=0`. Evidence
+  `evidence-5ada1579-627a-426d-90ff-27855f69e70a` accepted. M7
+  `verification-f45b8183-a097-476b-8bf0-cdc7892c8694` on
+  `gcli/grok-4.6-high`, decision `decision-3b5bcdaa-63d3-4073-93d6-da4e8b38ed85`
+  verdict `pass`. No repeated M7 rejection. Live progress showed Boss,
+  Task, worker tools (`ls`/`read`/`grep`), Evidence, M7 PASS, and
+  COMPLETED in the same Pi session without SQLite inspection.
 - **Publication boundary:** do not publish, tag, or GitHub-release RC31
   in this mission.
 

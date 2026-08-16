@@ -47,6 +47,11 @@ RC31 is the current local unpublished development identity at
 accepted. Public RC30 remains the current public prerelease and is
 immutable. npm `next` and `latest` are unchanged by this line.
 
+Live dogfood Mission `mission-5b5d4a11-8d0b-4974-9809-0bf64496cf01`
+reached durable `COMPLETED` with M7 pass in one Boss cycle. Phase A
+Mission `mission-423167a5-7c71-46bc-bad8-cbcaaff9b5ab` proved live
+progress in the same Pi session.
+
 ## RC30 Autonomous Boss-led mutation recovery (PUBLIC PRERELEASE)
 
 Correction 2026-08-17: RC30 is the current public prerelease. Package

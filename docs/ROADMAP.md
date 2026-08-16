@@ -522,9 +522,11 @@ Deliverables:
   (ADR-052).
 
 Exit evidence: `test/mission-progress.test.ts`, `test/rc31-convergence.test.ts`,
-ADR-051, ADR-052, RC31-01/02, `npm test` / `npm run check`, local unpublished
-candidate, and live dogfood. Publication, tagging, and GitHub Release are
-not authorized.
+ADR-051, ADR-052, RC31-01/02, `npm test` / `npm run check` `405/405`, local
+unpublished candidate, Phase A live Mission
+`mission-423167a5-7c71-46bc-bad8-cbcaaff9b5ab`, and combined dogfood Mission
+`mission-5b5d4a11-8d0b-4974-9809-0bf64496cf01` COMPLETED with M7 pass.
+Publication, tagging, and GitHub Release are not authorized.
 
 ## RC30 — Autonomous Boss-Led Mutation Recovery
 
