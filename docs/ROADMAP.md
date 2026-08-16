@@ -10,9 +10,11 @@ RC28 is the current public prerelease and adds live Boss invocation
 compatibility, classified failure diagnostics, and infrastructure-fallback
 semantics. RC29 (`0.1.0-rc.29`) is a frozen unpublished verified candidate
 after live Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED.
-Source currently develops RC30 (`0.1.0-rc.30`) Autonomous Boss-Led Mutation
-Recovery locally; it is not public, accepted, tagged, npm-published, or a
-production release. The frozen RC29 artifact must not be modified.
+Source currently holds RC30 (`0.1.0-rc.30`) Autonomous Boss-Led Mutation
+Recovery as a local unpublished candidate after controlled recovery dogfood
+and one real implementation Mission COMPLETED; it is not public, accepted,
+tagged, npm-published, or a production release. The frozen RC29 artifact
+must not be modified.
 M10 remains the latest accepted development milestone; M11 remains
 implemented but not accepted. Live `routing.fallback.enabled` is true.
 Acceptance dogfood used `routing.maxAttempts=1`; ADR-049 adds non-mutating
@@ -502,10 +504,11 @@ operator-owned. RC29 is an unpublished candidate.
 
 ## RC30 — Autonomous Boss-Led Mutation Recovery
 
-Status: IN PROGRESS / LOCAL UNPUBLISHED. Development identity:
+Status: LOCAL UNPUBLISHED CANDIDATE. Development identity:
 `0.1.0-rc.30`. Not public, accepted, tagged, npm-published, or production-ready.
 The frozen RC29 artifact `pi-multi-orchestrator-0.1.0-rc.29.tgz` is not
-modified.
+modified. Controlled recovery dogfood and one real implementation Mission
+reached durable COMPLETED.
 
 Deliverables:
 

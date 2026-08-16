@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC28 is the current public prerelease; RC29 (`0.1.0-rc.29`) is a frozen unpublished verified candidate after a live Mission COMPLETED; source currently develops unpublished RC30 (`0.1.0-rc.30`); none of these are stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC28 is the current public prerelease; RC29 (`0.1.0-rc.29`) is a frozen unpublished verified candidate after a live Mission COMPLETED; RC30 (`0.1.0-rc.30`) is a local unpublished candidate after controlled recovery dogfood and one real implementation Mission COMPLETED; none of these are stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -33,7 +33,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
-| RC30 development line | `0.1.0-rc.30` — Autonomous Boss-Led Mutation Recovery; local unpublished; RC29 frozen artifact SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b` must not be modified; not public, accepted, tagged, npm-published, or production-ready |
+| RC30 development line | `0.1.0-rc.30` — Autonomous Boss-Led Mutation Recovery; local unpublished candidate after controlled recovery dogfood and live implementation COMPLETED; RC29 frozen artifact SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b` must not be modified; not public, accepted, tagged, npm-published, or production-ready |
 | RC29 development line | `0.1.0-rc.29` — Mission Runtime Convergence; UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; artifact SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not public, accepted, tagged, npm-published, or production-ready |
 | RC28 release | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release | `0.1.0-rc.27` — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
@@ -77,7 +77,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
-| RC30 — Autonomous Boss-Led Mutation Recovery | IN PROGRESS / LOCAL UNPUBLISHED; `0.1.0-rc.30`; RC29 frozen artifact not modified; not public, accepted, tagged, npm-published, stable, or production-ready |
+| RC30 — Autonomous Boss-Led Mutation Recovery | LOCAL UNPUBLISHED CANDIDATE; `0.1.0-rc.30`; RC29 frozen artifact not modified; not public, accepted, tagged, npm-published, stable, or production-ready |
 | RC29 — Mission Runtime Convergence | UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; `0.1.0-rc.29`; not public, accepted, tagged, npm-published, stable, or production-ready |
 | RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
@@ -106,9 +106,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
   is a non-draft prerelease carrying the exact artifact and checksum.
 
-## RC30 Autonomous Boss-led mutation recovery (IN PROGRESS / LOCAL UNPUBLISHED)
+## RC30 Autonomous Boss-led mutation recovery (LOCAL UNPUBLISHED CANDIDATE)
 
-- **Status:** `IN PROGRESS / LOCAL UNPUBLISHED`. Development manifest is
+- **Status:** `LOCAL UNPUBLISHED CANDIDATE`. Development manifest is
   `pi-multi-orchestrator@0.1.0-rc.30`. Not public, tagged, npm-published,
   accepted, or a GitHub Release. The frozen RC29 artifact
   `pi-multi-orchestrator-0.1.0-rc.29.tgz` SHA-256
@@ -118,8 +118,39 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   structured result enters Boss-led recovery on the same Task. ADR-049
   CLASS A (`mutation=false`) fallback is unchanged. Unsafe/unknown external
   side effects still require a human.
+- **Tests:** `385/385 PASS`; `npm run check` PASS; `git diff --check` PASS;
+  `test/mutation-recovery.test.ts` 18 cases.
+- **Controlled recovery dogfood (installed `0.1.0-rc.30`, fake executor):**
+  fixture `/tmp/pmo-rc30-recovery-dogfood.mjs` against
+  `~/.pi/agent/pmo-rc30-local-package`. Mission
+  `mission-0a46605a-a68a-49d6-bfbf-067737100cb0` / Task
+  `task-f5733d75-22ef-474e-b1c1-d8a94caf1b43` terminal `COMPLETED`. Failed
+  Attempt `attempt-3ad4b92c-f9d4-4e83-8db4-a63616886012` remained
+  `attempt_interrupted`. Continuation Attempt
+  `attempt-5c818daf-8ffb-42f8-883c-e04da3310966` succeeded from the current
+  worktree (`REPAIR_EXISTING_WORK`). Evidence: `recovery-assessment`,
+  `implementation-result`, `other`. Quality `passed`. Helper preserved;
+  remaining wiring completed. This is the recovery proof.
+- **Normal real implementation Mission (2026-08-16):**
+  `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` terminal `COMPLETED` in
+  disposable sandbox `/private/tmp/pmo-rc30-impl-r1DnkO`. Boss
+  `ag/gemini-3.7-flash-high`, `protocolFailures=0`. Task
+  `task-6d878cfc-2062-4617-8047-33fe52871e30` `execution_completed` /
+  quality `passed`. Implementation Attempt
+  `attempt-f1a0b161-987c-40f3-982c-852d0e566552` on
+  `ag/claude-opus-4-6-thinking` submitted a structured result after local
+  mutation (`src/greet.ts` + `src/index.ts` re-export). Evidence 1 accepted
+  (`evidence-6242f092-fefe-438c-9ae9-719221cdb094`). M7
+  `verification-bbc358b1-a052-48de-91d9-7eca42f28a67` on
+  `ocg/deepseek-v4-pro`, verdict `pass`. Natural mutation recovery was not
+  required. Prior sandbox Mission
+  `mission-33b25578-51da-4811-9f76-203740f962e7` stopped at
+  `AWAITING_USER` after a continuation `find` hit `.git`; recovery
+  inspection is now ls/read only. A subsequent Goal that named `git push`
+  as a prohibition hit `CAPABILITY_MISMATCH` before Boss cycles.
 - **Publication boundary:** do not publish, tag, or GitHub-release RC30 in
-  this mission.
+  this mission. Detached unpublished candidate SHA is recorded after
+  `release:verify`.
 
 ## RC29 Mission runtime convergence (UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED)
 

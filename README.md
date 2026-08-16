@@ -5,8 +5,10 @@ Pi Multi-Orchestrator is a Pi extension for coordinating a bounded Boss Mission 
 ## Status
 
 RC28 (`0.1.0-rc.28`) is the current public prerelease on npm with `next`; RC27
-is superseded. `latest` remains `0.1.0-rc.17`. Source currently prepares RC30
-(`0.1.0-rc.30`) as a local unpublished Autonomous Mutation Recovery candidate.
+is superseded. `latest` remains `0.1.0-rc.17`. Source currently holds RC30
+(`0.1.0-rc.30`) as a local unpublished Autonomous Mutation Recovery candidate
+after controlled recovery dogfood and one real implementation Mission
+COMPLETED.
 RC29 (`0.1.0-rc.29`) remains a frozen unpublished verified candidate after a
 live Mission COMPLETED and must not be modified, republished, or retagged.
 RC30 is not published, tagged, a GitHub Release, or accepted. Public RC28 is
@@ -141,7 +143,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC28 is a public prerelease, not a stable or production release. RC29 is IN PROGRESS / LOCAL DOGFOOD REQUIRED in source only. See `docs/ROADMAP.md` for the release state.
+M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC28 is a public prerelease, not a stable or production release. RC29 is a frozen unpublished verified candidate; RC30 is a local unpublished candidate. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 

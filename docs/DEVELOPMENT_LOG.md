@@ -4,15 +4,26 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
-## RC30 — Autonomous Boss-led mutation recovery (IN PROGRESS)
+## RC30 — Autonomous Boss-led mutation recovery (LOCAL UNPUBLISHED CANDIDATE)
 
-- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL UNPUBLISHED`.
+- **Date/status:** 2026-08-16; `LOCAL UNPUBLISHED CANDIDATE`.
   Development identity is `0.1.0-rc.30`. Not public, tagged, npm-published,
   or a GitHub Release.
 - **ADR-050:** local observable Implementation mutation without
   `submit_agent_result` enters Boss-led recovery on the same Task. ADR-049
   CLASS A remains unchanged. Unsafe/unknown external side effects still
   require a human.
+- **Tests:** `385/385 PASS`; `npm run check` PASS; `git diff --check` PASS.
+- **Controlled recovery dogfood:** Mission
+  `mission-0a46605a-a68a-49d6-bfbf-067737100cb0` COMPLETED. Failed Attempt
+  `attempt-3ad4b92c-f9d4-4e83-8db4-a63616886012` stayed interrupted;
+  continuation `attempt-5c818daf-8ffb-42f8-883c-e04da3310966` repaired the
+  current worktree. Evidence `recovery-assessment` +
+  `implementation-result`; quality `passed`.
+- **Real implementation Mission:**
+  `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED. Evidence 1.
+  M7 `verification-bbc358b1-a052-48de-91d9-7eca42f28a67` verdict `pass`.
+  Natural recovery was not triggered.
 - **Frozen RC29 artifact:** `pi-multi-orchestrator-0.1.0-rc.29.tgz`
   SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`
   was not modified.

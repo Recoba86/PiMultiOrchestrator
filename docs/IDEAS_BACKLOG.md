@@ -33,7 +33,8 @@ ADR-048.
 
 **Status:** `PROMOTED TO ROADMAP`
 
-Authorized as RC30 / ADR-050. Local observable Implementation mutation
+Authorized as RC30 / ADR-050. Locally implemented as unpublished `0.1.0-rc.30`.
+Local observable Implementation mutation
 without `submit_agent_result` recovers through a read-only assessment and a
 Boss continuation on the same Task. Unsafe external side effects still
 require a human. This entry does not authorize publication or automatic
