@@ -24,6 +24,9 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED. Evidence 1.
   M7 `verification-bbc358b1-a052-48de-91d9-7eca42f28a67` verdict `pass`.
   Natural recovery was not triggered.
+- **Unpublished candidate:** `/Users/amin/Documents/Witamin-Game/pi-multi-orchestrator-release-rc30-local/pi-multi-orchestrator-0.1.0-rc.30.tgz`
+  SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`;
+  source `ef344ad12abeace41e9ba4f88f552b6f67306107`.
 - **Frozen RC29 artifact:** `pi-multi-orchestrator-0.1.0-rc.29.tgz`
   SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`
   was not modified.
