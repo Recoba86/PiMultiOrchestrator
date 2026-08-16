@@ -4,6 +4,30 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — Enable worker fallback & real end-to-end dogfood (BLOCKED)
+
+- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.
+  Development identity is `0.1.0-rc.29`. Not public, tagged, npm-published,
+  accepted, pre-release ready, or a GitHub Release. Public RC28 remains immutable.
+- **Live config:** ConfigStore generation 59 → 60 via supported
+  `ConfigStore.update`. `routing.fallback.enabled` false→true;
+  `routing.maxAttempts` 1→3. Investigation pool and Boss route unchanged.
+  `routing.maxSameRouteRetries` is not a config field (derived
+  `maxAttempts-1` = 2).
+- **Installed package:** `pmo-rc29-local-package` `0.1.0-rc.29` matches
+  current runtime bytes (finalization/executor/boss-response). No reinstall.
+- **Dogfood Mission:** `mission-0bfe84d8-6848-404b-94b4-81cc1bff502e`
+  05:33:57.688Z → 05:36:16.362Z, terminal `AWAITING_USER`,
+  `protocolFailures=0`, Boss `ag/gemini-3.7-flash-high`.
+- **First failing durable boundary:** Investigation Attempt
+  `attempt-cbfaa8bf-4715-4509-9c8f-6be2b25031dd` on
+  `ocg/deepseek-v4-flash` ended `invalid_child_result` (mutation 0,
+  `result_json=null`). Health recorded a 60s `timeout` at 05:35:03 then
+  `lastSuccessAt` 05:35:49. Luna was not selected. No cross-route fallback.
+  Evidence 0, verification 0, Task `blocked`, quality `unverified`.
+- **Stop:** no Mission #2, no pool/weight change, no runtime patch, no
+  RC29 candidate, no push/tag/publish.
+
 ## RC29 — Worker infrastructure fallback forensics
 
 - **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.
