@@ -569,3 +569,13 @@ prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
   immutable. Publication, tags, npm dist-tags, GitHub Releases, and live Pi
   install remain operator-owned. Do not call RC29 pre-release ready until a
   real isolated Pi Mission using this runtime reaches COMPLETED.
+
+## ADR-030 — Enforced Boss Decision Tool Transport
+
+- **Decision:** Assistant prose is not an authoritative control plane. Free-form JSON in assistant text is rejected as the primary orchestrator transport mechanism.
+- **Decision:** The canonical and preferred Boss decision transport is the schema-enforced `submit_boss_decision` tool call. Invocations define `submit_boss_decision` with strict JSON schema constrained sampling and force tool selection via `toolChoice`.
+- **Decision:** Strict text JSON is retained only as a secondary compatibility fallback for legacy/stub test runtimes when no toolCall block exists.
+- **Decision:** Thinking / Chain-of-Thought (`type: "thinking"`) content blocks are explicitly ignored and excluded from decision parsing.
+- **Decision:** Decision transport capability failures (missing tool definitions / uncarried control tools / empty responses) are classified as `BossInfrastructureError` eligible for controlled fallback. Semantic protocol failures (malformed tool arguments or invalid plans) remain `BossProtocolError` with machine-readable corrective feedback and early termination on repeated identical failure fingerprints without infrastructure fallback.
+- **Rationale:** Forensic investigation of `mission-939cfa52-87d2-4e6f-b8d8-bc5930c90a73` proved that free-form model text is non-compliant with JSON schema instructions under complex planning prompts. Moving to structured `submit_boss_decision` tool transport enforces schema validation at inference time and eliminates parsing ambiguity.
+- **Consequences:** All Boss routes compatible with Pi 0.84.1 / 9Router receive the `submit_boss_decision` tool definition; `normalizeBossDecision` remains the final strict validator.

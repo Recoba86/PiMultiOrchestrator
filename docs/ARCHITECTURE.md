@@ -493,13 +493,21 @@ forbid infrastructure fallback. Protocol/quality failures, cancellation, and
 safety-stop do not rotate the Boss.
 
 The host normalizes Pi `completeSimple` `AssistantMessage` values through one
-canonical layer before `normalizeBossDecision`. Pi's public contract exposes
-`stopReason` values `pending | stop | length | toolUse | error | aborted | deferred`
-and content blocks `text | thinking | toolCall`. User-visible decision text is
-exactly the `type:"text"` blocks (Pi `contentText()`). Thinking/CoT is never
-used as the decision. `length` with complete JSON is a usable completion;
-empty user-visible text is an invocation delivery failure (`empty_response`)
-and may infrastructure-fallback; truncated incomplete JSON, empty
+canonical layer before `normalizeBossDecision`. The primary and preferred Boss
+decision transport is the schema-enforced `submit_boss_decision` tool call
+(`type:"toolCall"` with `name:"submit_boss_decision"`), forced via `toolChoice`
+and validated with strict JSON schema constrained sampling. Thinking/CoT is
+explicitly excluded from decision parsing. When no `submit_boss_decision`
+tool call is present, strict text JSON from `type:"text"` blocks is accepted
+solely as a secondary compatibility fallback for legacy/stub test environments.
+Empty responses or missing tool definitions are classified as
+`BossInfrastructureError` (`empty_response` / `unsupported_shape`) eligible
+for controlled fallback; malformed tool arguments or invalid plans remain
+`BossProtocolError` with bounded machine-readable corrective feedback and
+early termination on repeated identical fingerprints without fallback.
+Pi's public contract exposes `stopReason` values
+`pending | stop | length | toolUse | error | aborted | deferred`.
+`length` with complete JSON is a usable completion; truncated incomplete JSON, empty
 `dispatch`/`replan` task arrays, and invalid BossDecision documents remain
 protocol and must not fallback. Unsupported shape, refusal, cancellation, and
 classified request/response failures remain distinct. Inspect persists only

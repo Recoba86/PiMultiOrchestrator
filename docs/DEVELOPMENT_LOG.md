@@ -4,6 +4,33 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — Enforced Boss Decision Transport & Local Dogfood Gate
+
+- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD INVESTIGATION`.
+  Development identity is `0.1.0-rc.29`. Not public, tagged, npm-published,
+  accepted, pre-release ready, or a GitHub Release. Public RC28 remains immutable.
+- **Forensic investigation (public RC28 / RC29 dev):** Forensic audit of
+  `mission-939cfa52-87d2-4e6f-b8d8-bc5930c90a73` recorded in
+  `docs/boss-decision-protocol-forensics.md`. Model delivery succeeded, but
+  free-form JSON in assistant text failed schema validation (Category C: Model
+  protocol non-compliance / Category E: Free-form structured-output architecture failure).
+- **Tool transport probe:** Verified that Pi 0.84.1 / 9Router path with
+  `ag/gemini-3.7-flash-high` natively supports `submit_boss_decision` tool calling
+  with strict JSON schema enforcement (`constrainedSampling: { type: "json_schema", strict: "prefer" }`)
+  and forced `toolChoice`.
+- **Implementation (ADR-030):**
+  1. Canonical `submit_boss_decision` tool definition with strict `BossDecision` schema.
+  2. Prioritize toolCall blocks over text parsing with fallback to strict JSON text for compatibility.
+  3. Explicitly exclude thinking/reasoning blocks.
+  4. Distinguish capability transport failures (`BossInfrastructureError`) from semantic protocol failures (`BossProtocolError`).
+  5. Machine-readable corrective feedback and early termination on repeated identical failure fingerprints.
+- **Unit & integration test verification:** `335/335 PASS` including 18 new test scenarios in `test/boss-tool-transport.test.ts`. `npm run check` and `git diff --check` PASS.
+- **Dogfood Mission results (`mission-306fb445-f267-4745-b5fc-a3c46e1760f5`):**
+  - Boss Enforced Tool Transport PASSED: 0 protocol failures across all 8 Boss inferences on `ag/gemini-3.7-flash-high`.
+  - Pinned Boss stayed pinned across all 4 cycles without unnecessary fallback.
+  - Subagent worker attempt 1 (`ocg-deepseek-v4-flash`) failed with `invalid_child_result` (child agent did not return structured result via `submit_agent_result`), causing M7 verification to block and the Mission to safely reach `AWAITING_USER` after exhausting the cycle safety budget.
+  - Failing boundary identified: Subagent worker child-result reporting protocol, not Boss Decision Transport.
+
 ## RC29 — Mission Runtime Convergence
 
 - **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.
