@@ -6,15 +6,15 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 ## Current planning boundary
 
-RC28 is the current public prerelease and adds live Boss invocation
-compatibility, classified failure diagnostics, and infrastructure-fallback
-semantics. RC29 (`0.1.0-rc.29`) is a frozen unpublished verified candidate
-after live Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED.
-Source currently holds RC30 (`0.1.0-rc.30`) Autonomous Boss-Led Mutation
-Recovery as a local unpublished candidate after controlled recovery dogfood
-and one real implementation Mission COMPLETED; it is not public, accepted,
-tagged, npm-published, or a production release. The frozen RC29 artifact
-must not be modified.
+RC30 is the current public prerelease and adds autonomous Boss-led mutation
+recovery for local observable Implementation worktree edits when
+`submit_agent_result` is missing. RC29 (`0.1.0-rc.29`) remains a frozen
+unpublished verified candidate after live Mission
+`mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED and was not
+published. RC28 remains a prior public immutable prerelease. Identity:
+`0.1.0-rc.30`, source `ef344ad12abeace41e9ba4f88f552b6f67306107`, tag
+`v0.1.0-rc.30`, artifact SHA-256
+`46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`.
 M10 remains the latest accepted development milestone; M11 remains
 implemented but not accepted. Live `routing.fallback.enabled` is true.
 Acceptance dogfood used `routing.maxAttempts=1`; ADR-049 adds non-mutating
@@ -504,10 +504,12 @@ operator-owned. RC29 is an unpublished candidate.
 
 ## RC30 — Autonomous Boss-Led Mutation Recovery
 
-Status: LOCAL UNPUBLISHED CANDIDATE. Development identity:
-`0.1.0-rc.30`. Not public, accepted, tagged, npm-published, or production-ready.
-The frozen RC29 artifact `pi-multi-orchestrator-0.1.0-rc.29.tgz` is not
-modified. Controlled recovery dogfood and one real implementation Mission
+Status: PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or
+production-ready. Identity: `0.1.0-rc.30`, source
+`ef344ad12abeace41e9ba4f88f552b6f67306107`, tag `v0.1.0-rc.30`, artifact
+SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`.
+The frozen RC29 artifact `pi-multi-orchestrator-0.1.0-rc.29.tgz` was not
+published. Controlled recovery dogfood and one real implementation Mission
 reached durable COMPLETED.
 
 Deliverables:
@@ -525,8 +527,7 @@ Deliverables:
 
 Exit evidence: `test/mutation-recovery.test.ts`, ADR-050, RC30-01, `npm test`
 / `npm run check`, controlled sandbox recovery dogfood, one normal
-implementation Mission COMPLETED, and an unpublished RC30 candidate. Do not
-publish, tag, or GitHub-release.
+implementation Mission COMPLETED, and public prerelease `0.1.0-rc.30`.
 
 ## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
 

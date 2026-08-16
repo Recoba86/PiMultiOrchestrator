@@ -1,10 +1,30 @@
 # Development log
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC30 — Public prerelease publication & release closure
+
+- **Date/status:** 2026-08-17; `PUBLIC PRERELEASE / RELEASE CLOSURE PASS`.
+- **Version:** `pi-multi-orchestrator@0.1.0-rc.30`.
+- **Artifact source commit:** `ef344ad12abeace41e9ba4f88f552b6f67306107`.
+- **Frozen artifact:** `/Users/amin/Documents/Witamin-Game/pi-multi-orchestrator-release-rc30-local/pi-multi-orchestrator-0.1.0-rc.30.tgz`
+  SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`.
+- **Review bundle SHA-256:** `68f77540a2faec88f6ae6c3948cf3a028cfe06bccebaee0e651690e423743147`.
+- **npm staged publication ID:** `f57a8c2b-6d55-4347-8fa7-89b11a81230b`.
+- **npm dist-tags:** `next=0.1.0-rc.30`; `latest` remained `0.1.0-rc.17`.
+- **Git tag:** `v0.1.0-rc.30` → `ef344ad12abeace41e9ba4f88f552b6f67306107`.
+- **GitHub:** prerelease [v0.1.0-rc.30](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.30).
+- **Dogfood:** recovery `mission-0a46605a-a68a-49d6-bfbf-067737100cb0` COMPLETED;
+  implementation `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED.
+- **Boundaries:** RC29 was not published. RC28 history was not rewritten.
+  RC30 is public as a prerelease, not stable or production-ready.
+
 ## RC30 — Autonomous Boss-led mutation recovery (LOCAL UNPUBLISHED CANDIDATE)
+
+Correction 2026-08-17: RC30 was later published as the public prerelease
+above. The original source-handoff below is not rewritten.
 
 - **Date/status:** 2026-08-16; `LOCAL UNPUBLISHED CANDIDATE`.
   Development identity is `0.1.0-rc.30`. Not public, tagged, npm-published,

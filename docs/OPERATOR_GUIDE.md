@@ -1,15 +1,11 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC28 is the current
-public `next`-tagged prerelease; RC27 is superseded. Source currently also
-prepares RC30 (`0.1.0-rc.30`) as a local unpublished candidate after
-controlled recovery dogfood and one real implementation Mission COMPLETED. RC29
-(`0.1.0-rc.29`) remains a frozen unpublished verified candidate after a
-live Mission COMPLETED and must not be modified. None of these are public
-tags, npm publications, accepted milestones, or a GitHub Release for RC30.
-Public RC28 is immutable. None of these are a
-stable or production release. Local validation
-uses isolated roots and never installs into
+This guide describes the Control Center in Pi `0.84.1`. RC30 is the current
+public `next`-tagged prerelease; RC28 remains a prior public immutable
+prerelease. RC29 (`0.1.0-rc.29`) remains a frozen unpublished verified
+candidate after a live Mission COMPLETED and must not be modified. None of
+these are an accepted milestone or a stable/production release. Local
+validation uses isolated roots and never installs into
 `~/.pi/agent/` unless the operator explicitly chooses the pinned package.
 
 ## Open the Control Center

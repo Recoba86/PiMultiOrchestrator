@@ -1,6 +1,6 @@
 # Release state
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 This file records releasable product state. It does not promote development progress; see [Current state](CURRENT_STATE.md) for the operational snapshot.
 
@@ -12,10 +12,10 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.28` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.28` public prerelease |
-| Development manifest version | `0.1.0-rc.30` — RC30 Autonomous Boss-Led Mutation Recovery; local unpublished candidate; RC29 frozen candidate remains unmodified |
-| RC30 development line | ADR-050 autonomous mutation recovery; `0.1.0-rc.30`; unpublished candidate SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`; source `ef344ad12abeace41e9ba4f88f552b6f67306107`; live implementation Mission `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED; not tagged or npm-published |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.30` — npm `next`; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.30` public prerelease |
+| Development manifest version | `0.1.0-rc.30` — RC30 Autonomous Boss-Led Mutation Recovery; public prerelease; RC29 frozen unpublished candidate remains unmodified |
+| RC30 development line | ADR-050 autonomous mutation recovery; `0.1.0-rc.30`; public prerelease SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`; source `ef344ad12abeace41e9ba4f88f552b6f67306107`; tag `v0.1.0-rc.30`; live implementation Mission `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED |
 | RC29 development line | ADR-046/048/049 plus live Mission COMPLETED; `0.1.0-rc.29`; unpublished candidate SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not tagged or npm-published |
 | RC28 release line | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release line | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
@@ -27,17 +27,29 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC30 local unpublished candidate on `0.1.0-rc.30` after recovery dogfood and one live implementation COMPLETED; RC29 unpublished verified candidate remains frozen; RC28 remains the verified public prerelease |
-| Release tag | `v0.1.0-rc.28` → `aad28c33260326665ec17e347d50fe985b18a953` |
-| Release commit | `aad28c33260326665ec17e347d50fe985b18a953` |
-| Release artifact | `pi-multi-orchestrator-0.1.0-rc.28.tgz`; SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
-| GitHub release | `v0.1.0-rc.28` — public prerelease; RC28 is immutable |
-| Installable production release | NONE; RC28 is a prerelease |
+| Local technical release readiness | RC30 public prerelease on `0.1.0-rc.30` after recovery dogfood and one live implementation COMPLETED; RC29 unpublished verified candidate remains frozen and was not published; RC28 remains a prior public immutable prerelease |
+| Release tag | `v0.1.0-rc.30` → `ef344ad12abeace41e9ba4f88f552b6f67306107` |
+| Release commit | `ef344ad12abeace41e9ba4f88f552b6f67306107` |
+| Release artifact | `pi-multi-orchestrator-0.1.0-rc.30.tgz`; SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc` |
+| GitHub release | `v0.1.0-rc.30` — public prerelease; RC30 is immutable |
+| Installable production release | NONE; RC30 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
+
+## RC30 Autonomous Boss-led mutation recovery (PUBLIC PRERELEASE)
+
+Correction 2026-08-17: RC30 is the current public prerelease. Package
+`pi-multi-orchestrator@0.1.0-rc.30`, tag `v0.1.0-rc.30`, source
+`ef344ad12abeace41e9ba4f88f552b6f67306107`, artifact SHA-256
+`46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`.
+npm `next=0.1.0-rc.30`; `latest` remains `0.1.0-rc.17`. Staged publication
+ID `f57a8c2b-6d55-4347-8fa7-89b11a81230b`. GitHub
+[v0.1.0-rc.30](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.30).
+RC29 was not published. RC28 history was not rewritten. The original
+source-handoff below is retained.
 
 ## RC30 Autonomous Boss-led mutation recovery (LOCAL UNPUBLISHED CANDIDATE)
 
@@ -87,8 +99,9 @@ Correction 2026-08-16: RC28 is public and immutable. Package
 `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
 `aad28c33260326665ec17e347d50fe985b18a953`, artifact SHA-256
 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3`.
-npm `next=0.1.0-rc.28`; `latest` remains `0.1.0-rc.17`. Do not retag or
-republish. The original source-handoff paragraph below is retained.
+Correction 2026-08-17: `next` now points to RC30; `latest` remains
+`0.1.0-rc.17`. Do not retag or republish RC28. The original source-handoff
+paragraph below is retained.
 
 ## RC28 Real Boss Invocation Compatibility (unpublished candidate)
 
