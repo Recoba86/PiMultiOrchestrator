@@ -4,6 +4,19 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC30 — Autonomous Boss-led mutation recovery (IN PROGRESS)
+
+- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL UNPUBLISHED`.
+  Development identity is `0.1.0-rc.30`. Not public, tagged, npm-published,
+  or a GitHub Release.
+- **ADR-050:** local observable Implementation mutation without
+  `submit_agent_result` enters Boss-led recovery on the same Task. ADR-049
+  CLASS A remains unchanged. Unsafe/unknown external side effects still
+  require a human.
+- **Frozen RC29 artifact:** `pi-multi-orchestrator-0.1.0-rc.29.tgz`
+  SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`
+  was not modified.
+
 ## RC29 — Unpublished candidate gates PASS
 
 - **Date/status:** 2026-08-16; `UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED`.
