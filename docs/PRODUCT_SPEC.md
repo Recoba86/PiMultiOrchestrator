@@ -171,11 +171,12 @@ These three Boss predicates are distinct and MUST NOT be collapsed:
 
 ### 9.2 Infrastructure fallback
 
-- **FB-001:** The failure classifier MUST distinguish quota exhausted, rate limited, authentication failed, timeout, transport failure, model unavailable, provider unavailable, cancelled, and unknown.
+- **FB-001:** The failure classifier MUST distinguish quota exhausted, rate limited, authentication failed, timeout, transport failure, model unavailable, provider unavailable, cancelled, unknown, and worker result-capability failure.
 - **FB-002:** Eligible infrastructure failures MAY automatically try the next route within attempt/budget policy.
 - **FB-003:** Every fallback MUST record source, destination, failure class, reason, and timestamps.
 - **FB-004:** Authentication failure MUST NOT expose credentials in diagnostics.
-- **FB-005:** Cancellation, policy denial, malformed worker result, failed test, or review rejection MUST NOT be mislabeled as infrastructure fallback.
+- **FB-005:** Cancellation, policy denial, malformed worker result, failed test, or review rejection MUST NOT be mislabeled as infrastructure fallback. A non-mutating result-capability miss after exhausted finalization MAY cross-route fallback as `result_capability`, which is not an infrastructure class.
+- **FB-006:** Result-capability fallback MUST NOT retry the same route, MUST preserve Task identity, MUST NOT replay `mutation_observed=true` work, and MUST NOT substitute for M7 quality rejection.
 
 ### 9.3 Quality escalation
 

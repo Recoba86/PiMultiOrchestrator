@@ -9,6 +9,7 @@ import {
 	nextAfterFailure,
 	previewRouting,
 	recordAttempt,
+	resultCapabilityFailure,
 	selectRoute,
 	type RoutingCandidate,
 	type RoutingPolicy,
@@ -144,6 +145,27 @@ describe("M4 pure routing", () => {
 		assert.equal(decideFailureAction({ classification: classifyFailure({ cancelled: true }), retryCount: 0, maxSameRouteRetries: 5, fallbackEnabled: true }), "STOP");
 		assert.equal(decideFailureAction({ classification: classifyFailure({ status: 400 }), retryCount: 0, maxSameRouteRetries: 5, fallbackEnabled: true }), "STOP");
 		assert.equal(decideFailureAction({ classification: classifyFailure({}), retryCount: 0, maxSameRouteRetries: 5, fallbackEnabled: true }), "STOP");
+	});
+
+	it("[U][fixture-v1] result_capability never retries the same route and may cross-route fallback", () => {
+		const failure = resultCapabilityFailure();
+		assert.equal(failure.class, "result_capability");
+		assert.equal(classifyFailure({ code: "result_capability" }).class, "result_capability");
+		assert.equal(decideFailureAction({ classification: failure, retryCount: 0, maxSameRouteRetries: 5, fallbackEnabled: true }), "FALLBACK_NEXT_ROUTE");
+		assert.equal(decideFailureAction({ classification: failure, retryCount: 99, maxSameRouteRetries: 5, fallbackEnabled: true }), "FALLBACK_NEXT_ROUTE");
+		assert.equal(decideFailureAction({ classification: failure, retryCount: 0, maxSameRouteRetries: 5, fallbackEnabled: false }), "STOP");
+		let chain = createAttemptChain("implementation", "2026-01-01T00:00:00.000Z");
+		chain = recordAttempt(chain, id("route-a"), failure);
+		assert.equal(nextAfterFailure(chain, failure, policy()), "FALLBACK_NEXT_ROUTE");
+		const decision = previewRouting({
+			poolId: "implementation",
+			candidates: [candidate("route-a", 0), candidate("route-b", 1)],
+			policy: policy(),
+			now: "2026-01-01T00:00:00.000Z",
+			attemptedRouteIds: chain.attemptedRouteIds,
+		});
+		assert.equal(decision.kind, "SELECTED");
+		if (decision.kind === "SELECTED") assert.equal(decision.routeId, id("route-b"));
 	});
 
 	it("[U][fixture-v1] attempt chains prevent repeated failed routes and preserve retry counts", () => {

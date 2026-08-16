@@ -14,6 +14,7 @@ export type FailureClass =
 	| "model_unavailable"
 	| "invalid_request"
 	| "protocol_error"
+	| "result_capability"
 	| "cancelled"
 	| "unknown";
 
@@ -155,6 +156,7 @@ const SAFE_MESSAGES: Record<FailureClass, string> = {
 	model_unavailable: "Model unavailable",
 	invalid_request: "Request rejected as invalid",
 	protocol_error: "Provider protocol error",
+	result_capability: "Worker result capability failed",
 	cancelled: "Request cancelled",
 	unknown: "Unknown infrastructure failure",
 };
@@ -183,6 +185,7 @@ export function classifyFailure(input: FailureInput): FailureClassification {
 	else if (code === "provider_unavailable" || code === "service_unavailable" || input.status === 502 || input.status === 503 || input.status === 504) failureClass = "provider_unavailable";
 	else if (code === "invalid_request" || code === "bad_request" || input.status === 400 || input.status === 422) failureClass = "invalid_request";
 	else if (code === "protocol_error" || code === "malformed" || code === "decode_error") failureClass = "protocol_error";
+	else if (code === "result_capability" || code === "result_capability_failure") failureClass = "result_capability";
 	else if (code === "transport_error" || code === "transport" || code === "network_error" || input.status === 0) failureClass = "transport_error";
 	else failureClass = "unknown";
 	const retryAfterMs = boundedRetryAfterMs(input.retryAfterMs);
@@ -197,6 +200,14 @@ export function classifyFailure(input: FailureInput): FailureClassification {
 
 export function failureMessage(failureClass: FailureClass): string {
 	return SAFE_MESSAGES[failureClass];
+}
+
+export function resultCapabilityFailure(): FailureClassification {
+	return { class: "result_capability", safeMessage: SAFE_MESSAGES.result_capability };
+}
+
+export function isInfrastructureHealthFailure(failureClass: FailureClass): boolean {
+	return failureClass !== "cancelled" && failureClass !== "result_capability";
 }
 
 export function decideFailureAction(input: FailureDecisionInput): FailureAction {

@@ -1,5 +1,5 @@
 import { packetToSubagentRequest, type TaskPacketV1 } from "../context/index.js";
-import type { SubagentExecutor, SubagentRunResult } from "../workers/index.js";
+import type { SubagentExecutor, SubagentRunResult, SubagentAttempt } from "../workers/index.js";
 import { MissionNotFoundError, MissionValidationError } from "./errors.js";
 import type { AttemptRecord, EvidenceRecord, MissionId, MissionStoreAdapter, TaskRecord } from "./types.js";
 import type { VerificationResultV1 } from "../quality/types.js";
@@ -95,6 +95,7 @@ export async function executeMissionTask(options: MissionTaskExecutionOptions): 
 		terminalState: run.terminalStatus,
 		mutationObserved: run.potentialMutationObserved,
 		result: run.structuredResult,
+		routeDiagnostics: run.attempts.map(workerRouteDiagnostics),
 	});
 	if (run.structuredResult?.status === "blocked") options.store.finishTask(options.taskId, "blocked");
 
@@ -124,5 +125,24 @@ export async function executeMissionTask(options: MissionTaskExecutionOptions): 
 		attempt: finishedAttempt,
 		run,
 		...(evidence === undefined ? {} : { evidence }),
+	};
+}
+
+function workerRouteDiagnostics(attempt: SubagentAttempt): Record<string, unknown> {
+	const finalization = attempt.resultFinalization;
+	const fallbackClass = attempt.infrastructureFailure?.class
+		?? (attempt.resultFinalization?.attempted === true && (attempt.outcome === "invalid_child_result" || attempt.outcome === "protocol_violation") ? "result_capability" : undefined);
+	return {
+		attemptId: attempt.attemptId,
+		routeId: attempt.routeId,
+		outcome: attempt.outcome,
+		...(attempt.selectionKind === undefined ? {} : { selectionKind: attempt.selectionKind }),
+		...(attempt.failureAction === undefined ? {} : { failureAction: attempt.failureAction }),
+		...(fallbackClass === undefined ? {} : { failureClass: fallbackClass }),
+		finalizationRequired: finalization?.required === true,
+		finalizationAttempted: finalization?.attempted === true,
+		finalizationSucceeded: finalization?.succeeded === true,
+		finalizationOutcome: finalization?.outcome ?? "not_required",
+		...(finalization?.stopReason === undefined ? {} : { stopReason: finalization.stopReason }),
 	};
 }

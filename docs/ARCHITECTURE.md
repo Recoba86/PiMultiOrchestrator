@@ -261,9 +261,11 @@ normal provider-success boundary without a captured result protocol tool, the
 same `AgentSession` may run exactly one capture-only finalization turn with
 only that tool exposed. Finalization cannot call work tools, cannot mutate the
 worktree, and cannot create another Task or Attempt. After a potential
-mutation, finalization infrastructure failure does not replay the worker on
-another route. Missing capture after that single turn remains
-`invalid_child_result`.
+mutation, missing capture or finalization infrastructure failure does not
+replay the worker on another route. After a non-mutating miss, ADR-049 may
+select `FALLBACK_NEXT_ROUTE` as `result_capability` for another eligible
+route on the same Task. MissionStore persists metadata-only finalization
+diagnostics on the attempt event payload.
 
 ### 5.12 `tui`
 

@@ -353,7 +353,7 @@ export interface MissionStoreAdapter extends QualityPersistence {
 	createAttempt(input: AttemptCreateInput): AttemptRecord;
 	getAttempt(attemptId: AttemptId | string): AttemptRecord | undefined;
 	updateAttemptProvenance(attemptId: AttemptId | string, options: { readonly routeId?: StableId | string; readonly remoteModelId?: string; readonly packetRevision?: number }): AttemptRecord;
-  finishAttempt(attemptId: AttemptId | string, status: Exclude<AttemptStatus, "running">, options?: { readonly terminalState?: string; readonly mutationObserved?: boolean; readonly result?: unknown }): AttemptRecord;
+  finishAttempt(attemptId: AttemptId | string, status: Exclude<AttemptStatus, "running">, options?: { readonly terminalState?: string; readonly mutationObserved?: boolean; readonly result?: unknown; readonly routeDiagnostics?: readonly Record<string, unknown>[] }): AttemptRecord;
   admitEvidence(input: EvidenceInput): EvidenceRecord;
   promoteEvidence(evidenceId: EvidenceId | string, options?: PromoteEvidenceOptions): EvidenceRecord;
   rejectEvidence(evidenceId: EvidenceId | string, reason: string, actor?: MissionActor): EvidenceRecord;

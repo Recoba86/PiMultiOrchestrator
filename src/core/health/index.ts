@@ -131,9 +131,8 @@ export class HealthStore {
 			assertRouteId(routeId);
 			const now = toDate(options.now ?? this.clock()).toISOString();
 			const classification = isClassification(failure) ? failure : classifyFailure(failure);
-			// Cancellation is caller intent, not route infrastructure health. Return
-			// a transient healthy record without touching the runtime file.
-			if (classification.class === "cancelled") {
+			// Cancellation and result-capability misses are not infrastructure health.
+			if (classification.class === "cancelled" || classification.class === "result_capability") {
 				const loaded = await this.readRaw();
 				return loaded.result.snapshot?.routes[routeId] ?? { routeId, consecutiveFailures: 0, circuit: "healthy" };
 			}
@@ -409,7 +408,7 @@ function isCircuit(value: unknown): value is CircuitState {
 }
 
 function isFailureClass(value: unknown): value is FailureClass {
-	return value === "quota_exhausted" || value === "rate_limited" || value === "authentication_failed" || value === "timeout" || value === "transport_error" || value === "provider_unavailable" || value === "model_unavailable" || value === "invalid_request" || value === "protocol_error" || value === "cancelled" || value === "unknown";
+	return value === "quota_exhausted" || value === "rate_limited" || value === "authentication_failed" || value === "timeout" || value === "transport_error" || value === "provider_unavailable" || value === "model_unavailable" || value === "invalid_request" || value === "protocol_error" || value === "result_capability" || value === "cancelled" || value === "unknown";
 }
 
 function assertRouteId(routeId: StableId): void {

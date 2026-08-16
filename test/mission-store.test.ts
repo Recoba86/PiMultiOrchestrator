@@ -140,7 +140,7 @@ describe("SQLite mission store", () => {
 			protocolVersion: 1, runId: "run-1", roleId: "implementer", poolId: "implementation", terminalStatus: "completed",
 			finalRouteId: "route-a" as never, finalRemoteModelId: "remote-a", fallbackCount: 0, potentialMutationObserved: false,
 			summary: "done", structuredResult: { protocolVersion: 1, status: "completed", summary: "done", evidence: ["read"], filesChanged: [], tests: [], risks: [], questions: [] },
-			attempts: [{ attemptId: "worker-attempt", routeId: "route-a" as never, remoteModelId: "remote-a", retryIndex: 0, startedAt: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:01.000Z", outcome: "completed", toolNamesUsed: ["read"], toolObservations: [], potentialMutationObserved: false, sessionTerminalState: "idle", structuredResult: { protocolVersion: 1, status: "completed", summary: "done", evidence: ["read"], filesChanged: [], tests: [], risks: [], questions: [] } }],
+			attempts: [{ attemptId: "worker-attempt", routeId: "route-a" as never, remoteModelId: "remote-a", retryIndex: 0, startedAt: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T00:00:01.000Z", outcome: "completed", toolNamesUsed: ["read"], toolObservations: [], potentialMutationObserved: false, sessionTerminalState: "idle", resultFinalization: { required: false, attempted: false, succeeded: false, outcome: "not_required" }, structuredResult: { protocolVersion: 1, status: "completed", summary: "done", evidence: ["read"], filesChanged: [], tests: [], risks: [], questions: [] } }],
 		};
 		const result = await executeMissionTask({ store, contextBroker: packetBroker, executor: { run: async () => run }, missionId: "m1", taskId: task.taskId });
 		assert.equal(result.evidence?.status, "proposed");
@@ -148,6 +148,9 @@ describe("SQLite mission store", () => {
 		assert.equal(store.getTask("t1")?.status, "execution_completed");
 		assert.equal(store.getTask("t1")?.packetRevision, 1);
 		assert.ok(store.listCheckpoints("m1").some((checkpoint) => checkpoint.kind === "task-ended"));
+		const finished = store.listEvents("m1").find((event) => event.kind === "attempt_succeeded");
+		assert.equal((finished?.payload as { routes?: Array<{ finalizationAttempted?: boolean; routeId?: string }> } | undefined)?.routes?.[0]?.routeId, "route-a");
+		assert.equal((finished?.payload as { routes?: Array<{ finalizationRequired?: boolean }> } | undefined)?.routes?.[0]?.finalizationRequired, false);
 	}));
 
 	it("completes using active Task identity and ignores cancelled historical rows", async () => withStore((root) => {

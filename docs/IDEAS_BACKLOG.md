@@ -18,18 +18,12 @@ Implementation requires an explicit mission and the state/acceptance gates in
 
 ## Metadata-only worker finalization Attempt diagnostics
 
-**Status:** `PROPOSED`
+**Status:** `PROMOTED TO ROADMAP`
 
-`WorkerFinalizationReport` (`required` / `attempted` / `succeeded` /
-`outcome` / optional `toolsExposed` / `stopReason`) is currently
-in-memory on the executor Attempt and is lost when the Pi process exits.
-MissionStore `finishAttempt` persists `terminalState`, mutation, and
-result only. Live diagnosis of whether the bounded finalization turn ran
-therefore cannot be done from the durable store.
-
-A later mission may persist those metadata-only fields on the Attempt or
-as an analytics event. It must not persist raw completions, transcripts,
-or hidden reasoning. Presence here does not authorize implementation.
+Implemented in RC29 ADR-049 as MissionStore `attempt_*` event metadata
+(`finalizationRequired` / `attempted` / `succeeded` / `outcome`, `routeId`,
+`attemptId`, safe `stopReason` / `failureClass`). Raw completions remain
+forbidden. This entry does not authorize additional transcript persistence.
 
 Evidence: [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md),
 ADR-048.

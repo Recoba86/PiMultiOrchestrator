@@ -4,8 +4,10 @@ import { isAbsolute, normalize } from "node:path";
 import {
 	classifyFailure,
 	createAttemptChain,
+	isInfrastructureHealthFailure,
 	nextAfterFailure,
 	recordAttempt,
+	resultCapabilityFailure,
 	selectRoute,
 	type FailureClassification,
 	type FailureInput,
@@ -191,11 +193,13 @@ export class SubagentExecutor {
 			});
 			let attempt = single.attempt;
 			attempts.push(attempt);
+			const capabilityEligible = isResultCapabilityEligible(single);
+			if (capabilityEligible) single.failure = resultCapabilityFailure();
 			chain = recordAttempt(chain, routeId, single.failure);
 
 			try {
 				if (single.providerSucceeded) await this.routeAdapter.recordSuccess?.(routeId, new Date(this.clock().getTime()));
-				if (single.failure !== undefined && single.failure.class !== "cancelled") await this.routeAdapter.recordFailure?.(routeId, single.failure, new Date(this.clock().getTime()));
+				if (single.failure !== undefined && isInfrastructureHealthFailure(single.failure.class)) await this.routeAdapter.recordFailure?.(routeId, single.failure, new Date(this.clock().getTime()));
 			} catch {
 				// Health persistence is operational feedback; it must not replay a child.
 			}
@@ -223,17 +227,18 @@ export class SubagentExecutor {
 				return resultBase(runId, request, "completed", attempts, fallbackCount, "Child execution completed; quality acceptance remains with the parent", route, single.result);
 			}
 			if (single.outcome === "invalid_child_result" || single.outcome === "protocol_violation") {
-				return resultBase(
-					runId,
-					request,
-					single.potentialMutation ? "partial_mutation_requires_review" : "invalid_child_result",
-					attempts,
-					fallbackCount,
-					single.potentialMutation ? "Child result protocol failed after a potential mutation" : "Child did not provide one valid structured result",
-					route,
-				);
-			}
-			if (single.potentialMutation) {
+				if (single.potentialMutation || !capabilityEligible) {
+					return resultBase(
+						runId,
+						request,
+						single.potentialMutation ? "partial_mutation_requires_review" : "invalid_child_result",
+						attempts,
+						fallbackCount,
+						single.potentialMutation ? "Child result protocol failed after a potential mutation" : "Child did not provide one valid structured result",
+						route,
+					);
+				}
+			} else if (single.potentialMutation) {
 				return resultBase(runId, request, "partial_mutation_requires_review", attempts, fallbackCount, "Infrastructure failure followed a potential mutation", route);
 			}
 			if (single.outcome === "child_runtime_error") {
@@ -248,7 +253,9 @@ export class SubagentExecutor {
 			attempts[attempts.length - 1] = attempt;
 			this.emit({ type: "fallback", runId, attemptId, routeId, remoteModelId: route.remoteModelId, failureAction: action, failure: single.failure });
 			if (action === "STOP") {
-				const terminalStatus: SubagentTerminalStatus = single.outcome === "timed_out" ? "timed_out" : "infrastructure_stopped";
+				const terminalStatus: SubagentTerminalStatus = single.failure.class === "result_capability" || single.outcome === "invalid_child_result" || single.outcome === "protocol_violation"
+					? "invalid_child_result"
+					: single.outcome === "timed_out" ? "timed_out" : "infrastructure_stopped";
 				return resultBase(runId, request, terminalStatus, attempts, fallbackCount, single.failure.safeMessage, route);
 			}
 			if (action === "RETRY_SAME_ROUTE") {
@@ -709,6 +716,13 @@ function failureInputFromProviderText(value: unknown, fallbackToTransport = true
 	if (/(?:protocol|malformed|decode[_\s-]*error)/u.test(text)) return { ...(status === undefined ? {} : { status }), code: "protocol_error" };
 	if (/(?:network|transport|connection|econn|socket)/u.test(text)) return { ...(status === undefined ? {} : { status }), code: "transport_error" };
 	return fallbackToTransport ? { code: "transport_error" } : {};
+}
+
+function isResultCapabilityEligible(single: SingleAttempt): boolean {
+	return (single.outcome === "invalid_child_result" || single.outcome === "protocol_violation")
+		&& !single.potentialMutation
+		&& single.attempt.resultFinalization?.attempted === true
+		&& single.result === undefined;
 }
 
 function retrySelection(routeId: StableId, request: RoutingRequest): import("../routing/index.js").RoutingDecision {

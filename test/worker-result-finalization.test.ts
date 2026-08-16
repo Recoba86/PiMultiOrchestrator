@@ -42,6 +42,7 @@ type FakeMode =
 	| "rate"
 	| "safety-stop"
 	| "mutate-omit-then-finalize"
+	| "mutate-omit-then-missing"
 	| "mutate-omit-then-infra"
 	| "hang";
 
@@ -121,7 +122,7 @@ describe("RC29 two-phase worker result finalization", () => {
 	it("fails deterministically without a second finalization when the tool is still missing", async () => {
 		const root = await tmp();
 		try {
-			const { executor, tracker } = executorFor("omit-then-missing");
+			const { executor, tracker } = executorFor("omit-then-missing", [], { ...policy, fallback: { enabled: false } });
 			const result = await executor.run(request(root, "investigation"));
 			assert.equal(tracker.promptCount, 2);
 			assert.equal(result.terminalStatus, "invalid_child_result");
@@ -135,7 +136,7 @@ describe("RC29 two-phase worker result finalization", () => {
 	it("classifies invalid finalization arguments as protocol/finalization failure", async () => {
 		const root = await tmp();
 		try {
-			const { executor, tracker } = executorFor("omit-then-invalid");
+			const { executor, tracker } = executorFor("omit-then-invalid", [], { ...policy, fallback: { enabled: false } });
 			const result = await executor.run(request(root, "investigation"));
 			assert.equal(tracker.promptCount, 2);
 			assert.equal(result.resultFinalization?.outcome, "protocol_violation");
@@ -172,25 +173,20 @@ describe("RC29 two-phase worker result finalization", () => {
 				create: async (options) => {
 					creates += 1;
 					seen.push(options.route.routeId);
-					return fakeSessionHandle(options.resultProtocol, creates === 1 ? "hang" : "omit-then-missing", tracker);
+					const mode = creates === 1 ? "hang" : creates === 2 ? "omit-then-missing" : "complete";
+					return fakeSessionHandle(options.resultProtocol, mode, tracker);
 				},
 			});
 			const result = await executor.run({ ...request(root, "investigation"), timeoutMs: 40 });
-			assert.equal(creates, 2);
-			assert.deepEqual(seen, [id("route-a"), id("route-a")]);
-			assert.equal(result.attempts.length, 2);
-			assert.equal(result.attempts[0]?.outcome, "timed_out");
-			assert.equal(result.attempts[0]?.selectionKind, "scheduled");
+			assert.equal(creates, 3);
+			assert.deepEqual(seen, [id("route-a"), id("route-a"), id("route-b")]);
 			assert.equal(result.attempts[0]?.failureAction, "RETRY_SAME_ROUTE");
-			assert.equal(result.attempts[1]?.selectionKind, "retry");
-			assert.equal(result.attempts[1]?.resultFinalization?.required, true);
 			assert.equal(result.attempts[1]?.resultFinalization?.attempted, true);
-			assert.equal(result.attempts[1]?.resultFinalization?.outcome, "missing");
-			assert.equal(tracker.promptCount, 3);
-			assert.deepEqual(tracker.finalizationTools, ["submit_agent_result"]);
-			assert.equal(result.terminalStatus, "invalid_child_result");
-			assert.equal(result.fallbackCount, 0);
-			assert.equal(result.structuredResult, undefined);
+			assert.equal(result.attempts[1]?.failureAction, "FALLBACK_NEXT_ROUTE");
+			assert.equal(result.attempts[2]?.selectionKind, "fallback");
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(result.fallbackCount, 1);
+			assert.equal(result.structuredResult?.summary, "child complete");
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -404,10 +400,128 @@ describe("RC29 two-phase worker result finalization", () => {
 	it("keeps invalid_child_result truthful when the bounded finalizer also fails", async () => {
 		const root = await tmp();
 		try {
-			const { executor } = executorFor("omit");
+			const { executor } = executorFor("omit", [], { ...policy, fallback: { enabled: false } });
 			const result = await executor.run(request(root, "investigation"));
 			assert.equal(result.terminalStatus, "invalid_child_result");
 			assert.equal(result.resultFinalization?.outcome, "missing");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("falls back to another route after a non-mutating result-capability miss", async () => {
+		const root = await tmp();
+		try {
+			const seen: string[] = [];
+			const health: string[] = [];
+			const tracker = createTracker();
+			const adapter: RouteAttemptAdapter = {
+				...adapterFor([candidate("route-a", 0), candidate("route-b", 1)]),
+				recordFailure: async (routeId) => { health.push(`fail:${routeId}`); },
+				recordSuccess: async (routeId) => { health.push(`ok:${routeId}`); },
+			};
+			let creates = 0;
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+				create: async (options) => {
+					creates += 1;
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, creates === 1 ? "omit-then-missing" : "complete", tracker);
+				},
+			});
+			const result = await executor.run(request(root, "investigation"));
+			assert.deepEqual(seen, [id("route-a"), id("route-b")]);
+			assert.equal(result.attempts[0]?.failureAction, "FALLBACK_NEXT_ROUTE");
+			assert.equal(result.attempts[1]?.selectionKind, "fallback");
+			assert.equal(result.attempts[1]?.outcome, "completed");
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(result.fallbackCount, 1);
+			assert.equal(result.structuredResult?.summary, "child complete");
+			assert.equal(health.includes(`fail:${id("route-a")}`), false);
+			assert.equal(health.includes(`ok:${id("route-a")}`), true);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("completes via route-B finalization after route-A result-capability miss", async () => {
+		const root = await tmp();
+		try {
+			const seen: string[] = [];
+			const tracker = createTracker();
+			const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)]);
+			let creates = 0;
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+				create: async (options) => {
+					creates += 1;
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, creates === 1 ? "omit-then-missing" : "omit-then-finalize", tracker);
+				},
+			});
+			const result = await executor.run(request(root, "investigation"));
+			assert.deepEqual(seen, [id("route-a"), id("route-b")]);
+			assert.equal(result.attempts[1]?.resultFinalization?.outcome, "succeeded");
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(result.structuredResult?.summary, "finalized");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not replay a mutated worker after result-capability miss", async () => {
+		const root = await tmp();
+		try {
+			const seen: string[] = [];
+			const { executor } = executorFor("mutate-omit-then-missing", seen);
+			const result = await executor.run(request(root, "implementation"));
+			assert.deepEqual(seen, [id("route-a")]);
+			assert.equal(result.terminalStatus, "partial_mutation_requires_review");
+			assert.equal(result.fallbackCount, 0);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("stops result-capability failure when fallback is disabled", async () => {
+		const root = await tmp();
+		try {
+			const seen: string[] = [];
+			const { executor } = executorFor("omit-then-missing", seen, { ...policy, fallback: { enabled: false } });
+			const result = await executor.run(request(root, "investigation"));
+			assert.deepEqual(seen, [id("route-a")]);
+			assert.equal(result.terminalStatus, "invalid_child_result");
+			assert.equal(result.fallbackCount, 0);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("returns no_eligible_route when result-capability fallback has no remaining route", async () => {
+		const root = await tmp();
+		try {
+			const adapter = adapterFor([candidate("route-a", 0)], { ...policy, fallback: { enabled: true } });
+			const tracker = createTracker();
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+				create: async (options) => fakeSessionHandle(options.resultProtocol, "omit-then-missing", tracker),
+			});
+			const result = await executor.run(request(root, "investigation"));
+			assert.equal(result.terminalStatus, "no_eligible_route");
+			assert.equal(result.attempts[0]?.failureAction, "FALLBACK_NEXT_ROUTE");
+			assert.equal(result.structuredResult, undefined);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not treat a valid structured result as result-capability fallback", async () => {
+		const root = await tmp();
+		try {
+			const seen: string[] = [];
+			const { executor } = executorFor("complete", seen);
+			const result = await executor.run(request(root, "investigation"));
+			assert.deepEqual(seen, [id("route-a")]);
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(result.fallbackCount, 0);
+			assert.equal(result.attempts[0]?.failureAction, undefined);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
@@ -438,8 +552,8 @@ function createTracker(): Tracker {
 	return { promptCount: 0, workTools: ["read", "grep", "find", "ls", "submit_agent_result"] };
 }
 
-function executorFor(mode: FakeMode, seen: string[] = []) {
-	const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)]);
+function executorFor(mode: FakeMode, seen: string[] = [], routingPolicy: RoutingPolicy = policy) {
+	const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)], routingPolicy);
 	const tracker = createTracker();
 	const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
 		create: async (options) => {
