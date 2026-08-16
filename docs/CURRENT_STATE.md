@@ -33,7 +33,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
-| RC29 development line | `0.1.0-rc.29` — Mission Runtime Convergence; UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; not public, accepted, tagged, npm-published, or production-ready |
+| RC29 development line | `0.1.0-rc.29` — Mission Runtime Convergence; UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; artifact SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not public, accepted, tagged, npm-published, or production-ready |
 | RC28 release | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release | `0.1.0-rc.27` — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release | `0.1.0-rc.26` — Goal Terminal Semantics & Runtime Metadata Correctness; public prerelease; source `11153f0587634bcba732a5b214c95319c305f9e6`, tag `v0.1.0-rc.26`, artifact SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a`; immutable |
@@ -133,10 +133,17 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   `routing.fallback.enabled=true`, `routing.maxAttempts=1` (temporary
   dogfood; no `maxSameRouteRetries` field). Investigation pool and Boss
   unchanged.
-- **Publication boundary:** public RC28 remains immutable. RC29 is
-  verified and may be pushed as an unpublished candidate. It is not
-  tagged, npm-published, or a GitHub Release until an authorized later
-  operator publication step.
+- **Unpublished candidate:** `pi-multi-orchestrator-0.1.0-rc.29.tgz` at
+  `/Users/amin/Documents/Witamin-Game/pi-multi-orchestrator-release-rc29-final/`.
+  SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`.
+  Artifact source commit `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`
+  (`buildSource=detached-git-commit`). Detached `npm run release:verify`
+  PASS: `367/367`, privacy clean, Pi install PASS, `20/20` integrity
+  attacks. `extractWorkerUsage` lives in `workers/usage.ts` so
+  peer-free `mission/index` import no longer pulls Pi `session.js`.
+- **Publication boundary:** public RC28 remains immutable. RC29 is a
+  verified unpublished candidate. It is not tagged, npm-published, or a
+  GitHub Release until an authorized later operator publication step.
 
 ### Historical RC29 dogfood (superseded by live COMPLETED)
 

@@ -490,9 +490,12 @@ Deliverables:
   rows, including reject→repair and resume.
 
 Exit evidence: `docs/mission-runtime-root-cause.md`, ADR-046, ADR-049,
-RC29-01/02/03 acceptance tests, `npm run check`, and live isolated Pi
-Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED.
-Publication remains operator-owned. RC29 is an unpublished candidate.
+RC29-01/02/03 acceptance tests, `npm run check` `367/367`, live isolated Pi
+Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED, and
+detached unpublished candidate SHA-256
+`fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`
+(source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`). Publication remains
+operator-owned. RC29 is an unpublished candidate.
 
 ## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
 

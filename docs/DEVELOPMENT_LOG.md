@@ -4,6 +4,18 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — Unpublished candidate gates PASS
+
+- **Date/status:** 2026-08-16; `UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED`.
+  Not tagged, npm-published, or a GitHub Release.
+- **Verify-gate repair:** `d975a5d` moved `extractWorkerUsage` to
+  `src/core/workers/usage.ts` so peer-free `mission/index` import no longer
+  loads Pi `session.js`. Detached `npm run release:verify` then PASS.
+- **Artifact:** `/Users/amin/Documents/Witamin-Game/pi-multi-orchestrator-release-rc29-final/pi-multi-orchestrator-0.1.0-rc.29.tgz`
+- **SHA-256:** `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`
+- **Source commit:** `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`
+- **Tests:** `367/367 PASS`; integrity `20/20`; privacy clean; Pi install PASS.
+
 ## RC29 — First real end-to-end Mission COMPLETED
 
 - **Date/status:** 2026-08-16; `UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED`.
