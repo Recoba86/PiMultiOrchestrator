@@ -127,7 +127,9 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   `BLOCKED`; empty `dispatch` JSON remains protocol (`AWAITING_USER`); Goal
   capability preflight; Task identity reuse; active-only completion; bounded
   Boss canonical projection; persisted `lastFeedback`; class-specific M7
-  prompts; terminal Missions do not resume. ADR-046. Host-shaped harness
+  prompts; terminal Missions do not resume. ADR-046. ADR-048 adds one
+  same-session capture-only worker result finalization turn when work-phase
+  capture is missing. Host-shaped harness
   inspects durable store rows through Goal→Task→M7→COMPLETED, reject→repair,
   multi-task, resume, and capability mismatch.
 - **Verification:** prior source `npm test` `313/313` and `npm run check` PASS

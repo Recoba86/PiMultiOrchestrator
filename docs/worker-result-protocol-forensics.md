@@ -248,6 +248,5 @@ Deterministic two-phase worker completion:
 6. After mutation, infrastructure failure during finalization must not
    fallback to a fresh implementation worker.
 
-Next ADR number: ADR-047 (ADR-046 is the last sequential record;
-the later Boss-transport heading currently reused ADR-030 and must not
-be duplicated).
+Next sequential ADR after this forensics record: the Boss-transport heading
+that reused ADR-030 is ADR-047; two-phase worker finalization is ADR-048.

@@ -30,6 +30,7 @@ export function createProtocolOnlyCaptureTool(protocol: ResultProtocolSpec, stat
 		description: "Submit one bounded worker result to the parent, then stop.",
 		promptSnippet: `${protocol.toolName}: submit one bounded worker result`,
 		parameters: protocol.parameters,
+		constrainedSampling: { type: "json_schema", strict: "prefer" },
 		execute: async (_toolCallId, params): Promise<AgentToolResult<unknown>> => {
 			const mutable = state as MutableProtocolCaptureState;
 			mutable.submissionCount += 1;

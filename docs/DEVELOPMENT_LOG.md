@@ -4,6 +4,22 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — Two-phase worker result finalization
+
+- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.
+  Development identity is `0.1.0-rc.29`. Not public, tagged, npm-published,
+  accepted, pre-release ready, or a GitHub Release. Public RC28 remains immutable.
+- **Forensics:** `docs/worker-result-protocol-forensics.md`. Live Mission
+  `mission-306fb445-f267-4745-b5fc-a3c46e1760f5` Attempt
+  `attempt-e533b18a-d6b5-4941-8914-bce137e39e1b` on `ocg/deepseek-v4-flash`
+  ended `invalid_child_result` because `submit_agent_result` was never captured.
+  A direct probe on the same route advertised and invoked the tool successfully.
+- **Fix:** ADR-048. Same-session capture-only finalization turn when work-phase
+  capture is missing. Tools restricted to the result protocol tool. No
+  `toolChoice` on AgentSession. No Task/Attempt duplication. No side-effect replay.
+- **Direct live probe:** work phase capture absent; one finalization turn;
+  `submit_agent_result` only; parsed status `completed`; no mutation.
+
 ## RC29 — Enforced Boss Decision Transport & Local Dogfood Gate
 
 - **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD INVESTIGATION`.
@@ -18,7 +34,7 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   `ag/gemini-3.7-flash-high` natively supports `submit_boss_decision` tool calling
   with strict JSON schema enforcement (`constrainedSampling: { type: "json_schema", strict: "prefer" }`)
   and forced `toolChoice`.
-- **Implementation (ADR-030):**
+- **Implementation (ADR-047):**
   1. Canonical `submit_boss_decision` tool definition with strict `BossDecision` schema.
   2. Prioritize toolCall blocks over text parsing with fallback to strict JSON text for compatibility.
   3. Explicitly exclude thinking/reasoning blocks.

@@ -10,3 +10,4 @@ export {
 } from "./result-tool.js";
 export * from "./session.js";
 export { SubagentExecutor, createSubagentExecutor, extractWorkerUsage } from "./executor.js";
+export { resultFinalizationPrompt, shouldRunResultFinalization } from "./finalization.js";

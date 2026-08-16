@@ -570,7 +570,7 @@ prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
   install remain operator-owned. Do not call RC29 pre-release ready until a
   real isolated Pi Mission using this runtime reaches COMPLETED.
 
-## ADR-030 — Enforced Boss Decision Tool Transport
+## ADR-047 — Enforced Boss Decision Tool Transport
 
 - **Decision:** Assistant prose is not an authoritative control plane. Free-form JSON in assistant text is rejected as the primary orchestrator transport mechanism.
 - **Decision:** The canonical and preferred Boss decision transport is the schema-enforced `submit_boss_decision` tool call. Invocations define `submit_boss_decision` with strict JSON schema constrained sampling and force tool selection via `toolChoice`.
@@ -579,3 +579,12 @@ prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
 - **Decision:** Decision transport capability failures (missing tool definitions / uncarried control tools / empty responses) are classified as `BossInfrastructureError` eligible for controlled fallback. Semantic protocol failures (malformed tool arguments or invalid plans) remain `BossProtocolError` with machine-readable corrective feedback and early termination on repeated identical failure fingerprints without infrastructure fallback.
 - **Rationale:** Forensic investigation of `mission-939cfa52-87d2-4e6f-b8d8-bc5930c90a73` proved that free-form model text is non-compliant with JSON schema instructions under complex planning prompts. Moving to structured `submit_boss_decision` tool transport enforces schema validation at inference time and eliminates parsing ambiguity.
 - **Consequences:** All Boss routes compatible with Pi 0.84.1 / 9Router receive the `submit_boss_decision` tool definition; `normalizeBossDecision` remains the final strict validator.
+
+## ADR-048 — Two-phase worker result finalization
+
+- **Decision:** Worker task execution and worker result handoff are separate phases. A successful work phase without a structured result may receive exactly one capture-only finalization turn. Finalization cannot perform task work or replay side effects.
+- **Decision:** Finalization uses the same child `AgentSession`. Tools are restricted with `setActiveToolsByName([resultTool])`. `AgentSession.prompt` does not support `toolChoice`; the strongest supported enforcement is tool restriction plus `ToolDefinition.constrainedSampling` and a one-turn `shouldStopAfterTurn` budget.
+- **Decision:** Finalization belongs to the same canonical Attempt. It does not create a Task or Attempt. After mutation, infrastructure failure during finalization must not fallback to a fresh implementation worker.
+- **Decision:** When the bounded finalizer also fails to capture a valid result, keep backward-compatible `invalid_child_result` (or `partial_mutation_requires_review` after mutation) and attach a precise in-memory `resultFinalization` diagnostic. Do not add a persisted terminal-state enum.
+- **Rationale:** `mission-306fb445-f267-4745-b5fc-a3c46e1760f5` proved DeepSeek can call `submit_agent_result`, but the live Mission omitted it. Copying Boss `toolChoice` into the work phase would hide investigation/implementation tools. Same-session capture-only finalization recovers the handoff without replaying work.
+- **Consequences:** Work-phase protocol violations with no valid capture do not loop into finalization. Evidence admission still requires a parsed structured result.

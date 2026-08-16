@@ -100,10 +100,12 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 		resultToolName,
 		...(options.safety === undefined ? {} : options.safety),
 	});
+	let safetyTerminated = false;
 	const previousBeforeToolCall = session.agent.beforeToolCall;
 	session.agent.beforeToolCall = async (context, signal) => {
 		const safety = guard.authorize(context.toolCall.name, context.args);
 		if (safety.decision !== "ALLOW") {
+			safetyTerminated = true;
 			return { block: true, reason: workerSafetyBlockMessage(context.toolCall.name, safety), terminate: true };
 		}
 		return previousBeforeToolCall?.(context, signal);
@@ -113,6 +115,7 @@ export async function createChildSession(options: ChildSessionOptions): Promise<
 		session,
 		toolNames: activeToolNames,
 		protocolState,
+		get safetyTerminated() { return safetyTerminated; },
 		dispose: () => {
 			if (disposed) return;
 			disposed = true;

@@ -641,7 +641,7 @@ M8 acceptance note: STATE-8 records `134/134 PASS` and the actual Pi/fake-gatewa
 
 - **Level:** U/I, fixture-v1
 - **Action:** submit one bounded `submit_agent_result`, omit it, submit twice, and attempt post-submit mutation.
-- **Pass:** one valid result completes; missing/invalid is `invalid_child_result`; duplicate/post-submit activity is a protocol violation; no infrastructure health penalty or automatic fallback is inferred.
+- **Pass:** one valid work-phase result completes without finalization; a normal provider-success miss may receive exactly one capture-only finalization turn on the same Attempt; missing/invalid after that turn is `invalid_child_result`; duplicate/post-submit activity is a protocol violation; no infrastructure health penalty or automatic fallback is inferred from protocol misses.
 
 ### WORK-07 — M4 fallback and mutation safety
 

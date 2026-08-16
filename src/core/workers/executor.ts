@@ -15,6 +15,15 @@ import { POOL_IDS } from "../pools/index.js";
 import { createAgentResultProtocol, parseStructuredChildResult, readProtocolCapture } from "./result-tool.js";
 import { parseVerificationResult } from "../quality/gate.js";
 import { defaultChildSessionFactory } from "./session.js";
+import {
+	installOneTurnStop,
+	notRequiredFinalization,
+	reportFromCapture,
+	restrictSessionToResultTool,
+	resultFinalizationPrompt,
+	shouldRunResultFinalization,
+	skippedSafetyFinalization,
+} from "./finalization.js";
 import { isPotentiallyMutatingTool, toolProfileForPool } from "./profiles.js";
 import {
 	WORKER_PROTOCOL_VERSION,
@@ -32,8 +41,9 @@ import {
 	 type WorkerProgressEvent,
 	 type SubagentExecutorOptions,
 	 type ResolvedWorkerRoute,
-	 type ResultProtocolSpec,
-	 type ProtocolCaptureState,
+	type ResultProtocolSpec,
+	type ProtocolCaptureState,
+	type WorkerFinalizationReport,
 } from "./types.js";
 import type { WorkerSafetyContext } from "./safety.js";
 import type { StableId } from "../config/types.js";
@@ -287,6 +297,7 @@ export class SubagentExecutor {
 		let terminalState: SubagentAttempt["sessionTerminalState"] = "error";
 		let protocolViolation = false;
 		let result: unknown;
+		let resultFinalization: WorkerFinalizationReport = notRequiredFinalization();
 		let observedUsage: WorkerUsage | undefined;
 		let effectiveThinkingEffort: EffectiveThinkingEffort = "unknown";
 		let handle: Awaited<ReturnType<ChildSessionFactory["create"]>> | undefined;
@@ -362,8 +373,48 @@ export class SubagentExecutor {
 					providerSucceeded = true;
 					result = readProtocolResult(resultProtocol, handle.protocolState);
 					protocolViolation ||= handle.protocolState.protocolViolation;
-					outcome = protocolViolation ? "protocol_violation" : result === undefined ? "invalid_child_result" : "completed";
 					terminalState = "idle";
+					if (handle.safetyTerminated === true) {
+						resultFinalization = skippedSafetyFinalization();
+						outcome = result === undefined ? "invalid_child_result" : "completed";
+					} else if (shouldRunResultFinalization({
+						captured: result !== undefined,
+						cancelled: options.signal?.aborted === true,
+						safetyTerminated: false,
+						providerSucceeded: true,
+						protocolViolation,
+					})) {
+						const finalized = await this.runResultFinalization(handle.session, resultProtocol, handle.protocolState, options.request.timeoutMs ?? this.routeAdapter.policy.timeoutMs, options.signal);
+						resultFinalization = finalized.report;
+						if (finalized.prompt.kind === "cancelled") {
+							outcome = "cancelled";
+							terminalState = "aborted";
+							resultFinalization = { required: true, attempted: true, succeeded: false, outcome: "cancelled", ...(finalized.report.toolsExposed === undefined ? {} : { toolsExposed: finalized.report.toolsExposed }) };
+						} else if (finalized.prompt.kind === "timed_out") {
+							outcome = "timed_out";
+							failure = classifyFailure({ timeout: true });
+							terminalState = "aborted";
+							resultFinalization = { required: true, attempted: true, succeeded: false, outcome: "infrastructure_failure", ...(finalized.report.toolsExposed === undefined ? {} : { toolsExposed: finalized.report.toolsExposed }) };
+						} else if (finalized.prompt.kind === "error") {
+							failure = classifyFailure(failureInputFromError(finalized.prompt.error));
+							outcome = failure.class === "cancelled" ? "cancelled" : failure.class === "timeout" ? "timed_out" : "infrastructure_failure";
+							terminalState = "error";
+							resultFinalization = {
+								required: true,
+								attempted: true,
+								succeeded: false,
+								outcome: failure.class === "cancelled" ? "cancelled" : "infrastructure_failure",
+								...(finalized.report.toolsExposed === undefined ? {} : { toolsExposed: finalized.report.toolsExposed }),
+							};
+						} else {
+							result = readProtocolResult(resultProtocol, handle.protocolState);
+							protocolViolation = handle.protocolState.protocolViolation && result === undefined;
+							resultFinalization = reportFromCapture(handle.protocolState, finalized.report.toolsExposed ?? [], result);
+							outcome = result === undefined ? (protocolViolation ? "protocol_violation" : "invalid_child_result") : "completed";
+						}
+					} else {
+						outcome = protocolViolation ? "protocol_violation" : result === undefined ? "invalid_child_result" : "completed";
+					}
 				}
 			}
 		} catch (error) {
@@ -414,9 +465,28 @@ export class SubagentExecutor {
 			schedulerPolicy: options.schedulerPolicy,
 			configuredWeight: options.configuredWeight,
 			poolPosition: options.poolPosition,
+			resultFinalization,
 		};
 		this.emit({ type: "attempt_finished", runId: options.runId, attemptId: options.attemptId, routeId: options.route.routeId, remoteModelId: options.route.remoteModelId });
 		return { attempt, outcome, failure, result, providerSucceeded, potentialMutation: potentialMutationObserved, protocolViolation };
+	}
+
+	private async runResultFinalization(
+		session: import("@earendil-works/pi-coding-agent").AgentSession,
+		protocol: ResultProtocolSpec,
+		state: ProtocolCaptureState,
+		timeoutMs: number,
+		signal?: AbortSignal,
+	): Promise<{ readonly report: WorkerFinalizationReport; readonly prompt: PromptOutcome }> {
+		const toolsExposed = restrictSessionToResultTool(session, protocol.toolName);
+		const restoreStop = installOneTurnStop(session);
+		try {
+			const prompt = await this.promptWithControl(session, resultFinalizationPrompt(protocol.toolName), timeoutMs, signal);
+			if (prompt.kind !== "done") return { report: { required: true, attempted: true, succeeded: false, outcome: "missing", toolsExposed }, prompt };
+			return { report: reportFromCapture(state, toolsExposed), prompt };
+		} finally {
+			restoreStop();
+		}
 	}
 
 	private async promptWithControl(session: import("@earendil-works/pi-coding-agent").AgentSession, promptText: string, timeoutMs: number, signal?: AbortSignal): Promise<PromptOutcome> {
@@ -670,6 +740,7 @@ function resultBase(
 	protocolResult?: unknown,
 ): SubagentRunResult {
 	const structuredResult = isStructuredChildResult(protocolResult) ? protocolResult : undefined;
+	const lastAttempt = attempts.at(-1);
 	return {
 		protocolVersion: WORKER_PROTOCOL_VERSION,
 		runId,
@@ -684,7 +755,8 @@ function resultBase(
 		fallbackCount,
 		summary: summary.slice(0, 1_000),
 		requestedThinkingEffort: request.thinkingEffort ?? "auto",
-		effectiveThinkingEffort: attempts.at(-1)?.effectiveThinkingEffort ?? "unknown",
+		effectiveThinkingEffort: lastAttempt?.effectiveThinkingEffort ?? "unknown",
+		...(lastAttempt?.resultFinalization ? { resultFinalization: lastAttempt.resultFinalization } : {}),
 	};
 }
 

@@ -146,6 +146,7 @@ export interface SubagentAttempt {
 	readonly schedulerPolicy?: PoolSchedulingPolicy;
 	readonly configuredWeight?: number;
 	readonly poolPosition?: number;
+	readonly resultFinalization?: WorkerFinalizationReport;
 }
 
 export type SubagentTerminalStatus =
@@ -174,6 +175,7 @@ export interface SubagentRunResult {
 	readonly summary: string;
 	readonly requestedThinkingEffort?: ThinkingEffort;
 	readonly effectiveThinkingEffort?: EffectiveThinkingEffort;
+	readonly resultFinalization?: WorkerFinalizationReport;
 }
 
 export interface ResolvedWorkerRoute {
@@ -209,11 +211,30 @@ export interface ChildSessionOptions {
 	readonly signal?: AbortSignal;
 }
 
+export type WorkerFinalizationOutcome =
+	| "not_required"
+	| "succeeded"
+	| "missing"
+	| "protocol_violation"
+	| "infrastructure_failure"
+	| "cancelled"
+	| "safety_stop";
+
+export interface WorkerFinalizationReport {
+	readonly required: boolean;
+	readonly attempted: boolean;
+	readonly succeeded: boolean;
+	readonly outcome: WorkerFinalizationOutcome;
+	readonly toolsExposed?: readonly string[];
+	readonly stopReason?: string;
+}
+
 export interface ChildSessionHandle {
 	readonly session: AgentSession;
 	readonly toolNames: readonly string[];
 	readonly protocolState: ProtocolCaptureState;
 	readonly dispose: () => void;
+	readonly safetyTerminated?: boolean;
 }
 
 export interface ChildSessionFactory {

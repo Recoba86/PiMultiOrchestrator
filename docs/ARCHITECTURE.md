@@ -256,6 +256,15 @@ unknown names and collisions with guarded or reserved Pi tools. This prevents
 an untrusted caller from registering a `submit_evil` handler that can mutate
 the workspace through Pi's child-session API.
 
+RC29 separates worker task execution from result handoff. If a child reaches a
+normal provider-success boundary without a captured result protocol tool, the
+same `AgentSession` may run exactly one capture-only finalization turn with
+only that tool exposed. Finalization cannot call work tools, cannot mutate the
+worktree, and cannot create another Task or Attempt. After a potential
+mutation, finalization infrastructure failure does not replay the worker on
+another route. Missing capture after that single turn remains
+`invalid_child_result`.
+
 ### 5.12 `tui`
 
 Renders the twelve Control Center sections using Pi TUI components and calls application operations. Components do not read files, query SQLite, resolve secrets, or call 9Router directly. Each screen receives view data plus explicit commands so non-TUI tests can exercise the same operations.
