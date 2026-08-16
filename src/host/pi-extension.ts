@@ -764,7 +764,7 @@ const asProviderConfig = (projection: ProviderProjection): ProviderConfig | unde
 };
 
 /** Resolve one current route without selecting a worker pool or copying credentials. */
-async function resolveHostRoute(manager: PiManagerContract, routeId: StableId, providerRegistry?: PiProviderRegistry): Promise<ResolvedWorkerRoute> {
+export async function resolveHostRoute(manager: PiManagerContract, routeId: StableId, providerRegistry?: PiProviderRegistry): Promise<ResolvedWorkerRoute> {
 	const projection = await manager.providerProjection();
 	const selected = projection?.models.find((model) => model.routeId === routeId);
 	if (!selected) {

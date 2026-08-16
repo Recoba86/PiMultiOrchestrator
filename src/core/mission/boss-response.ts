@@ -309,3 +309,95 @@ export function parseBossAssistantResponse(
 		throw error;
 	}
 }
+
+export interface BossRouteProbeResult {
+	readonly routeId: string;
+	readonly remoteModelId?: string;
+	readonly success: boolean;
+	readonly failureClass?: string;
+	readonly code?: string;
+	readonly status?: number;
+	readonly stopReason?: string;
+	readonly hasText: boolean;
+	readonly textLength: number;
+	readonly elapsedMs: number;
+}
+
+const probeIdentity = (identity: { readonly routeId: string; readonly remoteModelId?: string }): Pick<BossRouteProbeResult, "routeId" | "remoteModelId"> => ({
+	routeId: identity.routeId,
+	...(identity.remoteModelId === undefined ? {} : { remoteModelId: identity.remoteModelId }),
+});
+
+/** Classify a live completeSimple result for visible-text Boss compatibility. Never returns assistant text. */
+export function evaluateBossVisibleTextProbe(
+	response: unknown,
+	identity: { readonly routeId: string; readonly remoteModelId?: string },
+	elapsedMs: number,
+): BossRouteProbeResult {
+	const elapsed = Number.isFinite(elapsedMs) && elapsedMs >= 0 ? Math.round(elapsedMs) : 0;
+	const base = { ...probeIdentity(identity), elapsedMs: elapsed };
+	if (!isRecord(response)) {
+		return { ...base, success: false, failureClass: "unsupported_shape", hasText: false, textLength: 0 };
+	}
+	const stopReason = typeof response.stopReason === "string" ? response.stopReason.slice(0, 32) : undefined;
+	const extracted = extractBossAssistantText(response.content);
+	const hasText = extracted.text.length > 0;
+	const textLength = extracted.text.length;
+	if (stopReason === "error" || stopReason === "aborted" || stopReason === "pending" || stopReason === "deferred") {
+		return {
+			...base,
+			success: false,
+			failureClass: stopReason === "error" ? "provider_unavailable" : stopReason === "aborted" ? "cancelled" : "provider_unavailable",
+			code: stopReason,
+			...(stopReason === undefined ? {} : { stopReason }),
+			hasText,
+			textLength,
+		};
+	}
+	if (!hasText) {
+		return {
+			...base,
+			success: false,
+			failureClass: stopReason === "length" ? "truncated" : "empty_response",
+			code: stopReason === "length" ? "max_tokens" : "empty_response",
+			...(stopReason === undefined ? {} : { stopReason }),
+			hasText: false,
+			textLength: 0,
+		};
+	}
+	const usable = stopReason === undefined || stopReason === "stop" || stopReason === "length";
+	return {
+		...base,
+		success: usable,
+		...(usable ? {} : { failureClass: "unsupported_shape", code: stopReason }),
+		...(stopReason === undefined ? {} : { stopReason }),
+		hasText: true,
+		textLength,
+	};
+}
+
+export function bossRouteProbeFromError(
+	error: unknown,
+	identity: { readonly routeId: string; readonly remoteModelId?: string },
+	elapsedMs: number,
+): BossRouteProbeResult {
+	const elapsed = Number.isFinite(elapsedMs) && elapsedMs >= 0 ? Math.round(elapsedMs) : 0;
+	try {
+		if (!(error instanceof BossInfrastructureError) && !(error instanceof BossProtocolError)) wrapBossRequestFailure(error, identity);
+		throw error;
+	} catch (wrapped) {
+		const diagnostic = bossInvocationDiagnostic(wrapped);
+		const remoteModelId = identity.remoteModelId ?? diagnostic?.remoteModelId;
+		return {
+			...probeIdentity({ routeId: identity.routeId, ...(remoteModelId === undefined ? {} : { remoteModelId }) }),
+			success: false,
+			failureClass: diagnostic?.failureClass ?? "transport_error",
+			...(diagnostic?.code === undefined ? {} : { code: diagnostic.code }),
+			...(diagnostic?.status === undefined ? {} : { status: diagnostic.status }),
+			...(diagnostic?.stopReason === undefined ? {} : { stopReason: diagnostic.stopReason }),
+			hasText: diagnostic?.hasText === true,
+			textLength: 0,
+			elapsedMs: elapsed,
+		};
+	}
+}
