@@ -498,9 +498,33 @@ canonical layer before `normalizeBossDecision`. Pi's public contract exposes
 and content blocks `text | thinking | toolCall`. User-visible decision text is
 exactly the `type:"text"` blocks (Pi `contentText()`). Thinking/CoT is never
 used as the decision. `length` with complete JSON is a usable completion;
-empty text, truncated JSON, unsupported shape, refusal, cancellation, and
+empty user-visible text is an invocation delivery failure (`empty_response`)
+and may infrastructure-fallback; truncated incomplete JSON, empty
+`dispatch`/`replan` task arrays, and invalid BossDecision documents remain
+protocol and must not fallback. Unsupported shape, refusal, cancellation, and
 classified request/response failures remain distinct. Inspect persists only
 safe stage/class/stopReason/hasText/fallback fields.
+
+Before the first Boss inference, Goal and Mission acceptance criteria are
+preflighted against worker capability. `git commit` is outside the command
+allowlist (`COMMAND_NOT_ALLOWLISTED` / `REVIEW_REQUIRED`, which workers treat
+as a block). `git push` and other network/publication commands are
+`NETWORK_OR_PUBLICATION` and `BLOCK`. Workers never receive
+`explicitlyAuthorized` for those commands. An impossible Goal terminals
+`AWAITING_USER` with provenance `CAPABILITY_MISMATCH` instead of burning
+Boss cycles.
+
+Logical Tasks are resolved by explicit Mission `taskId` or by identity key
+`executionClass` + normalized objective. Repair reuses that identity. M7
+reviewer prompts are execution-class specific. Completion inspects **active**
+Tasks (latest non-cancelled identity); historical cancelled or superseded rows
+remain durable. The Boss prompt includes a bounded canonical Mission
+projection. `lastFeedback` and the next cycle persist in
+`plan.orchestration`. Terminal Missions do not resume.
+
+Invocation-delivery exhaustion is `BLOCKED`. Decision-protocol exhaustion with
+zero Tasks remains Inspectable `AWAITING_USER`. Productive
+plan→execute→verify→evaluate iterations keep the existing cycle bound.
 
 The fallback event records the original route, replacement route, failure class, and safe
 reason, then pins the replacement for the remaining Mission. Quality rejection,

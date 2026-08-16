@@ -21,6 +21,7 @@ import type {
 	QualityStatus, TaskQualityStatus, VerificationRunInput, VerificationRunRecord, VerificationStatus,
 } from "../quality/types.js";
 import { resolveMissionAcceptanceCriteria } from "./acceptance-criteria.js";
+import { activeMissionTasks } from "./task-identity.js";
 
 type Row = Record<string, unknown>;
 const json = (value: unknown): string => JSON.stringify(value ?? null);
@@ -151,12 +152,12 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 		return row;
 	}
 	private assertMissionCompletable(missionId: string): void {
-		const tasks = this.db.prepare("SELECT task_id,status FROM tasks WHERE mission_id=? ORDER BY task_id").all(missionId) as Row[];
+		const tasks = activeMissionTasks(this, missionId);
 		if (tasks.length === 0) throw new MissionValidationError([{ path: "status", message: "mission requires at least one completed and passed task" }]);
 		for (const task of tasks) {
-			if (task.status !== "execution_completed") throw new MissionValidationError([{ path: "status", message: `task ${String(task.task_id)} is not execution-completed` }]);
-			const quality = this.db.prepare("SELECT status,latest_decision_id FROM task_quality_status WHERE task_id=? AND mission_id=?").get(String(task.task_id), missionId) as Row | undefined;
-			if (!quality || quality.status !== "passed" || typeof quality.latest_decision_id !== "string" || quality.latest_decision_id.length === 0) throw new MissionValidationError([{ path: "status", message: `task ${String(task.task_id)} has not passed quality review` }]);
+			if (task.status !== "execution_completed") throw new MissionValidationError([{ path: "status", message: `task ${String(task.taskId)} is not execution-completed` }]);
+			const quality = this.db.prepare("SELECT status,latest_decision_id FROM task_quality_status WHERE task_id=? AND mission_id=?").get(String(task.taskId), missionId) as Row | undefined;
+			if (!quality || quality.status !== "passed" || typeof quality.latest_decision_id !== "string" || quality.latest_decision_id.length === 0) throw new MissionValidationError([{ path: "status", message: `task ${String(task.taskId)} has not passed quality review` }]);
 		}
 	}
 	private missionFrom(row: Row): MissionRecord {
@@ -500,3 +501,7 @@ export {
 	resolveMissionAcceptanceCriteria,
 	type MissionAcceptanceCriteriaProvenance,
 } from "./acceptance-criteria.js";
+export { evaluateMissionCapability, capabilityMismatchReason } from "./capability-preflight.js";
+export { taskIdentityKey, resolveOrCreateMissionTask, activeMissionTasks, completedAndVerified } from "./task-identity.js";
+export { projectBossCanonicalState } from "./boss-projection.js";
+export { BOSS_SYSTEM_PROMPT, bossInferencePrompt } from "./boss-prompt.js";

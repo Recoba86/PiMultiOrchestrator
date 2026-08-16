@@ -17,6 +17,7 @@ import {
 	MissionUnauthorizedError,
 } from "../src/core/mission/index.js";
 import { ContextBroker, missionStoreContextRepository } from "../src/core/context/index.js";
+import { QualityService } from "../src/core/quality/index.js";
 import type { SubagentRunResult } from "../src/core/workers/index.js";
 
 async function withStore<T>(run: (root: string) => T | Promise<T>): Promise<T> {
@@ -147,5 +148,32 @@ describe("SQLite mission store", () => {
 		assert.equal(store.getTask("t1")?.status, "execution_completed");
 		assert.equal(store.getTask("t1")?.packetRevision, 1);
 		assert.ok(store.listCheckpoints("m1").some((checkpoint) => checkpoint.kind === "task-ended"));
+	}));
+
+	it("completes using active Task identity and ignores cancelled historical rows", async () => withStore((root) => {
+		const store = createMissionStore({ root });
+		const quality = new QualityService(store);
+		const created = store.createMission({ missionId: "m1", goal: "ship" });
+		store.createTask({ missionId: "m1", taskId: "abandoned", roleId: "implementer", executionClass: "implementation", objective: "old draft" });
+		store.finishTask("abandoned", "cancelled");
+		const task = store.createTask({ missionId: "m1", taskId: "active", roleId: "implementer", executionClass: "implementation", objective: "ship docs" });
+		const attempt = store.createAttempt({ taskId: task.taskId, routeId: "route-a", remoteModelId: "model-a" });
+		store.finishAttempt(attempt.attemptId, "succeeded", { result: { ok: true } });
+		const verification = quality.startVerification({ missionId: "m1", taskId: task.taskId, targetRunId: attempt.attemptId, round: 0 });
+		quality.completeVerification(verification.verificationId, {
+			verdict: "pass",
+			criterionResults: [{ criterion: "ship", status: "satisfied", evidenceSummary: "done" }],
+			mechanicalChecks: [{ command: "ls", outcome: "passed", provenance: "reviewer" }],
+			findings: [],
+			requiredFixes: [],
+			risks: [],
+			summary: "pass",
+		}, ["ship"]);
+		const running = store.transitionMission("m1", "running", { actor: "boss", expectedRevision: created.revision });
+		const review = store.transitionMission("m1", "awaiting-review", { actor: "boss", expectedRevision: running.revision });
+		const completed = store.transitionMission("m1", "completed", { actor: "boss", expectedRevision: review.revision });
+		assert.equal(completed.status, "completed");
+		assert.equal(store.getTask("abandoned")?.status, "cancelled");
+		store.close();
 	}));
 });

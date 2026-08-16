@@ -17,6 +17,8 @@ export interface BossInvocationDiagnostic {
 	readonly remoteModelId?: string;
 	readonly fallbackAttempted?: boolean;
 	readonly fallbackSelectedRouteId?: string;
+	readonly textBlocks?: number;
+	readonly thinkingBlocks?: number;
 }
 
 export type PiStopReason = "pending" | "stop" | "length" | "toolUse" | "error" | "aborted" | "deferred";
@@ -43,6 +45,12 @@ export function sanitizeBossInvocationDiagnostic(value: unknown): BossInvocation
 	const routeId = boundedId(value.routeId, 128);
 	const remoteModelId = boundedId(value.remoteModelId, 240);
 	const fallbackSelectedRouteId = boundedId(value.fallbackSelectedRouteId, 128);
+	const count = (key: "textBlocks" | "thinkingBlocks"): number | undefined => {
+		const raw = value[key];
+		return typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 0 && raw <= 1_024 ? raw : undefined;
+	};
+	const textBlocks = count("textBlocks");
+	const thinkingBlocks = count("thinkingBlocks");
 	return {
 		stage: value.stage as BossInvocationStage,
 		failureClass: value.failureClass as BossResponseFailureClass,
@@ -55,6 +63,8 @@ export function sanitizeBossInvocationDiagnostic(value: unknown): BossInvocation
 		...(remoteModelId === undefined ? {} : { remoteModelId }),
 		...(value.fallbackAttempted === undefined ? {} : { fallbackAttempted: value.fallbackAttempted === true }),
 		...(fallbackSelectedRouteId === undefined ? {} : { fallbackSelectedRouteId }),
+		...(textBlocks === undefined ? {} : { textBlocks }),
+		...(thinkingBlocks === undefined ? {} : { thinkingBlocks }),
 	};
 }
 
@@ -204,6 +214,8 @@ export function parseBossAssistantResponse(
 	const base = {
 		hasText: extracted.text.length > 0,
 		normalized: false,
+		textBlocks: extracted.textBlocks,
+		thinkingBlocks: extracted.thinkingBlocks,
 		...(stopReason === undefined ? {} : { stopReason: stopReason.slice(0, 32) }),
 		...identity,
 	};
@@ -241,7 +253,7 @@ export function parseBossAssistantResponse(
 		});
 	}
 	if (stopReason !== undefined && !USABLE_STOP_REASONS.has(stopReason) && !extracted.text) {
-		throw bossProtocolError("Boss response used an unsupported completion shape", {
+		throw bossInfrastructureError("Boss response used an unsupported completion shape", {
 			stage: "response",
 			failureClass: "unsupported_shape",
 			...base,
@@ -257,13 +269,13 @@ export function parseBossAssistantResponse(
 			});
 		}
 		if (stopReason === "toolUse") {
-			throw bossProtocolError("Boss response used an unsupported completion shape", {
+			throw bossInfrastructureError("Boss response used an unsupported completion shape", {
 				stage: "response",
 				failureClass: "unsupported_shape",
 				...base,
 			});
 		}
-		throw bossProtocolError("Boss response contained no assistant text", {
+		throw bossInfrastructureError("Boss response contained no assistant text", {
 			stage: "response",
 			failureClass: "empty_response",
 			...base,

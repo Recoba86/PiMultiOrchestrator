@@ -1338,14 +1338,16 @@ requirements and remain future work.
   `BossDecision`, creates the first Task, runs the worker and M7 path, and
   does not terminal `BLOCKED` at cycle 0.
 
-### RC28-02 — Empty, truncated, and malformed responses are precise protocol diagnostics
+### RC28-02 — Empty, truncated, and malformed responses are precise classified diagnostics
 
 - **Level:** U
-- **Pass:** thinking-only `stop` (RC27 Cursor dogfood shape) is
+- **Pass:** thinking-only `stop` (RC27/RC28 Cursor dogfood shape) is
   `Boss response contained no assistant text` with stage `response` and class
-  `empty_response`. Truncated `length` without a complete decision reports
-  `max_tokens`. Malformed/schema-invalid JSON remains `BossProtocolError`.
-  Protocol failure does not trigger infrastructure fallback. Inspect shows
+  `empty_response`, typed as invocation delivery (`BossInfrastructureError`)
+  so remaining compatible Boss routes may fallback. Truncated `length` without
+  a complete decision reports `max_tokens` and remains protocol. Malformed or
+  schema-invalid JSON remains `BossProtocolError`. Protocol failure still does
+  not trigger infrastructure fallback. Inspect shows
   stage/class/stopReason/hasText without secrets or thinking.
 
 ### RC28-03 — Infrastructure failure falls back independently of scheduling weight
@@ -1368,6 +1370,35 @@ requirements and remain future work.
   selection as the scheduled Boss. Route rows distinguish scheduling
   eligibility from fallback eligibility.
 
+### RC29-01 — Hollow Boss delivery does not consume the productive cycle budget
+
+- **Level:** U, fake Pi `AssistantMessage` fixtures, real MissionStore
+- **Pass:** Tabi-shaped `authentication_failed` HTTP 403 falls back to a
+  weight-0 Cursor route; thinking-only empty Cursor delivery is
+  `empty_response` infrastructure; the loop terminals `BLOCKED` with 0 Tasks
+  and 0 protocol failures instead of `AWAITING_USER` after four cycles.
+  Empty `dispatch` JSON still follows RC27-02.
+
+### RC29-02 — Capability mismatch terminals before Boss inference
+
+- **Level:** U
+- **Pass:** a Goal/criterion requiring `git commit` and `git push` terminals
+  `AWAITING_USER` with provenance `CAPABILITY_MISMATCH`, 0 Tasks, and 0 Boss
+  invocations. Negated language (`do not commit or push`) is allowed.
+  Implementation workers never receive `explicitlyAuthorized` for those
+  commands.
+
+### RC29-03 — Host-shaped Goal→Task→M7→COMPLETED inspects durable state
+
+- **Level:** U/I, real MissionStore, ContextBroker, `executeMissionTask`
+  boundary, QualityService, Pi-shaped Boss fixtures
+- **Pass:** a fully permitted local read/write Goal reaches COMPLETED with
+  durable Task, Attempt, proposed then accepted Evidence, and M7 pass rows.
+  A rejected Task repairs the same logical identity without duplication.
+  A multi-task Mission completes. A cancelled historical Task does not poison
+  completion. Resume from persisted `lastFeedback`/cycle does not recreate
+  completed Tasks or re-enter terminal Missions. Boss prompts include the
+  canonical projection and class-specific M7 prompts are used.
 
 ### RC26-04 — Persisted Pi install evidence is machine-neutral
 

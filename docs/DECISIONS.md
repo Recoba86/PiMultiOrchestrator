@@ -501,3 +501,64 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   (`0.1.0-rc.27`, source `267612d15dcc0784856e7dafd6704d2f802272b9`) is
   immutable. Publication, tags, npm dist-tags, GitHub Releases, and live Pi
   install remain a separate operator-owned step. RC27 history is not rewritten.
+
+## ADR-046 — RC29 Mission runtime convergence: delivery vs protocol, identity, capability, active completion
+
+- **Decision:** Keep RC25–RC28 pinning, weight-0 infrastructure fallback,
+  classified invocation diagnostics, strict `normalizeBossDecision`, Goal
+  criteria provenance, autonomous Task bootstrap, three worker Pools, Context
+  Broker boundedness, M7 independence, CANCELLED, SAFETY_STOP, and the
+  ADR-045 rule that thinking/CoT is never the Boss decision. Do not rewrite
+  public RC26/RC27 or the unpublished RC28 candidate identity.
+- **Decision:** Empty user-visible assistant text (`stop`/`length` with no
+  `type:"text"`, including thinking-only completions) is an **invocation
+  delivery failure**. Persist class `empty_response` and treat it as
+  `BossInfrastructureError` so remaining compatible Boss routes may fallback.
+  After fallback is exhausted, terminal `BLOCKED` with the classified reason.
+  Do not burn `maxCycles` as `AWAITING_USER` with 0 Tasks. Truncated
+  incomplete JSON, empty `dispatch`/`replan` task arrays, and invalid
+  BossDecision documents remain **protocol** and still must not fallback
+  (RC27-02 unchanged).
+- **Decision:** Safety budgets are distinct. Invocation-delivery /
+  infrastructure exhaustion is `BLOCKED`. Decision-protocol exhaustion with
+  no Tasks remains informative `AWAITING_USER`. Productive
+  plan→execute→verify→evaluate iterations keep the existing cycle bound
+  (default 4) and must not be conflated with hollow delivery retries.
+- **Decision:** Logical Task identity is `executionClass` plus NFKC / lower /
+  collapsed objective. Reuse the latest non-cancelled Mission Task with that
+  key, or an explicit `taskId` that already belongs to the Mission and is not
+  cancelled. Repair rejected work on the same identity; do not multiply Tasks
+  because an LLM omitted an ID. Historical cancelled or superseded rows stay
+  durable. `completedAndVerified` and store completion inspect **active**
+  Tasks only.
+- **Decision:** COMPLETED requires Boss `complete` with `acceptanceSatisfied`
+  **and** every active Task `execution_completed` with M7 `passed`. Boss
+  semantic judgment cannot hide missing durable state; durable state cannot
+  complete without the Boss complete action.
+- **Decision:** Before Boss inference, Goal/criteria that require
+  worker-impossible operations (`git commit`, `git push`, npm publish, other
+  network/publication) terminal `AWAITING_USER` with provenance
+  `CAPABILITY_MISMATCH`. Implementation workers never receive
+  `explicitlyAuthorized` for those commands. Negated language
+  (`do not` / `without`) is not a mismatch.
+- **Decision:** Boss inference receives a bounded canonical Mission
+  projection (Task ID, objective, class, lifecycle, latest Attempt, quality,
+  accepted evidence summary, required fixes, supersession, outstanding Goal
+  criteria). No raw transcripts or hidden reasoning. M7 reviewer prompts are
+  execution-class specific. Persist `lastFeedback` and the next cycle in
+  `plan.orchestration`. Terminal `completed` / `cancelled` / `blocked` /
+  `awaiting-review` Missions do not resume Boss inference.
+- **Rationale:** Live RC28 Mission
+  `mission-04452706-5486-4131-8565-dcec84f52beb` pinned Tabi, fell back after
+  HTTP 403, then classified Cursor thinking-only `empty_response` as protocol
+  four times and labelled `AWAITING_USER` with 0 Tasks. RC28 selection and
+  classification worked; the remaining failure was treating hollow delivery as
+  protocol and burning the productive cycle budget. The same Goal also
+  required commit/push, which workers cannot perform; that mismatch never
+  executed because planning never ran. Evidence is in
+  `docs/mission-runtime-root-cause.md`.
+- **Boundary:** This repair stays on the `0.1.0-rc.28` development manifest
+  until a real isolated Pi Mission using this runtime reaches COMPLETED.
+  RC29 may then be prepared as an unpublished candidate. Publication, tags,
+  npm dist-tags, GitHub Releases, and live Pi install remain operator-owned.
+  Public RC27 and the RC28 source-bound artifact identity are immutable.

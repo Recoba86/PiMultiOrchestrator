@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC27 is the current public prerelease; RC28 is implemented / pre-release ready in source and is not public; none of these are stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC27 is the current public prerelease; RC28 is implemented / pre-release ready in source and is not public; RC29 Mission runtime convergence is implemented in source on the `0.1.0-rc.28` manifest and is not a package bump; none of these are stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -34,6 +34,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
 | RC28 local candidate | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; implemented / pre-release ready in source; not tagged or published |
+| RC29 source repair | Mission runtime convergence (ADR-046) on the `0.1.0-rc.28` manifest; not a package bump, tag, or publication |
 | RC27 release | `0.1.0-rc.27` — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release | `0.1.0-rc.26` — Goal Terminal Semantics & Runtime Metadata Correctness; public prerelease; source `11153f0587634bcba732a5b214c95319c305f9e6`, tag `v0.1.0-rc.26`, artifact SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a`; immutable |
 | RC24 release line | `0.1.0-rc.24` — Model Router enablement status checkboxes layered over canonical rows; superseded public prerelease |
@@ -75,6 +76,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
+| RC29 — Mission Runtime Convergence | IMPLEMENTED IN SOURCE on `0.1.0-rc.28`; not a package candidate, public, accepted, stable, or production-ready |
 | RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics | IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or production-ready |
 | RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC26 — Goal Terminal Semantics & Runtime Metadata Correctness | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
@@ -101,6 +103,36 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   were used.
 - **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
   is a non-draft prerelease carrying the exact artifact and checksum.
+
+## RC29 Mission runtime convergence (source repair on rc.28)
+
+- **Status:** implemented in source on `pi-multi-orchestrator@0.1.0-rc.28`.
+  This is not `0.1.0-rc.29`, not a public prerelease, npm publication, GitHub
+  Release, accepted development milestone, or live Pi install.
+- **Dogfood evidence (unpublished RC28 runtime, live MissionStore snapshot):**
+  Mission `mission-04452706-5486-4131-8565-dcec84f52beb` created 2026-08-15
+  `22:38:17.450Z`, terminal `22:38:24.663Z` (7.213s), status
+  `awaiting-review`, revision 15, **0 Tasks / 0 Attempts / 0 Evidence / 0 M7**.
+  Pin: Tabi/claude-opus-5-thinking weight 1, then fallback to
+  `cu/cursor-grok-4.6-high` weight 0 after `authentication_failed` HTTP 403.
+  Cycles 0–3 after fallback: Cursor `empty_response`, `stopReason=stop`,
+  `hasText=false`. Terminal `AWAITING_USER` with `cycles=4; tasks=0;
+  protocolFailures=4`. RC28 pin/fallback/UI worked; hollow delivery was
+  classified protocol and burned the productive cycle budget. The Goal also
+  required commit/push (latent `CAPABILITY_MISMATCH`). Full timeline:
+  [mission-runtime-root-cause.md](mission-runtime-root-cause.md).
+- **Runtime:** empty/thinking-only assistant text is invocation delivery
+  (`BossInfrastructureError`, class `empty_response`) and may fallback, then
+  `BLOCKED`; empty `dispatch` JSON remains protocol (`AWAITING_USER`); Goal
+  capability preflight; Task identity reuse; active-only completion; bounded
+  Boss canonical projection; persisted `lastFeedback`; class-specific M7
+  prompts; terminal Missions do not resume. ADR-046. Host-shaped harness
+  inspects durable store rows through Goal→Task→M7→COMPLETED, reject→repair,
+  multi-task, resume, and capability mismatch.
+- **Publication boundary:** public RC27 remains immutable. The RC28
+  source-bound artifact identity is not rewritten. Live `~/.pi/agent/` was
+  not modified. `0.1.0-rc.29` is not prepared until a real isolated Pi
+  Mission using this runtime reaches COMPLETED.
 
 ## RC28 implemented / pre-release ready
 
@@ -803,6 +835,15 @@ explanation reached the editor with no recommendation banner, and a complex
 implementation request showed the recommendation and created exactly one
 canonical Mission with the exact goal. Live ambiguous triage and real fallback
 were not called because no secure 9Router route/credential was available.
+
+### RC29 live Pi COMPLETED dogfood
+
+Host-shaped MissionStore/ContextBroker/QualityService fixtures prove
+Goal→COMPLETED, reject→repair, capability mismatch, and resume. A real
+isolated Pi Mission using this runtime has not yet reached COMPLETED. Live
+Boss routes still observed Tabi HTTP 403 and Cursor hollow `completeSimple`.
+Installing the repair into the live Pi agent is not authorized. `0.1.0-rc.29`
+must not be prepared from fixture COMPLETED alone.
 
 ### Deferred capabilities beyond the current RC25 loop
 

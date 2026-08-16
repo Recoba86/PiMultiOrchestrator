@@ -2,7 +2,8 @@
 
 This guide describes the Control Center in Pi `0.84.1`. RC27 is the current
 public `next`-tagged prerelease; RC26 is superseded. Source currently also
-prepares RC28 (`0.1.0-rc.28`) as implemented / pre-release ready; that
+prepares RC28 (`0.1.0-rc.28`) as implemented / pre-release ready, including
+the RC29 Mission runtime convergence repair on that manifest; that
 candidate is not public until the operator publishes it. Public RC27 is
 immutable. None of these are a
 stable or production release. Local validation

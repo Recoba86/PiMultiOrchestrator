@@ -81,19 +81,21 @@ describe("RC28 Boss response normalization", () => {
 		}
 	});
 
-	it("reproduces the RC27 Cursor empty-response dogfood shape", () => {
+	it("classifies thinking-only empty delivery as infrastructure so fallback can run", () => {
 		try {
 			parseBossAssistantResponse(assistant({
 				stopReason: "stop",
 				content: [{ type: "thinking", thinking: "internal notes with no user-visible decision" }],
 			}), { phase: "plan", routeId: "cu/cursor-grok-4.6-high", remoteModelId: "cu/cursor-grok-4.6-high" });
-			assert.fail("expected empty-response protocol error");
+			assert.fail("expected empty-response infrastructure error");
 		} catch (error) {
-			assert.equal(error instanceof BossProtocolError, true);
+			assert.equal(error instanceof BossInfrastructureError, true);
 			assert.equal((error as Error).message, "Boss response contained no assistant text");
 			assert.equal(bossInvocationDiagnostic(error)?.failureClass, "empty_response");
 			assert.equal(bossInvocationDiagnostic(error)?.stopReason, "stop");
 			assert.equal(bossInvocationDiagnostic(error)?.hasText, false);
+			assert.equal(bossInvocationDiagnostic(error)?.thinkingBlocks, 1);
+			assert.equal(bossInvocationDiagnostic(error)?.textBlocks, 0);
 			assert.equal(bossInvocationDiagnostic(error)?.routeId, "cu/cursor-grok-4.6-high");
 		}
 	});

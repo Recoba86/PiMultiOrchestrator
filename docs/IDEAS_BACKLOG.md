@@ -130,3 +130,14 @@ capabilities must remain distinct from empirical observations.
 
 Evidence: the route-identity decisions, RC18 capability-sync requirement, and
 RC20/RC21 catalog boundaries.
+
+## Git push / npm publish as in-band Mission acceptance
+
+**Status:** `REJECTED`
+
+Using `git commit`, `git push`, or npm publication as a worker-executed
+Mission acceptance criterion is rejected. Implementation workers never receive
+`explicitlyAuthorized`; `git commit` is outside the allowlist and `git push` is
+`NETWORK_OR_PUBLICATION`. Authorized RC29 / ADR-046 terminals such Goals as
+`CAPABILITY_MISMATCH` instead of dispatching workers. Publication remains an
+operator-owned step outside the Mission runtime.

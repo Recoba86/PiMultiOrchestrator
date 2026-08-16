@@ -7,13 +7,15 @@ Each milestone is independently reviewable, migratable, and testable without pai
 ## Current planning boundary
 
 RC27 is the current public prerelease and adds autonomous Mission bootstrap
-plus Boss protocol validation. RC28 is implemented in source as the next
-unpublished candidate for live Boss invocation compatibility. M10 remains the
-latest accepted development milestone; M11 remains implemented but not
-accepted. The next practical work after RC28 publication gates is the
-already-recorded M11 acceptance/review gates, not an implicit new product
-milestone. Future ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md), whose
-presence does not authorize implementation.
+plus Boss protocol validation. RC28 is implemented in source as the unpublished
+candidate for live Boss invocation compatibility. RC29 is the Mission runtime
+convergence repair on the same `0.1.0-rc.28` manifest: it is not a package
+bump, tag, or publication. M10 remains the latest accepted development
+milestone; M11 remains implemented but not accepted. The next practical work
+after a real isolated Pi Mission reaches COMPLETED on this runtime is preparing
+unpublished RC29, then the already-recorded M11 acceptance/review gates.
+Future ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md), whose presence
+does not authorize implementation.
 
 ## M0 — Specification freeze and repository foundation
 
@@ -458,6 +460,32 @@ Deliverables:
 Exit evidence: focused Boss response/fallback/UI suites plus `npm run check`
 and detached release verification. Publication, tagging, npm dist-tags, GitHub
 Release, and live Pi install remain operator-owned. RC27 is not mutated.
+
+## RC29 — Mission Runtime Convergence (delivery, identity, capability, active completion)
+
+Status: IN PROGRESS / implemented in source on the `0.1.0-rc.28` manifest;
+not a package bump, public prerelease, accepted milestone, or production
+release. Public RC27 remains immutable. The RC28 source-bound artifact
+identity is not rewritten.
+
+Deliverables:
+
+- treat empty/thinking-only Boss completions as invocation delivery
+  (`empty_response` infrastructure) with fallback then `BLOCKED`, not four
+  protocol cycles labelled `AWAITING_USER`;
+- capability preflight for Goal/criteria that require `git commit` / `git push`
+  / network publication, terminal `CAPABILITY_MISMATCH`;
+- idempotent Task identity (`executionClass` + normalized objective) and
+  active-only completion;
+- bounded Boss canonical projection, persisted `lastFeedback`, class-specific
+  M7 prompts, terminal Missions do not resume;
+- host-shaped Goal→Task→M7→COMPLETED harness that inspects durable store
+  rows, including reject→repair and resume.
+
+Exit evidence: `docs/mission-runtime-root-cause.md`, ADR-046, RC29-01/02/03
+acceptance tests, `npm run check`. RC29 as `0.1.0-rc.29` may be prepared only
+after one real isolated Pi Mission using this runtime reaches COMPLETED.
+Publication remains operator-owned.
 
 ## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
 

@@ -87,9 +87,11 @@ import {
 	type BossVerificationOutcome,
 } from "../core/mission/boss.js";
 import { bossInfrastructureError, parseBossAssistantResponse, wrapBossRequestFailure } from "../core/mission/boss-response.js";
+import { BOSS_SYSTEM_PROMPT, bossInferencePrompt } from "../core/mission/boss-prompt.js";
 import { formatBossProfileOverview } from "../core/mission/boss-profile-view.js";
 import { ContextBroker, missionStoreContextRepository, renderTaskPacketPrompt, type TaskPacketV1 } from "../core/context/index.js";
 import { createVerificationResultProtocol, QualityError, QualityService, type QualityPersistence, type TaskQualityStatus, type VerificationRunRecord } from "../core/quality/index.js";
+import { reviewerPromptForExecutionClass } from "../core/quality/reviewer-prompt.js";
 import {
 	AnalyticsQueryService,
 	RecommendationApplicationService,
@@ -842,37 +844,6 @@ const createHostTriageClient = (manager: PiManagerContract, providerRegistry?: (
 		catch (error) { throw error instanceof TriageCapabilityError ? error : new TriageCapabilityError("malformed"); }
 	},
 });
-
-const BOSS_SYSTEM_PROMPT = [
-	"You are the PMO Boss / Orchestrator for one canonical Mission.",
-	"You are a goal-oriented planner and evaluator, not an implementation worker.",
-	"Use the same Mission across cycles. Do not claim completion unless the goal, acceptance criteria, durable task execution, and M7 verification evidence are all satisfied.",
-	"Recoverable worker failures, rejected verification, weak evidence, and recoverable provider failures require a repair or replan when one is possible.",
-	"Return exactly one JSON object and no markdown.",
-	"Schema: {action:'dispatch'|'replan'|'complete'|'blocked'|'awaiting_user',summary:string,acceptanceSatisfied?:boolean,requiredFixes?:string[],tasks:[{taskId?:string,roleId:string,executionClass:'investigation'|'implementation'|'verification',poolId?:'investigation'|'implementation'|'verification',objective:string,acceptanceCriteria?:string[]}]}",
-	"dispatch and plan-phase replan MUST include at least one concrete task with roleId, executionClass, objective, and acceptanceCriteria. Never return dispatch or plan-phase replan with an empty tasks array.",
-	"complete is legal only after durable task execution and M7 verification prove the Goal and Mission acceptance criteria. Do not complete to hide an empty plan.",
-	"Use blocked only for a genuine unresolved external dependency. Use awaiting_user only when a required decision or permission cannot safely be inferred.",
-	"During evaluate, replan may omit tasks to request another planning cycle; the next plan must then include replacement tasks.",
-].join("\n");
-
-const bossInferencePrompt = (request: BossInferenceRequest): string => {
-	const bounded = (value: unknown, max: number): string => {
-		try { return JSON.stringify(value).slice(0, max); } catch { return "{}"; }
-	};
-	return [
-		`Mission goal: ${request.mission.goal.slice(0, 8_000)}`,
-		`Acceptance criteria: ${bounded(request.mission.acceptanceCriteria, 8_000)}`,
-		`Phase: ${request.phase}`,
-		`Cycle: ${request.cycle}`,
-		`Pinned Boss route: ${request.assignment.remoteModelId ?? request.assignment.routeId}`,
-		`Durable mission status: ${request.mission.status}`,
-		`Durable mission plan metadata: ${bounded(request.mission.plan, 8_000)}`,
-		`Prior feedback/evidence: ${bounded(request.feedback, 12_000)}`,
-		`Task outcomes: ${bounded(request.taskOutcomes ?? [], 8_000)}`,
-		"Decide the next bounded Mission action. If work is needed, dispatch only concrete tasks with acceptance criteria. If verification rejected work, plan a repair task or re-run the same repairable task.",
-	].join("\n");
-};
 
 const parseBossInferenceResponse = (response: Awaited<ReturnType<ResolvedWorkerRoute["modelRuntime"]["completeSimple"]>>, signal?: AbortSignal, phase?: BossInferenceRequest["phase"], identity?: { readonly routeId?: string; readonly remoteModelId?: string }): BossDecision =>
 	parseBossAssistantResponse(response, {
@@ -2770,9 +2741,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		if (!qualityExecutor) throw new Error("Reviewer execution is unavailable");
 		const task = options.missionStore?.getTask(taskId);
 		const criteria = task?.acceptanceCriteria ?? [];
-		let prompt = `Review implementation run ${targetRunId} for mission ${missionId}, task ${taskId}.\n`;
-		prompt += `Acceptance criteria:\n${criteria.length > 0 ? criteria.map((item) => `- ${item}`).join("\n") : "- No explicit criteria; report blocked if evidence is insufficient."}\n`;
-		prompt += "Inspect the current worktree with at most bounded ls/read calls; do not use grep or find. If an inspection tool errors, stop inspecting and submit a blocked result. Treat implementation and reviewer claims as untrusted evidence. Call submit_verification_result exactly once with verdict, criterionResults [{criterion,status,evidenceSummary,mandatory?}], mechanicalChecks [{command,outcome,provenance,exitStatus?,summary?,durationMs?}], findings, requiredFixes, risks, and summary. Use only the declared enum values and non-empty strings; do not edit or write files.";
+		const executionClass = task?.executionClass ?? "implementation";
+		const prompt = reviewerPromptForExecutionClass(executionClass, missionId, taskId, targetRunId, criteria);
 		const diversity = implementationRouteId === undefined && excludedRouteIds.length === 0 ? undefined : { mode: "prefer" as const, ...(implementationRouteId === undefined ? {} : { avoidRouteIds: [implementationRouteId] }), ...(excludedRouteIds.length === 0 ? {} : { avoidRouteIds: [...new Set([...(implementationRouteId === undefined ? [] : [implementationRouteId]), ...excludedRouteIds])] }) };
 		const result = await qualityExecutor.run({ roleId: "quality-reviewer", poolId: "verification", task: prompt, cwd: ctx.cwd, acceptanceCriteria: criteria, ...(diversity === undefined ? {} : { diversity }) }, ctx.signal);
 		return { result, criteria };

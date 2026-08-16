@@ -4,6 +4,31 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — Mission Runtime Convergence
+
+- **Date/status:** 2026-08-16; implemented in source on the `0.1.0-rc.28`
+  manifest. Not a package bump, public prerelease, tag, npm publication,
+  GitHub Release, or live Pi install. Public RC27 remains immutable. The RC28
+  source-bound artifact is not rewritten.
+- **Dogfood incident (unpublished RC28 runtime):** Mission
+  `mission-04452706-5486-4131-8565-dcec84f52beb` pinned Tabi
+  (`claude-opus-5-thinking`), fell back after HTTP 403, then classified
+  Cursor thinking-only completions as protocol `empty_response` four times
+  and entered `AWAITING_USER` with 0 Tasks in 7.213s. Store evidence:
+  `docs/mission-runtime-root-cause.md`.
+- **Root causes:** hollow `completeSimple` delivery was protocol, so it could
+  not fallback further and burned `maxCycles`; the Goal also required commit
+  and push, which workers cannot perform (`CAPABILITY_MISMATCH`, latent).
+  Latent: Task identity duplication, all-rows completion poisoning, Boss
+  prompt without canonical projection, in-memory-only feedback, one M7
+  “implementation review” prompt.
+- **Fix:** ADR-046. Empty text is invocation delivery / infrastructure;
+  capability preflight; identity reuse; active-only completion; bounded Boss
+  projection; persisted feedback; class-specific M7 prompts; host-shaped
+  durable-state harness.
+- **Publication:** none. RC29 as `0.1.0-rc.29` is not prepared until a real
+  isolated Pi Mission using this runtime reaches COMPLETED.
+
 ## RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics
 
 - **Date/status:** 2026-08-16; `IMPLEMENTED / PRE-RELEASE READY`. Source is

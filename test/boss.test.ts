@@ -897,9 +897,9 @@ describe("RC28 Boss invocation compatibility", () => {
 		}
 	});
 
-	it("keeps empty assistant text as a precise protocol diagnostic without infrastructure fallback", async () => {
-		const entries = [route("boss-a", 1), route("boss-b", 1)];
-		const root = await mkdtemp(join(tmpdir(), "pmo-rc28-empty-text-"));
+	it("treats empty assistant text as invocation delivery failure and falls back", async () => {
+		const entries = [route("boss-a", 1), route("boss-b", 0)];
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc29-empty-text-"));
 		try {
 			const store = createMissionStore({ root });
 			const mission = store.createMission({ missionId: "mission-89d5e163-17ee-4218-b06c-dea5fa4b480b", goal: "bounded docs-only work\nAcceptance criteria:\n- one\n- two" });
@@ -919,19 +919,17 @@ describe("RC28 Boss invocation compatibility", () => {
 				verify: async () => ({ verdict: "blocked", summary: "must not verify" }),
 				maxCycles: 4,
 			});
-			assert.equal(result.terminal, "AWAITING_USER");
-			assert.equal(new Set(calls).size, 1);
+			assert.equal(result.terminal, "BLOCKED");
+			assert.deepEqual(calls, ["boss-a", "boss-b"]);
 			const state = orchestration(store, String(mission.missionId));
-			assert.equal(state?.protocolFailures, 4);
-			assert.equal(state?.fallbackHistory?.length ?? 0, 0);
-			assert.equal(state?.lastProtocolError, "Boss response contained no assistant text");
-			assert.equal(state?.lastInvocation?.stage, "response");
+			assert.equal(state?.protocolFailures ?? 0, 0);
+			assert.equal(state?.fallbackHistory?.length, 1);
+			assert.equal(state?.lastProtocolError, undefined);
 			assert.equal(state?.lastInvocation?.failureClass, "empty_response");
-			assert.equal(state?.lastInvocation?.fallbackAttempted, false);
+			assert.equal(state?.terminalProvenance, undefined);
 			const inspect = formatBossLoopDiagnostics(store.getMission(mission.missionId)!, 0);
-			assert.ok(inspect.some((line) => line.includes("boss invocation stage: response")));
 			assert.ok(inspect.some((line) => line.includes("boss invocation class: empty_response")));
-			assert.ok(inspect.some((line) => line.includes("boss fallback: none")));
+			assert.ok(inspect.some((line) => line.includes("boss fallback:")));
 			store.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });
@@ -1040,6 +1038,132 @@ describe("RC28 Boss invocation compatibility", () => {
 			const inspect = formatBossLoopDiagnostics(store.getMission(mission.missionId)!, 0);
 			assert.ok(inspect.some((line) => line.includes("why execution stopped: Boss request failed: model_unavailable")));
 			assert.ok(inspect.some((line) => line.includes("boss invocation stage: response")));
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("RC29 Mission runtime convergence", () => {
+	it("replays RC28 Tabi 403 then Cursor empty delivery as BLOCKED without burning four cycles", async () => {
+		const entries = [route("tabi", 1), route("cursor", 0)];
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc29-rc28-replay-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({
+				missionId: "mission-04452706-5486-4131-8565-dcec84f52beb",
+				goal: "Write a local docs-only note that workers can complete in the trusted worktree.",
+			});
+			const calls: string[] = [];
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries,
+				schedulingKey: "tabi-preferred",
+				invoke: async ({ assignment }) => {
+					calls.push(assignment.routeId);
+					if (assignment.routeId === "tabi") {
+						throw bossInfrastructureError("Boss request failed: authentication_failed", {
+							stage: "response",
+							failureClass: "authentication_failed",
+							hasText: false,
+							normalized: false,
+							code: "authentication_failed",
+							status: 403,
+							stopReason: "error",
+							routeId: assignment.routeId,
+							...(assignment.remoteModelId === undefined ? {} : { remoteModelId: assignment.remoteModelId }),
+						});
+					}
+					return parseBossAssistantResponse(rc28Assistant({
+						stopReason: "stop",
+						content: [{ type: "thinking", thinking: "no user-visible decision" }],
+					}), { phase: "plan", routeId: assignment.routeId, ...(assignment.remoteModelId === undefined ? {} : { remoteModelId: assignment.remoteModelId }) });
+				},
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "must not dispatch" }),
+				verify: async () => ({ verdict: "blocked", summary: "must not verify" }),
+				maxCycles: 4,
+			});
+			assert.equal(result.terminal, "BLOCKED");
+			assert.notEqual(result.terminal, "AWAITING_USER");
+			assert.deepEqual(calls, ["tabi", "cursor"]);
+			assert.equal(store.listTasks(mission.missionId).length, 0);
+			const state = orchestration(store, String(mission.missionId));
+			assert.equal(state?.fallbackHistory?.length, 1);
+			assert.equal(state?.protocolFailures ?? 0, 0);
+			assert.equal(state?.lastInvocation?.failureClass, "empty_response");
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("stops before Boss inference when the Goal requires git commit and push", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc29-capability-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({
+				missionId: "capability-mismatch",
+				goal: "Close the release.\nMission acceptance criteria:\n- Commit and push the docs-only closure if all checks pass.\n- Finish with HEAD == origin/main and clean worktree.",
+			});
+			let invoked = 0;
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1)],
+				invoke: async () => {
+					invoked += 1;
+					return { action: "dispatch", summary: "should not plan", tasks: [{ roleId: "implementer", executionClass: "implementation", objective: "push", acceptanceCriteria: ["pushed"] }] };
+				},
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "must not dispatch" }),
+				verify: async () => ({ verdict: "blocked", summary: "must not verify" }),
+				maxCycles: 4,
+			});
+			assert.equal(invoked, 0);
+			assert.equal(result.terminal, "AWAITING_USER");
+			assert.equal(orchestration(store, String(mission.missionId))?.terminalProvenance, "CAPABILITY_MISMATCH");
+			assert.equal(store.listTasks(mission.missionId).length, 0);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("reuses logical Task identity across omitted Boss taskIds and does not poison completion with a replaced failure", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc29-identity-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "identity", goal: "document the change", acceptanceCriteria: ["documented"] });
+			let plans = 0;
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1)],
+				invoke: async ({ phase }) => {
+					if (phase === "evaluate") return { action: "complete", summary: "done", tasks: [], acceptanceSatisfied: true };
+					plans += 1;
+					return { action: "dispatch", summary: "same work", tasks: [{ roleId: "implementer", executionClass: "implementation", poolId: "implementation", objective: "Write the note", acceptanceCriteria: ["documented"] }] };
+				},
+				dispatch: succeedDispatch(store),
+				verify: passVerify(store, String(mission.missionId), "documented"),
+				maxCycles: 2,
+			});
+			assert.equal(result.terminal, "COMPLETED");
+			assert.equal(store.listTasks(mission.missionId).length, 1);
+			const again = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a", 1)],
+				invoke: async () => {
+					throw new Error("terminal Missions must not resume Boss inference");
+				},
+				dispatch: async (task) => ({ taskId: String(task.taskId), status: "failed", summary: "must not dispatch" }),
+				verify: async () => ({ verdict: "blocked", summary: "must not verify" }),
+				maxCycles: 2,
+			});
+			assert.equal(again.terminal, "COMPLETED");
+			assert.equal(plans, 1);
 			store.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });
