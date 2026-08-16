@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { BossInfrastructureError, BossProtocolError } from "../src/core/mission/boss.js";
@@ -145,6 +147,14 @@ describe("RC28 Boss response normalization", () => {
 			assert.doesNotMatch(JSON.stringify(bossInvocationDiagnostic(error)), /sk-ant|Bearer|authorization/u);
 			assert.equal(bossInvocationDiagnostic(error)?.stage, "response");
 		}
+	});
+
+	it("does not load the Pi session graph to extract Boss token usage", () => {
+		const compiled = readFileSync(join(process.cwd(), "dist-test/src/core/mission/boss-response.js"), "utf8");
+		const usage = readFileSync(join(process.cwd(), "dist-test/src/core/workers/usage.js"), "utf8");
+		assert.doesNotMatch(compiled, /workers\/(?:executor|session)\.js/u);
+		assert.match(compiled, /workers\/usage\.js/u);
+		assert.doesNotMatch(usage, /pi-coding-agent|session\.js/u);
 	});
 
 	it("treats aborted completions as cancellation", () => {

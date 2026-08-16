@@ -1,5 +1,5 @@
 import { classifyFailure, type FailureClass } from "../routing/index.js";
-import { extractWorkerUsage } from "../workers/executor.js";
+import { extractWorkerUsage } from "../workers/usage.js";
 import { BossInfrastructureError, BossProtocolError, normalizeBossDecision, type BossDecision } from "./boss.js";
 
 export type BossInvocationStage = "route-resolution" | "capability" | "request" | "response" | "decision-protocol";

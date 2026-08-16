@@ -427,6 +427,9 @@ const verifyUnpacked = async ({ packageRoot, packageManifest, files }) => {
 	}
 	const entryUrl = pathToFileURL(join(packageRoot, ENTRYPOINT)).href;
 	await run(node.realpath, ["--input-type=module", "-e", `const module = await import(${JSON.stringify(entryUrl)}); if (typeof module.default !== "function") throw new Error("compiled Pi entrypoint has no default extension function");`], { cwd: packageRoot, env: safeEnvironment(node.realpath) });
+	await rm(join(packageRoot, "node_modules"), { recursive: true, force: true });
+	const missionUrl = pathToFileURL(join(packageRoot, "dist/core/mission/index.js")).href;
+	await run(node.realpath, ["--input-type=module", "-e", `await import(${JSON.stringify(missionUrl)});`], { cwd: packageRoot, env: safeEnvironment(node.realpath) });
 	const unpackedManifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 	if (JSON.stringify(unpackedManifest) !== JSON.stringify(packageManifest)) fail("unpacked package.json differs from the source manifest");
 	return {

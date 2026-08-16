@@ -9,5 +9,6 @@ export {
 	submitAgentResultParameters,
 } from "./result-tool.js";
 export * from "./session.js";
-export { SubagentExecutor, createSubagentExecutor, extractWorkerUsage } from "./executor.js";
+export { SubagentExecutor, createSubagentExecutor } from "./executor.js";
+export { extractWorkerUsage } from "./usage.js";
 export { resultFinalizationPrompt, shouldRunResultFinalization } from "./finalization.js";
