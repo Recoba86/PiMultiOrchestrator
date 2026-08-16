@@ -274,9 +274,10 @@ It cannot see Pi returning `content: []` / thinking-only in 600ms.
 - Goal acceptance-criteria provenance (explicit > labelled > derived).
 - `CANCELLED` and `SAFETY_STOP` terminals.
 - Trust / path / secret protections.
-- RC26/RC27/RC28 public identities immutable (RC28 unpublished candidate
-  identity in source remains historically bound; this repair does not
-  rewrite those commits).
+- RC26/RC27/RC28 public identities immutable. RC28 is a public prerelease
+  (`0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
+  `aad28c33260326665ec17e347d50fe985b18a953`); this repair does not rewrite
+  those commits.
 - Thinking/CoT is never the Boss decision (ADR-045 text contract).
 
 ## 7. Proposed corrected state machine
@@ -334,6 +335,6 @@ supersession (replaced by later same-key Task), outstanding Goal criteria.
   remains.
 - RC28-02's "thinking-only empty does not fallback" is superseded by ADR-046
   for *delivery* emptiness only.
-- Package version stays `0.1.0-rc.28` until a real local permitted Mission
-  reaches `COMPLETED` and RC29 is prepared as an unpublished candidate.
-  This document authorizes the architecture repair, not publication.
+- Package identity for this repair is `0.1.0-rc.29` with status
+  IN PROGRESS / LOCAL DOGFOOD REQUIRED. Public RC28 remains immutable.
+  This document authorizes the architecture repair, not RC29 publication.

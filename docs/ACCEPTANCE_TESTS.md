@@ -1284,11 +1284,11 @@ requirements and remain future work.
 
 - **Level:** U
 - **Setup:** load `PACKAGE_INFO` from compiled `dist`/`dist-test` output.
-- **Pass:** version equals `package.json` (`0.1.0-rc.28`); development line is
-  `RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics`; RC23 titles
+- **Pass:** version equals `package.json` (`0.1.0-rc.29`); development line is
+  `RC29 — Mission Runtime Convergence`; RC23 titles
   are absent; `latestAcceptedMilestone` is M10; `productionReady` is false;
   an unmapped version would report `stale-development-line:<version>` rather
-  than an older RC title. The `0.1.0-rc.26` and `0.1.0-rc.27` map entries remain historical.
+  than an older RC title. The `0.1.0-rc.26`, `0.1.0-rc.27`, and `0.1.0-rc.28` map entries remain historical.
   `@orchestrator` and Smart Routing Run as Mission
   still enter the same canonical Boss loop.
 

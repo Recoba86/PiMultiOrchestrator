@@ -12,11 +12,11 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.27` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.27` public prerelease |
-| Development manifest version | `0.1.0-rc.28` — RC28 Real Boss Invocation Compatibility plus RC29 Mission runtime convergence source repair; not public |
-| RC29 source repair | ADR-046 delivery-vs-protocol, capability preflight, Task identity, active completion, Boss projection; implemented on the rc.28 manifest; `0.1.0-rc.29` is not prepared |
-| RC28 local candidate | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; implemented / pre-release ready; not published; detached verifier PASS on `aad28c3`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.28` — npm `next`; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.28` public prerelease |
+| Development manifest version | `0.1.0-rc.29` — RC29 Mission Runtime Convergence; IN PROGRESS / LOCAL DOGFOOD REQUIRED; not public |
+| RC29 development line | ADR-046 delivery-vs-protocol, capability preflight, Task identity, active completion, Boss projection; `0.1.0-rc.29`; not pre-release ready, tagged, or published |
+| RC28 release line | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release line | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release line | Goal terminal CANCELLED/SAFETY_STOP plus truthful runtime package metadata; public prerelease; immutable |
 | RC25 release line | Weighted multi-route Boss profiles, one pinned Boss per Mission, bounded goal-loop repair/replan, explicit infrastructure fallback, Mission analytics, and manual-only Boss weight recommendations |
@@ -26,23 +26,23 @@ This file records releasable product state. It does not promote development prog
 | RC18 compatibility repair | Source/test commit `0af7b8e`; local dogfood PASS; no package version or publication change |
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
-| Local technical release readiness | RC29 source repair implemented on `0.1.0-rc.28`; RC28 remains the unpublished candidate identity; RC27 remains the verified public prerelease |
-| Release tag | `v0.1.0-rc.27` → `267612d15dcc0784856e7dafd6704d2f802272b9` |
-| Release commit | `267612d15dcc0784856e7dafd6704d2f802272b9` |
-| Release artifact | `pi-multi-orchestrator-0.1.0-rc.27.tgz`; SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
-| GitHub release | `v0.1.0-rc.27` — public prerelease identity recorded by the RC28 baseline; RC27 is immutable |
-| Installable production release | NONE; RC27 is a prerelease |
+| Local technical release readiness | RC29 IN PROGRESS / LOCAL DOGFOOD REQUIRED on `0.1.0-rc.29`; RC28 remains the verified public prerelease |
+| Release tag | `v0.1.0-rc.28` → `aad28c33260326665ec17e347d50fe985b18a953` |
+| Release commit | `aad28c33260326665ec17e347d50fe985b18a953` |
+| Release artifact | `pi-multi-orchestrator-0.1.0-rc.28.tgz`; SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
+| GitHub release | `v0.1.0-rc.28` — public prerelease; RC28 is immutable |
+| Installable production release | NONE; RC28 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 
 Milestone acceptance does not itself create a product release.
 
-## RC29 Mission runtime convergence (unpublished source repair)
+## RC29 Mission runtime convergence (IN PROGRESS / LOCAL DOGFOOD REQUIRED)
 
-RC29 is implemented in source on the `0.1.0-rc.28` manifest. It is **not**
-`0.1.0-rc.29`, not tagged, not npm-published, and not a GitHub Release.
-Public RC27 is immutable. The RC28 source-bound artifact is not rewritten.
+RC29 is the current development line at `0.1.0-rc.29`. It is **not** tagged,
+npm-published, a GitHub Release, accepted, or pre-release ready. Public RC28
+is immutable.
 
 - **Delivery vs protocol:** thinking-only / empty assistant text is
   invocation delivery (`empty_response`) and may infrastructure-fallback, then
@@ -53,10 +53,20 @@ Public RC27 is immutable. The RC28 source-bound artifact is not rewritten.
   Boss inference.
 - **Identity and completion:** reuse Tasks by class+objective; complete on
   **active** Tasks only; persist Boss feedback; class-specific M7 prompts.
-- **Dogfood recorded:** RC28 Mission
+- **Dogfood recorded:** public RC28 Mission
   `mission-04452706-5486-4131-8565-dcec84f52beb` as hollow-delivery
   `AWAITING_USER` with 0 Tasks. Host-shaped harness COMPLETED is not live Pi
-  COMPLETED. Source verification: `npm test` `313/313`, `npm run check` PASS.
+  COMPLETED. Prior source verification: `npm test` `313/313`, `npm run check`
+  PASS.
+
+## RC28 Real Boss Invocation Compatibility (public immutable prerelease)
+
+Correction 2026-08-16: RC28 is public and immutable. Package
+`pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
+`aad28c33260326665ec17e347d50fe985b18a953`, artifact SHA-256
+`9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3`.
+npm `next=0.1.0-rc.28`; `latest` remains `0.1.0-rc.17`. Do not retag or
+republish. The original source-handoff paragraph below is retained.
 
 ## RC28 Real Boss Invocation Compatibility (unpublished candidate)
 

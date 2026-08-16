@@ -4,12 +4,12 @@ Pi Multi-Orchestrator is a Pi extension for coordinating a bounded Boss Mission 
 
 ## Status
 
-RC27 (`0.1.0-rc.27`) is the current public prerelease on npm with `next`; RC26
-is superseded. `latest` remains `0.1.0-rc.17`. Source currently prepares RC28
-(`0.1.0-rc.28`) as implemented / pre-release ready and includes the RC29
-Mission runtime convergence repair on that same manifest; neither is published,
-tagged, or a GitHub Release. Public RC27 is immutable and must not be retagged or
-republished. RC29 treats hollow Boss delivery as infrastructure fallback then
+RC28 (`0.1.0-rc.28`) is the current public prerelease on npm with `next`; RC27
+is superseded. `latest` remains `0.1.0-rc.17`. Source currently prepares RC29
+(`0.1.0-rc.29`) as IN PROGRESS / LOCAL DOGFOOD REQUIRED; it is not published,
+tagged, a GitHub Release, accepted, or pre-release ready. Public RC28 is
+immutable and must not be retagged or republished. RC29 treats hollow Boss
+delivery as infrastructure fallback then
 `BLOCKED`, preflights impossible commit/push Goals, reuses logical Task
 identity, and completes on active Tasks only. RC28 repairs live Boss invocation
 compatibility, classified failure diagnostics, and infrastructure-fallback
@@ -137,7 +137,7 @@ M0 did not:
 - create a GitHub repository or remote;
 - implement the extension.
 
-M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC25 is a public prerelease, not a stable or production release. RC26 is implemented / pre-release ready in source only. See `docs/ROADMAP.md` for the release state.
+M1 through RC25 final-gate work did not modify any live environment. M10 remains the latest accepted development milestone; RC28 is a public prerelease, not a stable or production release. RC29 is IN PROGRESS / LOCAL DOGFOOD REQUIRED in source only. See `docs/ROADMAP.md` for the release state.
 
 ## M9 accepted capability snapshot
 

@@ -6,11 +6,11 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
 
 ## RC29 — Mission Runtime Convergence
 
-- **Date/status:** 2026-08-16; implemented in source on the `0.1.0-rc.28`
-  manifest. Not a package bump, public prerelease, tag, npm publication,
-  GitHub Release, or live Pi install. Public RC27 remains immutable. The RC28
-  source-bound artifact is not rewritten.
-- **Dogfood incident (unpublished RC28 runtime):** Mission
+- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.
+  Development identity is `0.1.0-rc.29`. Not public, tagged, npm-published,
+  accepted, pre-release ready, or a GitHub Release. Public RC28 remains
+  immutable.
+- **Dogfood incident (public RC28 runtime):** Mission
   `mission-04452706-5486-4131-8565-dcec84f52beb` pinned Tabi
   (`claude-opus-5-thinking`), fell back after HTTP 403, then classified
   Cursor thinking-only completions as protocol `empty_response` four times
@@ -26,11 +26,18 @@ This is an append-oriented record of meaningful milestone outcomes, not a daily 
   capability preflight; identity reuse; active-only completion; bounded Boss
   projection; persisted feedback; class-specific M7 prompts; host-shaped
   durable-state harness.
-- **Verification:** `npm run check` PASS; `npm test` `313/313`.
-- **Publication:** none. RC29 as `0.1.0-rc.29` is not prepared until a real
-  isolated Pi Mission using this runtime reaches COMPLETED.
+- **Verification:** prior source `npm test` `313/313` and `npm run check` PASS
+  on the runtime repair commits before this identity bump.
+- **Publication:** none for RC29. Live Pi COMPLETED remains required before
+  calling RC29 pre-release ready.
 
 ## RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics
+
+Correction 2026-08-16: RC28 is the public immutable prerelease
+(`0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
+`aad28c33260326665ec17e347d50fe985b18a953`, artifact SHA-256
+`9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3`).
+npm `next=0.1.0-rc.28`. The original source-handoff below is not rewritten.
 
 - **Date/status:** 2026-08-16; `IMPLEMENTED / PRE-RELEASE READY`. Source is
   prepared as `0.1.0-rc.28`. Not public, tagged, npm-published, accepted, or

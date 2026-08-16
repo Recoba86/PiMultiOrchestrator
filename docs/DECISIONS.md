@@ -502,6 +502,10 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   immutable. Publication, tags, npm dist-tags, GitHub Releases, and live Pi
   install remain a separate operator-owned step. RC27 history is not rewritten.
 
+Correction 2026-08-16: RC28 was subsequently published as the public immutable
+prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
+`aad28c33260326665ec17e347d50fe985b18a953`. This ADR is not rewritten.
+
 ## ADR-046 — RC29 Mission runtime convergence: delivery vs protocol, identity, capability, active completion
 
 - **Decision:** Keep RC25–RC28 pinning, weight-0 infrastructure fallback,
@@ -557,8 +561,11 @@ Records through ADR-016 were accepted at M0; ADR-017 was accepted at M1. A later
   required commit/push, which workers cannot perform; that mismatch never
   executed because planning never ran. Evidence is in
   `docs/mission-runtime-root-cause.md`.
-- **Boundary:** This repair stays on the `0.1.0-rc.28` development manifest
-  until a real isolated Pi Mission using this runtime reaches COMPLETED.
-  RC29 may then be prepared as an unpublished candidate. Publication, tags,
-  npm dist-tags, GitHub Releases, and live Pi install remain operator-owned.
-  Public RC27 and the RC28 source-bound artifact identity are immutable.
+- **Boundary:** Development identity is `0.1.0-rc.29` with status
+  IN PROGRESS / LOCAL DOGFOOD REQUIRED. Public RC28
+  (`0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
+  `aad28c33260326665ec17e347d50fe985b18a953`, artifact SHA-256
+  `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3`) is
+  immutable. Publication, tags, npm dist-tags, GitHub Releases, and live Pi
+  install remain operator-owned. Do not call RC29 pre-release ready until a
+  real isolated Pi Mission using this runtime reaches COMPLETED.

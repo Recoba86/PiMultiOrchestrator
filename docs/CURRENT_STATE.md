@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC27 is the current public prerelease; RC28 is implemented / pre-release ready in source and is not public; RC29 Mission runtime convergence is implemented in source on the `0.1.0-rc.28` manifest and is not a package bump; none of these are stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC28 is the current public prerelease; RC29 (`0.1.0-rc.29`) is IN PROGRESS / LOCAL DOGFOOD REQUIRED; none of these are stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -33,8 +33,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
-| RC28 local candidate | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; implemented / pre-release ready in source; not tagged or published |
-| RC29 source repair | Mission runtime convergence (ADR-046) on the `0.1.0-rc.28` manifest; not a package bump, tag, or publication |
+| RC29 development line | `0.1.0-rc.29` — Mission Runtime Convergence; IN PROGRESS / LOCAL DOGFOOD REQUIRED; not public, accepted, pre-release ready, or production-ready |
+| RC28 release | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release | `0.1.0-rc.27` — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release | `0.1.0-rc.26` — Goal Terminal Semantics & Runtime Metadata Correctness; public prerelease; source `11153f0587634bcba732a5b214c95319c305f9e6`, tag `v0.1.0-rc.26`, artifact SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a`; immutable |
 | RC24 release line | `0.1.0-rc.24` — Model Router enablement status checkboxes layered over canonical rows; superseded public prerelease |
@@ -76,8 +76,8 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
-| RC29 — Mission Runtime Convergence | IMPLEMENTED IN SOURCE on `0.1.0-rc.28`; not a package candidate, public, accepted, stable, or production-ready |
-| RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics | IMPLEMENTED / PRE-RELEASE READY; not public, accepted, stable, or production-ready |
+| RC29 — Mission Runtime Convergence | IN PROGRESS / LOCAL DOGFOOD REQUIRED; `0.1.0-rc.29`; not public, accepted, pre-release ready, stable, or production-ready |
+| RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC26 — Goal Terminal Semantics & Runtime Metadata Correctness | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC25 — Operational Boss / Orchestrator | PRIOR PUBLIC PRERELEASE; superseded by RC26 |
@@ -104,12 +104,13 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
   is a non-draft prerelease carrying the exact artifact and checksum.
 
-## RC29 Mission runtime convergence (source repair on rc.28)
+## RC29 Mission runtime convergence (IN PROGRESS / LOCAL DOGFOOD REQUIRED)
 
-- **Status:** implemented in source on `pi-multi-orchestrator@0.1.0-rc.28`.
-  This is not `0.1.0-rc.29`, not a public prerelease, npm publication, GitHub
-  Release, accepted development milestone, or live Pi install.
-- **Dogfood evidence (unpublished RC28 runtime, live MissionStore snapshot):**
+- **Status:** `IN PROGRESS / LOCAL DOGFOOD REQUIRED`. Development manifest is
+  `pi-multi-orchestrator@0.1.0-rc.29`. This is not a public prerelease, npm
+  publication, GitHub Release, accepted development milestone, pre-release
+  ready claim, or production release.
+- **Dogfood evidence (public RC28 runtime, live MissionStore snapshot):**
   Mission `mission-04452706-5486-4131-8565-dcec84f52beb` created 2026-08-15
   `22:38:17.450Z`, terminal `22:38:24.663Z` (7.213s), status
   `awaiting-review`, revision 15, **0 Tasks / 0 Attempts / 0 Evidence / 0 M7**.
@@ -129,13 +130,23 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   prompts; terminal Missions do not resume. ADR-046. Host-shaped harness
   inspects durable store rows through Goal→Task→M7→COMPLETED, reject→repair,
   multi-task, resume, and capability mismatch.
-- **Verification:** `npm run check` PASS. `npm test` `313/313`. Typecheck and
-  build PASS. Live `~/.pi/agent/` was not modified. No tag, npm publication,
-  or GitHub Release.
-- **Publication boundary:** public RC27 remains immutable. The RC28
-  source-bound artifact identity is not rewritten. Live `~/.pi/agent/` was
-  not modified. `0.1.0-rc.29` is not prepared until a real isolated Pi
-  Mission using this runtime reaches COMPLETED.
+- **Verification:** prior source `npm test` `313/313` and `npm run check` PASS
+  on the pre-identity-bump repair. Live `~/.pi/agent/` was not modified by
+  that repair. No tag, npm publication, or GitHub Release for RC29.
+- **Publication boundary:** public RC28 remains immutable. RC29 is not tagged,
+  not npm-published, and not a GitHub Release until an authorized later
+  operator publication step. A real isolated Pi Mission COMPLETED remains
+  required before calling RC29 pre-release ready.
+
+## RC28 public prerelease (immutable baseline)
+
+Correction 2026-08-16: RC28 is the current public immutable prerelease
+(`pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
+`aad28c33260326665ec17e347d50fe985b18a953`, artifact SHA-256
+`9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3`).
+npm `next=0.1.0-rc.28`; `latest` remains `0.1.0-rc.17`. Do not retag,
+rebuild, or republish RC28. The original source-handoff text below is
+retained; it is not rewritten.
 
 ## RC28 implemented / pre-release ready
 
@@ -180,7 +191,8 @@ Correction 2026-08-16: RC27 is the public immutable prerelease baseline
 `267612d15dcc0784856e7dafd6704d2f802272b9`, artifact SHA-256
 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55`). The
 original source-handoff text below is retained; it is not rewritten. RC28 is
-the new unpublished candidate.
+the subsequent public immutable prerelease; RC29 is the current development
+line.
 
 - **Status:** `IMPLEMENTED / PRE-RELEASE READY`. Source is prepared as
   `pi-multi-orchestrator@0.1.0-rc.27`. This is not a public prerelease, npm

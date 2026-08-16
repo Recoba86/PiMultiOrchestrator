@@ -1,10 +1,9 @@
 # Pi Multi-Orchestrator operator guide
 
-This guide describes the Control Center in Pi `0.84.1`. RC27 is the current
-public `next`-tagged prerelease; RC26 is superseded. Source currently also
-prepares RC28 (`0.1.0-rc.28`) as implemented / pre-release ready, including
-the RC29 Mission runtime convergence repair on that manifest; that
-candidate is not public until the operator publishes it. Public RC27 is
+This guide describes the Control Center in Pi `0.84.1`. RC28 is the current
+public `next`-tagged prerelease; RC27 is superseded. Source currently also
+prepares RC29 (`0.1.0-rc.29`) as IN PROGRESS / LOCAL DOGFOOD REQUIRED; that
+candidate is not public, accepted, or pre-release ready. Public RC28 is
 immutable. None of these are a
 stable or production release. Local validation
 uses isolated roots and never installs into
