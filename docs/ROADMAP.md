@@ -13,7 +13,11 @@ Mission runtime convergence. It is not public, accepted, pre-release ready,
 or a production release. M10 remains the latest accepted development
 milestone; M11 remains implemented but not accepted. A real isolated Pi
 Mission COMPLETED on this runtime is required before calling RC29
-pre-release ready. Future ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md),
+pre-release ready. The 2026-08-16 local dogfood stopped after one Luna
+`infrastructure_stopped` Attempt because live worker
+`routing.fallback.enabled` is false; see
+[worker-infrastructure-fallback-forensics.md](worker-infrastructure-fallback-forensics.md).
+Future ideas belong in [IDEAS_BACKLOG.md](IDEAS_BACKLOG.md),
 whose presence does not authorize implementation.
 
 ## M0 — Specification freeze and repository foundation

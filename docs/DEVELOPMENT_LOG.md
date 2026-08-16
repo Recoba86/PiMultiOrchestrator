@@ -4,6 +4,30 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — Worker infrastructure fallback forensics
+
+- **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.
+  Development identity is `0.1.0-rc.29`. Not public, tagged, npm-published,
+  accepted, pre-release ready, or a GitHub Release. Public RC28 remains immutable.
+- **Mission:** `mission-b290a07a-dba3-4d03-87cf-ebe99dd9e6ae` /
+  Task `task-6d2d57d6-f88c-4c1d-a1c2-d7c05493036d` /
+  Attempt `attempt-0c01025f-db11-4afc-9a64-67dc9918d54a`.
+- **Observed:** `ocg/gpt-5.6-luna` `infrastructure_stopped`, mutation 0,
+  no structured result, no second Attempt, later Boss cycles reused the
+  blocked Task, terminal `AWAITING_USER`.
+- **Finding:** HealthStore class `transport_error`. M4 reached
+  `decideFailureAction` and returned STOP because live
+  `routing.fallback.enabled === false` and `maxAttempts === 1`. DeepSeek
+  (weight 40) and Gemini (weight 40) were eligible Investigation members.
+  Accepted architecture (FB-002 / ADR-007) makes fallback policy-gated.
+  Not a runtime executor bug; ADR-048 finalization never ran.
+- **Probe:** one bounded `createChildSession` on Luna; first assistant
+  `stopReason=error`; classified HTTP 400 `invalid_request`; no HealthStore
+  or MissionStore write.
+- **Recommended correction:** enable live `routing.fallback.enabled`
+  (operator config). No runtime source change in this mission.
+- **Evidence:** `docs/worker-infrastructure-fallback-forensics.md`.
+
 ## RC29 — Two-phase worker result finalization
 
 - **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.

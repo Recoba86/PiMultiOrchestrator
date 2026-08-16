@@ -132,6 +132,17 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   capture is missing. Host-shaped harness
   inspects durable store rows through Goal→Task→M7→COMPLETED, reject→repair,
   multi-task, resume, and capability mismatch.
+- **Worker infrastructure fallback forensics (2026-08-16):** live Mission
+  `mission-b290a07a-dba3-4d03-87cf-ebe99dd9e6ae` Attempt
+  `attempt-0c01025f-db11-4afc-9a64-67dc9918d54a` on `ocg/gpt-5.6-luna` ended
+  `infrastructure_stopped` / mutation 0 in 2723 ms with no second Attempt.
+  HealthStore classified `transport_error` (no HTTP status). M4
+  `decideFailureAction` returned STOP because live
+  `routing.fallback.enabled` is false and `routing.maxAttempts` is 1.
+  DeepSeek and Gemini Investigation members were eligible. This matches
+  accepted M4 policy (FB-002 MAY within budget); it is not an executor bug
+  and not ADR-048. Evidence:
+  [worker-infrastructure-fallback-forensics.md](worker-infrastructure-fallback-forensics.md).
 - **Verification:** prior source `npm test` `313/313` and `npm run check` PASS
   on the pre-identity-bump repair. Live `~/.pi/agent/` was not modified by
   that repair. No tag, npm publication, or GitHub Release for RC29.
@@ -857,10 +868,14 @@ were not called because no secure 9Router route/credential was available.
 
 Host-shaped MissionStore/ContextBroker/QualityService fixtures prove
 Goal→COMPLETED, reject→repair, capability mismatch, and resume. A real
-isolated Pi Mission using this runtime has not yet reached COMPLETED. Live
-Boss routes still observed Tabi HTTP 403 and Cursor hollow `completeSimple`.
-Installing the repair into the live Pi agent is not authorized. `0.1.0-rc.29`
-must not be prepared from fixture COMPLETED alone.
+isolated Pi Mission using this runtime has not yet reached COMPLETED. The
+2026-08-16 local dogfood Mission
+`mission-b290a07a-dba3-4d03-87cf-ebe99dd9e6ae` reached `AWAITING_USER`
+after one Luna `infrastructure_stopped` Attempt and no M4 worker-route
+fallback because live `routing.fallback.enabled` is false. Installing a
+fallback-policy change into live ConfigStore is not authorized by the
+forensics mission. `0.1.0-rc.29` must not be prepared from fixture
+COMPLETED alone.
 
 ### Deferred capabilities beyond the current RC25 loop
 
