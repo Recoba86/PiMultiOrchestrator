@@ -2,8 +2,9 @@
 
 This guide describes the Control Center in Pi `0.84.1`. RC28 is the current
 public `next`-tagged prerelease; RC27 is superseded. Source currently also
-prepares RC29 (`0.1.0-rc.29`) as IN PROGRESS / LOCAL DOGFOOD REQUIRED; that
-candidate is not public, accepted, or pre-release ready. Public RC28 is
+prepares RC29 (`0.1.0-rc.29`) as an unpublished verified candidate after a
+live Mission COMPLETED; that candidate is not public, tagged, npm-published,
+accepted, or a GitHub Release. Public RC28 is
 immutable. None of these are a
 stable or production release. Local validation
 uses isolated roots and never installs into

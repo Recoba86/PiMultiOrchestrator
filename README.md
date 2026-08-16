@@ -6,8 +6,9 @@ Pi Multi-Orchestrator is a Pi extension for coordinating a bounded Boss Mission 
 
 RC28 (`0.1.0-rc.28`) is the current public prerelease on npm with `next`; RC27
 is superseded. `latest` remains `0.1.0-rc.17`. Source currently prepares RC29
-(`0.1.0-rc.29`) as IN PROGRESS / LOCAL DOGFOOD REQUIRED; it is not published,
-tagged, a GitHub Release, accepted, or pre-release ready. Public RC28 is
+(`0.1.0-rc.29`) as an unpublished verified candidate after a live Mission
+COMPLETED; it is not published,
+tagged, a GitHub Release, or accepted. Public RC28 is
 immutable and must not be retagged or republished. RC29 treats hollow Boss
 delivery as infrastructure fallback then
 `BLOCKED`, preflights impossible commit/push Goals, reuses logical Task

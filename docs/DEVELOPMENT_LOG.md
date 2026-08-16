@@ -4,6 +4,35 @@ Last updated: 2026-08-16
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC29 — First real end-to-end Mission COMPLETED
+
+- **Date/status:** 2026-08-16; `UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED`.
+  Development identity is `0.1.0-rc.29`. Not public, tagged, npm-published,
+  accepted, or a GitHub Release. Public RC28 remains immutable.
+- **ADR-049:** non-mutating result-capability miss after the one capture-only
+  finalization turn may `FALLBACK_NEXT_ROUTE`; mutation observed never
+  auto-replays. Same-route retry is not used for this class.
+- **Mission #1 (failed, then fixed):** `mission-98feb9bb-f785-4bc7-881a-49873d6ce7cf`
+  terminal `AWAITING_USER`. DeepSeek Attempt ended `invalid_child_result`
+  with `finalizationOutcome=safety_stop` after `find` on `.` hit
+  `PROTECTED_PATH_DESCENDANT` (`.git`). The child was terminated, so
+  finalization and result-capability fallback never ran. Mutation 0.
+- **Correction:** blocked read-only / inactive tools no longer terminate the
+  worker session. Mutating command denials still stop. Metadata-only
+  `safetyBlockTool` / `safetyBlockCode` persist on Attempt events.
+- **Mission #2 (pass):** `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb`
+  terminal `COMPLETED`. Boss `ag/gemini-3.7-flash-high`,
+  `protocolFailures=0`. Task `task-1cd9979b-cf5a-45c3-b49f-072228fe3710`
+  `execution_completed` / quality `passed`. Attempt
+  `attempt-152689bc-d613-489b-9f4b-8405edbcfc59` on
+  `ocg/deepseek-v4-flash` captured structured result in the work phase
+  after a non-terminating `find` block. Evidence 1. M7
+  `verification-5b0e0f30-14ba-4aae-8609-d960fbd4d5e4` on
+  `gcli/grok-4.6-high`, verdict `pass`.
+- **Acceptance routing:** generation 61, `fallback.enabled=true`,
+  `maxAttempts=1`. Investigation pool unchanged.
+- **Tests:** `366/366 PASS` before candidate gates.
+
 ## RC29 — Retry → worker finalization → fallback boundary audit
 
 - **Date/status:** 2026-08-16; `IN PROGRESS / LOCAL DOGFOOD REQUIRED`.

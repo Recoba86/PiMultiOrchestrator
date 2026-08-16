@@ -22,7 +22,8 @@ Implementation requires an explicit mission and the state/acceptance gates in
 
 Implemented in RC29 ADR-049 as MissionStore `attempt_*` event metadata
 (`finalizationRequired` / `attempted` / `succeeded` / `outcome`, `routeId`,
-`attemptId`, safe `stopReason` / `failureClass`). Raw completions remain
+`attemptId`, safe `stopReason` / `failureClass`, plus `safetyBlockTool` /
+`safetyBlockCode`). Raw completions remain
 forbidden. This entry does not authorize additional transcript persistence.
 
 Evidence: [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md),

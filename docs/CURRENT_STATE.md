@@ -10,7 +10,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 |---|---|
 | Product | Pi Multi-Orchestrator |
 | Repository | `PiMultiOrchestrator` |
-| Development phase | M10 remains the latest accepted development milestone; RC28 is the current public prerelease; RC29 (`0.1.0-rc.29`) is IN PROGRESS / LOCAL DOGFOOD REQUIRED; none of these are stable/production-ready |
+| Development phase | M10 remains the latest accepted development milestone; RC28 is the current public prerelease; RC29 (`0.1.0-rc.29`) is an unpublished verified candidate after a live Mission COMPLETED; none of these are stable/production-ready |
 | Last accepted milestone | M10 — Safety and hardening |
 | Accepted M7 implementation commit | `db82ac141094db749835a0cc7f1f79dc780005e4` |
 | Accepted M7 evidence HEAD | `d15dccfd3415e7c705600526a6ef7d634d8c90c5` |
@@ -33,7 +33,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
-| RC29 development line | `0.1.0-rc.29` — Mission Runtime Convergence; IN PROGRESS / LOCAL DOGFOOD REQUIRED; not public, accepted, pre-release ready, or production-ready |
+| RC29 development line | `0.1.0-rc.29` — Mission Runtime Convergence; UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; not public, accepted, tagged, npm-published, or production-ready |
 | RC28 release | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release | `0.1.0-rc.27` — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
 | RC26 release | `0.1.0-rc.26` — Goal Terminal Semantics & Runtime Metadata Correctness; public prerelease; source `11153f0587634bcba732a5b214c95319c305f9e6`, tag `v0.1.0-rc.26`, artifact SHA-256 `1b20c048e91f8665cb8cfc31982c56c472b270a0bfbf5432ad91ec899aacd69a`; immutable |
@@ -76,7 +76,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | M12 Final Gate — Routing Dogfood | COMPLETE / LOCAL PLANNER ACCEPTANCE PASS; not public or production-ready |
 | RC18 — Real-world Pi/9Router compatibility repair | IMPLEMENTED / LOCAL DOGFOOD PASS; not a package release or acceptance promotion |
 | RC22 — Canonical model selector presentation | IMPLEMENTED / LOCAL CANDIDATE; exact detached verification PASS; not accepted or public |
-| RC29 — Mission Runtime Convergence | IN PROGRESS / LOCAL DOGFOOD REQUIRED; `0.1.0-rc.29`; not public, accepted, pre-release ready, stable, or production-ready |
+| RC29 — Mission Runtime Convergence | UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; `0.1.0-rc.29`; not public, accepted, tagged, npm-published, stable, or production-ready |
 | RC28 — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
 | RC26 — Goal Terminal Semantics & Runtime Metadata Correctness | PUBLIC PRERELEASE / IMMUTABLE; not accepted, stable, or production-ready |
@@ -104,9 +104,43 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 - **GitHub:** [v0.1.0-rc.25](https://github.com/Recoba86/PiMultiOrchestrator/releases/tag/v0.1.0-rc.25)
   is a non-draft prerelease carrying the exact artifact and checksum.
 
-## RC29 Mission runtime convergence (IN PROGRESS / LOCAL DOGFOOD REQUIRED)
+## RC29 Mission runtime convergence (UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED)
 
-- **Status:** `IN PROGRESS / LOCAL DOGFOOD REQUIRED`. Development manifest is
+- **Status:** `UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED`. Development
+  manifest is `pi-multi-orchestrator@0.1.0-rc.29`. This is not a public
+  prerelease, npm publication, GitHub Release, accepted development
+  milestone, or production release. Public RC28 remains immutable.
+- **First real end-to-end Mission (2026-08-16):**
+  `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` terminal `COMPLETED`.
+  Boss `ag/gemini-3.7-flash-high`, `protocolFailures=0`, one Task
+  `task-1cd9979b-cf5a-45c3-b49f-072228fe3710` `execution_completed` /
+  quality `passed`. Investigation Attempt
+  `attempt-152689bc-d613-489b-9f4b-8405edbcfc59` on
+  `ocg/deepseek-v4-flash` captured `submit_agent_result` in the work
+  phase (`finalizationOutcome=not_required`) after a non-terminating
+  `find` `PROTECTED_PATH_DESCENDANT` block. Evidence 1 accepted. M7
+  `verification-5b0e0f30-14ba-4aae-8609-d960fbd4d5e4` on
+  `gcli/grok-4.6-high`, verdict `pass`. No SAFETY_STOP, no duplicate
+  Task, no manual Task creation. Prior Mission
+  `mission-98feb9bb-f785-4bc7-881a-49873d6ce7cf` stopped at
+  `AWAITING_USER` when the same `.git`-protected `find` terminated the
+  child; that was fixed before this Mission.
+- **ADR-049:** non-mutating result-capability miss after the one
+  capture-only finalization turn may `FALLBACK_NEXT_ROUTE`. Mutation
+  observed never auto-replays. Metadata-only Attempt diagnostics persist
+  finalization flags plus `safetyBlockTool` / `safetyBlockCode`.
+- **Acceptance routing:** ConfigStore generation 61
+  `routing.fallback.enabled=true`, `routing.maxAttempts=1` (temporary
+  dogfood; no `maxSameRouteRetries` field). Investigation pool and Boss
+  unchanged.
+- **Publication boundary:** public RC28 remains immutable. RC29 is
+  verified and may be pushed as an unpublished candidate. It is not
+  tagged, npm-published, or a GitHub Release until an authorized later
+  operator publication step.
+
+### Historical RC29 dogfood (superseded by live COMPLETED)
+
+- **Status (historical):** `IN PROGRESS / LOCAL DOGFOOD REQUIRED`. Development manifest is
   `pi-multi-orchestrator@0.1.0-rc.29`. This is not a public prerelease, npm
   publication, GitHub Release, accepted development milestone, pre-release
   ready claim, or production release.
@@ -885,16 +919,15 @@ were not called because no secure 9Router route/credential was available.
 
 ### RC29 live Pi COMPLETED dogfood
 
-Host-shaped MissionStore/ContextBroker/QualityService fixtures prove
-Goal→COMPLETED, reject→repair, capability mismatch, and resume. A real
-isolated Pi Mission using this runtime has not yet reached COMPLETED. After
-enabling live `routing.fallback.enabled`, Mission
+Live isolated Pi Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb`
+reached durable `COMPLETED` on 2026-08-16 with Boss
+`ag/gemini-3.7-flash-high` (`protocolFailures=0`), one Investigation Task,
+work-phase `submit_agent_result` on `ocg/deepseek-v4-flash`, Evidence 1,
+and M7 `pass` on `gcli/grok-4.6-high`. Host-shaped fixtures remain
+regression coverage. Earlier Mission
 `mission-0bfe84d8-6848-404b-94b4-81cc1bff502e` reached `AWAITING_USER`
-because the DeepSeek worker Attempt ended `invalid_child_result` (no
-structured result, no Evidence, M7 never started). Retry→finalization
-forensics classified that miss as accepted protocol stop (C), not an
-executor skip after retry. `0.1.0-rc.29` must not be prepared from
-fixture COMPLETED alone. See
+on `invalid_child_result`; that forensic path is superseded by ADR-049
+and the later COMPLETED Mission. See
 [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md).
 
 ### Deferred capabilities beyond the current RC25 loop

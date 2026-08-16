@@ -8,16 +8,13 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 RC28 is the current public prerelease and adds live Boss invocation
 compatibility, classified failure diagnostics, and infrastructure-fallback
-semantics. RC29 (`0.1.0-rc.29`) is IN PROGRESS / LOCAL DOGFOOD REQUIRED for
-Mission runtime convergence. It is not public, accepted, pre-release ready,
-or a production release. M10 remains the latest accepted development
-milestone; M11 remains implemented but not accepted. A real isolated Pi
-Mission COMPLETED on this runtime is required before calling RC29
-pre-release ready. Live `routing.fallback.enabled` is now true with
-`routing.maxAttempts=3`. The 2026-08-16 end-to-end dogfood then stopped
-at DeepSeek `invalid_child_result` after timeout → same-route retry;
-retry→finalization forensics classified that as accepted protocol stop,
-not missing M4 fallback. See
+semantics. RC29 (`0.1.0-rc.29`) is an unpublished verified candidate after
+live Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED. It
+is not public, accepted, tagged, npm-published, or a production release.
+M10 remains the latest accepted development milestone; M11 remains
+implemented but not accepted. Live `routing.fallback.enabled` is true.
+Acceptance dogfood used `routing.maxAttempts=1`; ADR-049 adds non-mutating
+result-capability fallback. See
 [worker-retry-finalization-fallback-forensics.md](worker-retry-finalization-fallback-forensics.md)
 and
 [worker-infrastructure-fallback-forensics.md](worker-infrastructure-fallback-forensics.md).
@@ -474,8 +471,8 @@ Release, and live Pi install remain operator-owned. RC27 is not mutated.
 
 ## RC29 — Mission Runtime Convergence (delivery, identity, capability, active completion)
 
-Status: IN PROGRESS / LOCAL DOGFOOD REQUIRED. Development identity:
-`0.1.0-rc.29`. Not public, accepted, pre-release ready, or production-ready.
+Status: UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED. Development identity:
+`0.1.0-rc.29`. Not public, accepted, tagged, npm-published, or production-ready.
 Public RC28 remains immutable.
 
 Deliverables:
@@ -492,10 +489,10 @@ Deliverables:
 - host-shaped Goal→Task→M7→COMPLETED harness that inspects durable store
   rows, including reject→repair and resume.
 
-Exit evidence: `docs/mission-runtime-root-cause.md`, ADR-046, RC29-01/02/03
-acceptance tests, `npm run check`, and one real isolated Pi Mission COMPLETED.
-Publication remains operator-owned. Do not call RC29 pre-release ready from
-fixture tests alone.
+Exit evidence: `docs/mission-runtime-root-cause.md`, ADR-046, ADR-049,
+RC29-01/02/03 acceptance tests, `npm run check`, and live isolated Pi
+Mission `mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED.
+Publication remains operator-owned. RC29 is an unpublished candidate.
 
 ## RC27 — Autonomous Mission Bootstrap & Zero-Task Boss Loop Repair
 
