@@ -646,5 +646,12 @@ prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
 - **Decision:** Reliable foreground cancellation is triggered via a single `Ctrl+C` intercepted by `ctx.ui.onTerminalInput` while an active Mission is owned, invoking `ctx.abort()`. Cancellation propagates cleanly via `AbortSignal` through Boss, Worker, and M7 execution handles.
 - **Decision:** An explicit operator command `/mission-cancel [mission-id]` provides deterministic cancellation for active owned missions, fails closed on ambiguous/unowned missions, and updates durable state (`mission_cancelled`, attempt terminalization, verification blocked).
 - **Decision:** Interrupted terminal/process crashes remain distinctly recovered as `INTERRUPTED` without rewriting historical records to clean `CANCELLED`.
+- **Decision:** Amendments to ADR-051 and RC31-01 for real-world hardening:
+  - Startup silence: Pi session start / resume remains quiet by default (`resumeLiveProgress` does not paint historical or unowned active mission widgets).
+  - Decoupled ownership leases: Mission execution leases are heartbeat-driven and distinct from UI presentation heartbeats. Background intervals must be `unref()`-guarded.
+  - Non-stealing lease recovery: `recoverInterrupted` respects unexpired foreign leases, reconciling foreign executions silently only after true expiry.
+  - Atomic claim: `claimMissionExecution` atomically acquires the mission lease and transitions to `running`; losers dispatch 0 tasks/attempts.
+  - Owner shutdown: `interruptOwnedExecution` provides atomic, owner-specific terminalization during host dispose without corrupting foreign leases.
+  - Truthful health display: Expired cooldown timestamps are never displayed as active in `/routes` or `/orchestrator`.
 - **Rationale:** Live dogfooding proved that widget history accumulation caused ugly truncation notices, activity was invisible in the main transcript, and `Ctrl+C` failed to abort active in-flight missions.
 - **Consequences:** Development identity is `0.1.0-rc.31` LOCAL / UNPUBLISHED / DOGFOOD. Not tagged, published, or released. RC30 remains the public immutable prerelease.

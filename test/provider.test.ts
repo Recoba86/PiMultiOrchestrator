@@ -1037,7 +1037,7 @@ describe("Pi 9Router host adapter", () => {
 		}
 	});
 
-	it("paints live Mission progress onto Pi setWidget immediately and reconstructs it on resume", async () => {
+	it("paints live Mission progress onto Pi setWidget immediately for in-session missions, but stays quiet on fresh startup/resume", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-rc31-live-progress-"));
 		let entryId = 0;
 		const store = createMissionStore({ root, id: () => `live-${++entryId}` });
@@ -1072,7 +1072,8 @@ describe("Pi 9Router host adapter", () => {
 			store.transitionMission(mission.missionId, "active");
 			store.transitionMission(mission.missionId, "running", { actor: "boss", metadata: { kind: "boss-assignment", remoteModelId: "ag/gemini-3.7-flash-high" } });
 			const resumed: string[][] = [];
-			const resumedHost = createPiHost(piFixture().pi, { manager: managerFixture(projection()), missionStore: store });
+			const resumedPi = piFixture();
+			const resumedHost = createPiHost(resumedPi.pi, { manager: managerFixture(projection()), missionStore: store });
 			resumedHost.resumeLiveProgress({
 				cwd: ctx.cwd,
 				isIdle: () => true,
@@ -1083,7 +1084,8 @@ describe("Pi 9Router host adapter", () => {
 					setWorkingMessage: () => undefined,
 				},
 			} as unknown as ExtensionContext);
-			assert.match(resumed.at(-1)?.join("\n") ?? "", /Boss: Gemini|Boss Planning/);
+			// Inverted TDD assertion: fresh startup / resume must NOT paint historical or in-flight mission widget
+			assert.equal(resumed.length, 0, "fresh startup/resume must not auto-paint widget for unowned historical mission");
 			resumedHost.dispose();
 			host.dispose();
 		} finally {

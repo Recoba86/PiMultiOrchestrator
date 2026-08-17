@@ -14,7 +14,7 @@ const tempRoot = async (prefix: string): Promise<string> => mkdtemp(join(tmpdir(
 
 async function child(code: string, args: readonly string[]): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const proc = spawn(process.execPath, ["--input-type=module", "-e", code, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+		const proc = spawn(process.execPath, ["--input-type=module", "-e", code, "--", ...args], { stdio: ["ignore", "pipe", "pipe"] });
 		let out = ""; let err = "";
 		proc.stdout.on("data", (chunk: Buffer) => { out += chunk.toString(); });
 		proc.stderr.on("data", (chunk: Buffer) => { err += chunk.toString(); });
@@ -130,4 +130,38 @@ test("config fault injection leaves no silent empty replacement", async () => {
 		await assert.rejects(store.initialize(createDefaultConfig())); fail = false; await store.initialize(createDefaultConfig()); const before = await readFile(join(root, "config.json"));
 		fail = true; await assert.rejects(store.update((draft) => { draft.routing.maxAttempts = 2; })); assert.deepEqual(await readFile(join(root, "config.json")), before);
 	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recoverInterrupted does not interrupt active unexpired foreign leases or running verifications under unexpired mission lease", async () => {
+	const root = await tempRoot("pmo-m10-recover-lease-");
+	try {
+		let now = new Date("2026-08-17T00:00:00.000Z");
+		const store = createMissionStore({ root, clock: () => now });
+		const m1 = store.createMission({ missionId: "m1", goal: "live execution" });
+		store.acquireLease(m1.missionId, "live-owner", { ttlMs: 10_000 });
+		store.transitionMission(m1.missionId, "running");
+		const t1 = store.createTask({ taskId: "t1", missionId: m1.missionId, roleId: "worker", executionClass: "implementation", objective: "work" });
+		store.createAttempt({ taskId: t1.taskId, leaseOwner: "live-owner", leaseTtlMs: 10_000 });
+
+		// Dead mission with expired lease
+		const m2 = store.createMission({ missionId: "m2", goal: "dead execution" });
+		store.acquireLease(m2.missionId, "dead-owner", { ttlMs: 1_000 });
+		store.transitionMission(m2.missionId, "running");
+		const t2 = store.createTask({ taskId: "t2", missionId: m2.missionId, roleId: "worker", executionClass: "implementation", objective: "dead work" });
+		store.createAttempt({ taskId: t2.taskId, leaseOwner: "dead-owner", leaseTtlMs: 1_000 });
+
+		// Advance clock past dead lease, but before live lease expiry
+		now = new Date("2026-08-17T00:00:02.000Z");
+		const recovered = store.recoverInterrupted({ now });
+
+		// Dead attempt must be recovered, live attempt must NOT be stolen
+		assert.equal(recovered.length, 1);
+		assert.equal(recovered[0]?.taskId, "t2");
+		assert.equal(store.getTask("t1")?.status, "running");
+		assert.equal(store.getTask("t2")?.status, "interrupted");
+
+		store.close();
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });

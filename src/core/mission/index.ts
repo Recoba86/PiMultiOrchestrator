@@ -252,7 +252,34 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 	startTask(taskId: string, options?: TaskStatusOptions): TaskRecord { const task = this.getTask(taskId); if (!task) throw new MissionNotFoundError("task", taskId); if (!["pending", "planned", "ready", "interrupted"].includes(task.status)) throw new MissionValidationError([{ path: "status", message: "task is not runnable" }]); return this.setTask(taskId, "running", options); }
 	finishTask(taskId: string, status: Extract<TaskStatus, "succeeded" | "failed" | "cancelled" | "blocked" | "execution_completed"> = "execution_completed", options?: TaskStatusOptions): TaskRecord { return this.setTask(taskId, status, options); }
 
-	createAttempt(input: AttemptCreateInput): AttemptRecord { return this.tx(() => { const task = this.getTask(input.taskId); if (!task) throw new MissionNotFoundError("task", String(input.taskId)); const active = this.db.prepare("SELECT attempt_id FROM attempts WHERE task_id=? AND status='running' LIMIT 1").get(String(input.taskId)) as Row | undefined; if (active) throw new MissionLeaseError("task is already leased by an active attempt"); const ttl = input.leaseTtlMs ?? this.leaseTtlMs; if (!Number.isSafeInteger(ttl) || ttl <= 0) throw new MissionLeaseError("lease ttl must be positive"); const id = idOf(input.attemptId as string | undefined, "attempt", this.makeId); if (this.db.prepare("SELECT 1 FROM attempts WHERE attempt_id=?").get(id)) throw new MissionValidationError([{ path: "attemptId", message: "duplicate attempt id" }]); const at = nowIso(this.clock); const expires = new Date(this.clock().getTime() + ttl).toISOString(); const packetRevision = input.packetRevision ?? task.packetRevision; this.db.prepare("UPDATE tasks SET status='running',last_run_id=?,revision=revision+1,updated_at=? WHERE task_id=?").run(id, at, String(input.taskId)); this.db.prepare("INSERT INTO attempts(attempt_id,task_id,mission_id,revision,route_id,remote_model_id,status,lease_owner,lease_expires_at,started_at,ended_at,terminal_state,mutation_observed,result_json,packet_revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(id, input.taskId, task.missionId, task.revision + 1, input.routeId ?? null, input.remoteModelId ?? null, "running", input.leaseOwner ?? null, input.leaseOwner ? expires : null, at, null, null, 0, null, packetRevision, at, at); if (task.executionClass === "implementation") this.db.prepare("INSERT INTO task_quality_status(task_id,mission_id,status,quality_round,latest_verification_id,latest_decision_id,updated_at) VALUES (?,?,?,0,NULL,NULL,?) ON CONFLICT(task_id) DO UPDATE SET status='unverified',quality_round=0,latest_verification_id=NULL,latest_decision_id=NULL,updated_at=excluded.updated_at").run(input.taskId, task.missionId, "unverified", at); this.event(String(task.missionId), task.revision + 1, "task_started", "system", undefined, String(input.taskId), id); return this.attempt(id)!; }); }
+	createAttempt(input: AttemptCreateInput): AttemptRecord { return this.tx(() => {
+		const task = this.getTask(input.taskId);
+		if (!task) throw new MissionNotFoundError("task", String(input.taskId));
+		// Check that the parent mission is leased by the attempt's leaseOwner if leaseOwner is provided, or if mission lease is held by another owner
+		const missionLease = this.db.prepare("SELECT * FROM mission_leases WHERE mission_id=?").get(String(task.missionId)) as Row | undefined;
+		const now = this.clock();
+		const expiry = missionLease ? Date.parse(String(missionLease.expires_at)) : Number.NaN;
+		const hasActiveLease = Boolean(missionLease && Number.isFinite(expiry) && expiry > now.getTime());
+		if (hasActiveLease) {
+			if (!input.leaseOwner || String(missionLease!.owner) !== input.leaseOwner) {
+				throw new MissionLeaseError("parent mission is not actively leased by owner");
+			}
+		}
+		const active = this.db.prepare("SELECT attempt_id FROM attempts WHERE task_id=? AND status='running' LIMIT 1").get(String(input.taskId)) as Row | undefined;
+		if (active) throw new MissionLeaseError("task is already leased by an active attempt");
+		const ttl = input.leaseTtlMs ?? this.leaseTtlMs;
+		if (!Number.isSafeInteger(ttl) || ttl <= 0) throw new MissionLeaseError("lease ttl must be positive");
+		const id = idOf(input.attemptId as string | undefined, "attempt", this.makeId);
+		if (this.db.prepare("SELECT 1 FROM attempts WHERE attempt_id=?").get(id)) throw new MissionValidationError([{ path: "attemptId", message: "duplicate attempt id" }]);
+		const at = nowIso(this.clock);
+		const expires = new Date(this.clock().getTime() + ttl).toISOString();
+		const packetRevision = input.packetRevision ?? task.packetRevision;
+		this.db.prepare("UPDATE tasks SET status='running',last_run_id=?,revision=revision+1,updated_at=? WHERE task_id=?").run(id, at, String(input.taskId));
+		this.db.prepare("INSERT INTO attempts(attempt_id,task_id,mission_id,revision,route_id,remote_model_id,status,lease_owner,lease_expires_at,started_at,ended_at,terminal_state,mutation_observed,result_json,packet_revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(id, input.taskId, task.missionId, task.revision + 1, input.routeId ?? null, input.remoteModelId ?? null, "running", input.leaseOwner ?? null, input.leaseOwner ? expires : null, at, null, null, 0, null, packetRevision, at, at);
+		if (task.executionClass === "implementation") this.db.prepare("INSERT INTO task_quality_status(task_id,mission_id,status,quality_round,latest_verification_id,latest_decision_id,updated_at) VALUES (?,?,?,0,NULL,NULL,?) ON CONFLICT(task_id) DO UPDATE SET status='unverified',quality_round=0,latest_verification_id=NULL,latest_decision_id=NULL,updated_at=excluded.updated_at").run(input.taskId, task.missionId, "unverified", at);
+		this.event(String(task.missionId), task.revision + 1, "task_started", "system", undefined, String(input.taskId), id);
+		return this.attempt(id)!;
+	}); }
 	updateAttemptProvenance(attemptId: string, options: { readonly routeId?: string; readonly remoteModelId?: string; readonly packetRevision?: number }): AttemptRecord { return this.tx(() => { const current = this.attempt(attemptId); if (!current) throw new MissionNotFoundError("attempt", attemptId); if (current.status !== "running") throw new MissionValidationError([{ path: "attemptId", message: "attempt is already terminal" }]); this.db.prepare("UPDATE attempts SET route_id=COALESCE(?,route_id),remote_model_id=COALESCE(?,remote_model_id),packet_revision=COALESCE(?,packet_revision),updated_at=? WHERE attempt_id=?").run(options.routeId ?? null, options.remoteModelId ?? null, options.packetRevision ?? null, nowIso(this.clock), attemptId); return this.attempt(attemptId)!; }); }
 	getAttempt(attemptId: string): AttemptRecord | undefined { this.ensureOpen(); return this.attempt(attemptId); }
 	private attempt(id: string): AttemptRecord | undefined { const row = this.db.prepare("SELECT * FROM attempts WHERE attempt_id=?").get(id) as Row | undefined; if (!row) return undefined; return ({ attemptId: row.attempt_id as AttemptRecord["attemptId"], taskId: row.task_id as AttemptRecord["taskId"], missionId: row.mission_id as MissionId, revision: Number(row.revision), ...(row.route_id ? { routeId: row.route_id as AttemptRecord["routeId"] } : {}), ...(row.remote_model_id ? { remoteModelId: String(row.remote_model_id) } : {}), status: row.status as AttemptStatus, ...(row.lease_owner ? { leaseOwner: row.lease_owner as LeaseOwner } : {}), ...(row.lease_expires_at ? { leaseExpiresAt: String(row.lease_expires_at) } : {}), startedAt: String(row.started_at), ...(row.ended_at ? { endedAt: String(row.ended_at) } : {}), ...(row.terminal_state ? { terminalState: String(row.terminal_state) } : {}), mutationObserved: Number(row.mutation_observed) === 1, ...(row.result_json ? { result: parse(row.result_json, null) } : {}), createdAt: String(row.created_at), updatedAt: String(row.updated_at), ...(row.packet_revision == null ? {} : { packetRevision: Number(row.packet_revision) }) } as unknown as AttemptRecord); }
@@ -387,20 +414,138 @@ export class SQLiteMissionStore implements MissionStoreAdapter {
 	rejectEvidence(evidenceId: string, reason: string, actor: "boss" | "worker" | "reviewer" | "system" | "user" = "user"): EvidenceRecord { return this.tx(() => { const current = this.evidence(evidenceId); if (current.status !== "proposed") throw new MissionEvidenceError("Only proposed evidence can be rejected"); const mission = this.missionFrom(this.missionRow(String(current.missionId))); const at = nowIso(this.clock); this.db.prepare("UPDATE evidence SET status='rejected',reviewed_at=?,rejection_reason=? WHERE evidence_id=?").run(at, this.text(reason, "rejection"), evidenceId); this.event(String(current.missionId), mission.revision, "evidence_rejected", actor, { evidenceId }); return this.evidence(evidenceId); }); }
 
 	acquireLease(missionId: string, owner: string, options: { readonly ttlMs?: number; readonly forceRecover?: boolean } = {}): LeaseRecord { return this.tx(() => { this.missionRow(missionId); if (!owner.trim()) throw new MissionLeaseError("lease owner is required"); const ttl = options.ttlMs ?? this.leaseTtlMs; if (!Number.isSafeInteger(ttl) || ttl <= 0) throw new MissionLeaseError("lease ttl must be positive"); const existing = this.db.prepare("SELECT * FROM mission_leases WHERE mission_id=?").get(missionId) as Row | undefined; const now = this.clock(); const expiry = existing ? Date.parse(String(existing.expires_at)) : Number.NaN; if (existing && !Number.isFinite(expiry)) throw new MissionLeaseError("lease expiry is invalid"); const wasActive = existing !== undefined && expiry > now.getTime(); if (wasActive && String(existing?.owner) !== owner) throw new MissionLeaseError("mission is leased by another owner"); const expires = new Date(now.getTime() + ttl).toISOString(); const recoveredFrom = existing?.owner && String(existing.owner) !== owner ? String(existing.owner) : null; const acquiredAt = existing && String(existing.owner) === owner ? String(existing.acquired_at) : now.toISOString(); this.db.prepare("INSERT OR REPLACE INTO mission_leases(mission_id,owner,acquired_at,heartbeat_at,expires_at,recovered_from) VALUES (?,?,?,?,?,?)").run(missionId, owner, acquiredAt, now.toISOString(), expires, recoveredFrom); if (recoveredFrom) this.event(missionId, Number(this.missionRow(missionId).revision), "lease_recovered", "system", { recoveredFrom, owner }); return { missionId: missionId as MissionId, owner: owner as LeaseOwner, ownerToken: owner as LeaseOwner, acquiredAt, heartbeatAt: now.toISOString(), expiresAt: expires, ...(recoveredFrom ? { recoveredFrom: recoveredFrom as LeaseOwner } : {}) }; }); }
+	claimMissionExecution(missionId: string, owner: string, options: { readonly ttlMs?: number } = {}): { readonly lease: LeaseRecord; readonly mission: MissionRecord } {
+		return this.tx(() => {
+			const mission = this.getMission(missionId);
+			if (!mission) throw new MissionNotFoundError("mission", missionId);
+			if (["completed", "cancelled", "failed"].includes(mission.status)) {
+				throw new MissionConflictError(mission.revision, mission.revision);
+			}
+			const lease = this.acquireLease(missionId, owner, options.ttlMs === undefined ? {} : { ttlMs: options.ttlMs });
+			let nextMission = mission;
+			if (mission.status === "draft") {
+				nextMission = this.transitionMission(missionId, "planned");
+				nextMission = this.transitionMission(missionId, "active");
+				nextMission = this.transitionMission(missionId, "running");
+			} else if (mission.status === "planned") {
+				nextMission = this.transitionMission(missionId, "active");
+				nextMission = this.transitionMission(missionId, "running");
+			} else if (mission.status === "active") {
+				nextMission = this.transitionMission(missionId, "running");
+			} else if (mission.status === "paused" || mission.status === "awaiting-review" || mission.status === "blocked") {
+				nextMission = this.transitionMission(missionId, "running");
+			}
+			return { lease, mission: nextMission };
+		});
+	}
+	interruptOwnedExecution(missionId: string, owner: string, options: { readonly reason?: string; readonly now?: Date } = {}): { readonly interruptedAttempts: readonly AttemptRecord[]; readonly mission: MissionRecord } {
+		return this.tx(() => {
+			const lease = this.db.prepare("SELECT * FROM mission_leases WHERE mission_id=?").get(missionId) as Row | undefined;
+			if (!lease || String(lease.owner) !== owner) {
+				throw new MissionLeaseError("mission lease is not held by specified owner");
+			}
+			const now = options.now ?? this.clock();
+			const expiry = Date.parse(String(lease.expires_at));
+			if (!Number.isFinite(expiry) || expiry <= now.getTime()) {
+				throw new MissionLeaseError("mission lease has expired");
+			}
+			const nowIsoStr = now.toISOString();
+			// 1. Interrupt running attempts for this mission owned by this owner
+			const attemptRows = this.db.prepare("SELECT attempt_id FROM attempts WHERE mission_id=? AND status='running' AND lease_owner=?").all(missionId, owner) as Row[];
+			const interruptedAttempts: AttemptRecord[] = [];
+			for (const row of attemptRows) {
+				const current = this.attempt(String(row.attempt_id));
+				if (!current) continue;
+				this.db.prepare("UPDATE attempts SET status='interrupted',ended_at=?,terminal_state=?,updated_at=? WHERE attempt_id=? AND status='running'").run(nowIsoStr, "interrupted_shutdown", nowIsoStr, current.attemptId);
+				this.db.prepare("UPDATE tasks SET status='interrupted',revision=revision+1,updated_at=? WHERE task_id=? AND status='running'").run(nowIsoStr, current.taskId);
+				this.event(missionId, current.revision + 1, "task_interrupted", "system", { mutationObserved: current.mutationObserved, shutdown: true }, String(current.taskId), String(current.attemptId));
+				interruptedAttempts.push(this.attempt(String(current.attemptId))!);
+			}
+			// 2. Interrupt running verification runs for this mission
+			const verificationRows = this.db.prepare("SELECT verification_id, task_id, round FROM verification_runs WHERE mission_id=? AND status='running'").all(missionId) as Row[];
+			for (const row of verificationRows) {
+				this.db.prepare("UPDATE verification_runs SET status='interrupted',completed_at=?,failure_summary=? WHERE verification_id=? AND status='running'").run(nowIsoStr, options.reason ?? "session shutdown interruption", String(row.verification_id));
+				this.db.prepare("UPDATE task_quality_status SET status='review_required',quality_round=?,latest_verification_id=?,updated_at=? WHERE task_id=?").run(Number(row.round), String(row.verification_id), nowIsoStr, String(row.task_id));
+				this.event(missionId, Number(this.missionRow(missionId).revision), "verification_interrupted", "system", { verificationId: String(row.verification_id), taskId: String(row.task_id), shutdown: true }, String(row.task_id));
+			}
+			// 3. Transition mission to awaiting-review with INTERRUPTED terminal payload
+			const mission = this.getMission(missionId);
+			if (!mission) throw new MissionNotFoundError("mission", missionId);
+			let nextMission = mission;
+			if (["running", "active", "planned", "paused", "blocked"].includes(mission.status)) {
+				this.event(missionId, mission.revision, "mission_updated", "system", { kind: "boss-terminal", terminalState: "INTERRUPTED", reason: options.reason ?? "Mission interrupted on host shutdown" });
+				nextMission = this.transitionMission(missionId, "awaiting-review", { actor: "system", reason: "boss-review-ready", metadata: { kind: "boss-review-ready", terminalState: "INTERRUPTED", cycles: 0 } });
+			}
+			// 4. Cleanly release the mission lease
+			this.db.prepare("DELETE FROM mission_leases WHERE mission_id=? AND owner=?").run(missionId, owner);
+			return { interruptedAttempts, mission: nextMission };
+		});
+	}
 	heartbeatLease(missionId: string, owner: string, ttlMs = this.leaseTtlMs): LeaseRecord { return this.tx(() => { const existing = this.db.prepare("SELECT * FROM mission_leases WHERE mission_id=?").get(missionId) as Row | undefined; if (!existing || String(existing.owner) !== owner) throw new MissionLeaseError("lease not held"); const expiry = Date.parse(String(existing.expires_at)); if (!Number.isFinite(expiry) || expiry <= this.clock().getTime()) throw new MissionLeaseError("lease has expired"); if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0) throw new MissionLeaseError("lease ttl must be positive"); const now = this.clock(); const expires = new Date(now.getTime() + ttlMs).toISOString(); this.db.prepare("UPDATE mission_leases SET heartbeat_at=?,expires_at=? WHERE mission_id=? AND owner=? AND expires_at>?").run(now.toISOString(), expires, missionId, owner, now.toISOString()); return { missionId: missionId as MissionId, owner: owner as LeaseOwner, ownerToken: owner as LeaseOwner, acquiredAt: String(existing.acquired_at), heartbeatAt: now.toISOString(), expiresAt: expires }; }); }
 	releaseLease(missionId: string, owner: string): void { this.tx(() => { const existing = this.db.prepare("SELECT owner FROM mission_leases WHERE mission_id=?").get(missionId) as Row | undefined; if (!existing) return; if (String(existing.owner) !== owner) throw new MissionLeaseError("lease owned by another process"); this.db.prepare("DELETE FROM mission_leases WHERE mission_id=? AND owner=?").run(missionId, owner); }); }
 	recordCheckpoint(missionId: string, kind: CheckpointKind = "manual"): CheckpointRecord { return this.tx(() => { const mission = this.missionFrom(this.missionRow(missionId)); const existing = this.db.prepare("SELECT * FROM mission_checkpoints WHERE mission_id=? AND revision=?").get(missionId, mission.revision) as Row | undefined; if (existing) return { checkpointId: existing.checkpoint_id as CheckpointRecord["checkpointId"], missionId: existing.mission_id as MissionId, revision: Number(existing.revision), kind: existing.kind as CheckpointKind, status: existing.status as MissionStatus, snapshot: parse(existing.snapshot_json, mission), createdAt: String(existing.created_at) }; const id = `checkpoint-${this.makeId()}` as CheckpointRecord["checkpointId"]; const at = nowIso(this.clock); this.db.prepare("INSERT INTO mission_checkpoints(checkpoint_id,mission_id,revision,kind,status,snapshot_json,created_at) VALUES (?,?,?,?,?,?,?)").run(id, missionId, mission.revision, kind, mission.status, this.snapshot(mission), at); this.event(missionId, mission.revision, "checkpoint_created", "system", { checkpointId: id }); return { checkpointId: id, missionId: missionId as MissionId, revision: mission.revision, kind, status: mission.status, snapshot: mission, createdAt: at }; }); }
 	listCheckpoints(missionId: string): readonly CheckpointRecord[] { this.ensureOpen(); const rows = this.db.prepare("SELECT * FROM mission_checkpoints WHERE mission_id=? ORDER BY revision").all(missionId) as Row[]; return rows.map((r) => ({ checkpointId: r.checkpoint_id as CheckpointRecord["checkpointId"], missionId: r.mission_id as MissionId, revision: Number(r.revision), kind: r.kind as CheckpointKind, status: r.status as MissionStatus, snapshot: parse(r.snapshot_json, {} as MissionRecord), createdAt: String(r.created_at) })); }
 	listEvents(missionId: string): readonly MissionEventRecord[] { this.ensureOpen(); const rows = this.db.prepare("SELECT * FROM mission_events WHERE mission_id=? ORDER BY created_at,rowid").all(missionId) as Row[]; return rows.map((r) => ({ eventId: r.event_id as MissionEventRecord["eventId"], missionId: r.mission_id as MissionId, revision: Number(r.revision), kind: String(r.kind), actor: r.actor as MissionEventRecord["actor"], ...(r.task_id ? { taskId: r.task_id as MissionEventRecord["taskId"] } : {}), ...(r.attempt_id ? { attemptId: r.attempt_id as MissionEventRecord["attemptId"] } : {}), ...(r.payload_json ? { payload: parse(r.payload_json, null) } : {}), createdAt: String(r.created_at) } as MissionEventRecord)); }
-	recoverInterrupted(options: { readonly now?: Date; readonly owner?: string } = {}): readonly AttemptRecord[] { return this.tx(() => { const now = options.now ?? this.clock(); const rows = (options.owner === undefined ? this.db.prepare("SELECT attempt_id FROM attempts WHERE status='running' AND (lease_expires_at IS NULL OR lease_expires_at<=?)").all(now.toISOString()) : this.db.prepare("SELECT attempt_id FROM attempts WHERE status='running' AND lease_owner=? AND (lease_expires_at IS NULL OR lease_expires_at<=?)").all(options.owner, now.toISOString())) as Row[]; const out: AttemptRecord[] = []; for (const row of rows) { const current = this.attempt(String(row.attempt_id)); if (!current) continue; this.db.prepare("UPDATE attempts SET status='interrupted',ended_at=?,terminal_state=?,updated_at=? WHERE attempt_id=? AND status='running'").run(now.toISOString(), "recovered_interrupted", now.toISOString(), current.attemptId); this.db.prepare("UPDATE tasks SET status='interrupted',revision=revision+1,updated_at=? WHERE task_id=? AND status='running'").run(now.toISOString(), current.taskId); this.event(String(current.missionId), current.revision + 1, "task_interrupted", "system", { mutationObserved: current.mutationObserved }, String(current.taskId), String(current.attemptId)); out.push(this.attempt(String(current.attemptId))!); }
-		const qualityRows = this.db.prepare("SELECT verification_id,mission_id,task_id,round FROM verification_runs WHERE status='running'").all() as Row[];
+	recoverInterrupted(options: { readonly now?: Date; readonly owner?: string } = {}): readonly AttemptRecord[] { return this.tx(() => {
+		const now = options.now ?? this.clock();
+		const nowIsoStr = now.toISOString();
+		// Only recover attempts whose attempt lease has expired (or was unleased), AND whose parent mission lease (if any) is not active and unexpired for a different live owner.
+		const rows = (options.owner === undefined
+			? this.db.prepare(`
+				SELECT a.attempt_id FROM attempts a
+				LEFT JOIN mission_leases ml ON ml.mission_id = a.mission_id
+				WHERE a.status='running'
+				  AND (a.lease_expires_at IS NULL OR a.lease_expires_at<=?)
+				  AND (ml.expires_at IS NULL OR ml.expires_at<=?)
+			`).all(nowIsoStr, nowIsoStr)
+			: this.db.prepare(`
+				SELECT a.attempt_id FROM attempts a
+				WHERE a.status='running' AND a.lease_owner=? AND (a.lease_expires_at IS NULL OR a.lease_expires_at<=?)
+			`).all(options.owner, nowIsoStr)) as Row[];
+		const out: AttemptRecord[] = [];
+		for (const row of rows) {
+			const current = this.attempt(String(row.attempt_id));
+			if (!current) continue;
+			this.db.prepare("UPDATE attempts SET status='interrupted',ended_at=?,terminal_state=?,updated_at=? WHERE attempt_id=? AND status='running'").run(nowIsoStr, "recovered_interrupted", nowIsoStr, current.attemptId);
+			this.db.prepare("UPDATE tasks SET status='interrupted',revision=revision+1,updated_at=? WHERE task_id=? AND status='running'").run(nowIsoStr, current.taskId);
+			this.event(String(current.missionId), current.revision + 1, "task_interrupted", "system", { mutationObserved: current.mutationObserved }, String(current.taskId), String(current.attemptId));
+			out.push(this.attempt(String(current.attemptId))!);
+		}
+		// Also only recover running verification runs if their parent mission does not have an active unexpired lease held by another owner
+		const qualityRows = (options.owner === undefined
+			? this.db.prepare(`
+				SELECT vr.verification_id, vr.mission_id, vr.task_id, vr.round FROM verification_runs vr
+				LEFT JOIN mission_leases ml ON ml.mission_id = vr.mission_id
+				WHERE vr.status='running'
+				  AND (ml.expires_at IS NULL OR ml.expires_at<=?)
+			`).all(nowIsoStr)
+			: this.db.prepare(`
+				SELECT vr.verification_id, vr.mission_id, vr.task_id, vr.round FROM verification_runs vr
+				JOIN mission_leases ml ON ml.mission_id = vr.mission_id
+				WHERE vr.status='running' AND ml.owner=? AND ml.expires_at<=?
+			`).all(options.owner, nowIsoStr)) as Row[];
 		for (const row of qualityRows) {
-			const completedAt = now.toISOString();
+			const completedAt = nowIsoStr;
 			this.db.prepare("UPDATE verification_runs SET status='interrupted',completed_at=?,failure_summary=? WHERE verification_id=? AND status='running'").run(completedAt, "verification interrupted during runtime recovery", String(row.verification_id));
 			this.db.prepare("UPDATE task_quality_status SET status='review_required',quality_round=?,latest_verification_id=?,updated_at=? WHERE task_id=?").run(Number(row.round), String(row.verification_id), completedAt, String(row.task_id));
 			this.event(String(row.mission_id), Number(this.missionRow(String(row.mission_id)).revision), "verification_interrupted", "system", { verificationId: String(row.verification_id), taskId: String(row.task_id) }, String(row.task_id));
 		}
-		return out; }); }
+		// If any attempt or verification was recovered, transition their parent missions to awaiting-review + INTERRUPTED if still running/active/planned
+		const affectedMissionIds = new Set<string>();
+		for (const attempt of out) affectedMissionIds.add(String(attempt.missionId));
+		for (const row of qualityRows) affectedMissionIds.add(String(row.mission_id));
+		for (const mId of affectedMissionIds) {
+			const current = this.getMission(mId);
+			if (current && ["running", "active", "planned", "paused", "blocked"].includes(current.status)) {
+				const plan = (typeof current.plan === "object" && current.plan !== null && !Array.isArray(current.plan)) ? structuredClone(current.plan) as Record<string, any> : {};
+				const orch = (typeof plan.orchestration === "object" && plan.orchestration !== null && !Array.isArray(plan.orchestration)) ? plan.orchestration : {};
+				plan.orchestration = { ...orch, terminal: "INTERRUPTED", terminalReason: "Recovered interrupted execution" };
+				this.updateMission(mId, { plan });
+				this.transitionMission(mId, "awaiting-review", { actor: "system", reason: "recovered-interrupted" });
+			}
+		}
+		return out;
+	}); }
 	/** Create a SQLite-native, self-consistent backup and publish it atomically. */
 	async backup(destinationPath = join(this.root, "backups", `mission-${new Date().toISOString().replaceAll(/[:.]/gu, "-")}.sqlite`)): Promise<string> {
 		this.ensureOpen();

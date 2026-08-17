@@ -12,6 +12,7 @@ export interface MissionTaskExecutionOptions {
 	readonly executor: Pick<SubagentExecutor, "run">;
 	readonly missionId: MissionId | string;
 	readonly taskId: string;
+	readonly leaseOwner?: string;
 	readonly cwd?: string;
 	readonly timeoutMs?: number;
 	readonly signal?: AbortSignal;
@@ -68,7 +69,11 @@ export async function executeMissionTask(options: MissionTaskExecutionOptions): 
 		...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 	});
 	const packetTask = options.store.saveTaskPacket(options.taskId, packet, task.revision);
-	const attempt = options.store.createAttempt({ taskId: options.taskId, packetRevision: packetTask.packetRevision });
+	const attempt = options.store.createAttempt({
+		taskId: options.taskId,
+		packetRevision: packetTask.packetRevision,
+		...(options.leaseOwner === undefined ? {} : { leaseOwner: options.leaseOwner }),
+	});
 	let run: SubagentRunResult;
 	try {
 		run = await options.executor.run(packetToSubagentRequest(packet, options.cwd === undefined && options.timeoutMs === undefined && options.excludedRouteIds === undefined ? {} : {

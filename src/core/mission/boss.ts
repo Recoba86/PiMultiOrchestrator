@@ -115,7 +115,7 @@ export interface BossMissionState {
 	readonly terminalProvenance?: string;
 }
 
-export type BossTerminalState = "COMPLETED" | "BLOCKED" | "AWAITING_USER" | "CANCELLED" | "SAFETY_STOP";
+export type BossTerminalState = "COMPLETED" | "BLOCKED" | "AWAITING_USER" | "CANCELLED" | "SAFETY_STOP" | "INTERRUPTED";
 
 export interface MissionGoalLoopResult {
 	readonly status: Extract<MissionStatus, "completed" | "blocked" | "awaiting-review" | "cancelled">;
@@ -252,7 +252,7 @@ const throwIfCancelled = (signal?: AbortSignal): void => {
 const missionStatusForTerminal = (terminalState: BossTerminalState): Extract<MissionStatus, "completed" | "blocked" | "awaiting-review" | "cancelled"> => {
 	if (terminalState === "COMPLETED") return "completed";
 	if (terminalState === "CANCELLED") return "cancelled";
-	if (terminalState === "AWAITING_USER") return "awaiting-review";
+	if (terminalState === "AWAITING_USER" || terminalState === "INTERRUPTED") return "awaiting-review";
 	return "blocked";
 };
 
@@ -260,6 +260,7 @@ const analyticsOutcomeForTerminal = (terminalState: BossTerminalState): string =
 	if (terminalState === "COMPLETED") return "completed";
 	if (terminalState === "CANCELLED") return "cancelled";
 	if (terminalState === "SAFETY_STOP") return "safety_stop";
+	if (terminalState === "INTERRUPTED") return "interrupted";
 	return "failed";
 };
 
@@ -324,7 +325,7 @@ const readState = (mission: MissionRecord): BossMissionState => {
 		...(typeof value.repeatedRejectionCount === "number" && Number.isSafeInteger(value.repeatedRejectionCount) && value.repeatedRejectionCount >= 0 ? { repeatedRejectionCount: value.repeatedRejectionCount } : {}),
 		...(value.acceptanceCriteriaProvenance === "explicit" || value.acceptanceCriteriaProvenance === "labelled-goal" || value.acceptanceCriteriaProvenance === "derived-from-goal" ? { acceptanceCriteriaProvenance: value.acceptanceCriteriaProvenance } : {}),
 		...(normalizedTokenUsage(value.tokenUsage) === undefined ? {} : { tokenUsage: normalizedTokenUsage(value.tokenUsage) }),
-		...(value.terminal === "COMPLETED" || value.terminal === "BLOCKED" || value.terminal === "AWAITING_USER" || value.terminal === "CANCELLED" || value.terminal === "SAFETY_STOP" ? { terminal: value.terminal } : {}),
+		...(value.terminal === "COMPLETED" || value.terminal === "BLOCKED" || value.terminal === "AWAITING_USER" || value.terminal === "CANCELLED" || value.terminal === "SAFETY_STOP" || value.terminal === "INTERRUPTED" ? { terminal: value.terminal } : {}),
 		...(typeof value.terminalReason === "string" ? { terminalReason: value.terminalReason.slice(0, 240) } : {}),
 		...(typeof value.terminalProvenance === "string" ? { terminalProvenance: value.terminalProvenance.slice(0, 64) } : {}),
 	};

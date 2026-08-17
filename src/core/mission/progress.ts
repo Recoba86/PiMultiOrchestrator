@@ -46,6 +46,7 @@ export interface MissionProgressInput {
 	readonly tasks?: readonly Pick<TaskRecord, "taskId" | "executionClass" | "status" | "packetRevision" | "objective">[];
 	readonly counts?: MissionProgressCounts;
 	readonly live?: LiveProgressOverlay;
+	readonly isOwnedSession?: boolean;
 	readonly now?: Date;
 	readonly quietAfterMs?: number;
 	readonly maxCycles?: number;
@@ -205,7 +206,7 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 		lines.push(`Current: Quality Verification`);
 		lines.push(`Reviewer: ${prettyModel(live.m7.remoteModelId)} · ${m7Elapsed}`);
 		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
-		lines.push(`Ctrl+C to cancel`);
+		if (input.isOwnedSession !== false) lines.push(`Ctrl+C to cancel`);
 	} else if (live?.worker) {
 		const workerElapsed = formatElapsed(now.getTime() - Date.parse(live.worker.startedAt));
 		const activeTask = tasks.find((t) => t.status === "running" || t.status === "pending");
@@ -215,14 +216,14 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 			lines.push(`Tool: ${toolLine(live.tools[live.tools.length - 1]!)}`);
 		}
 		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
-		lines.push(`Ctrl+C to cancel`);
+		if (input.isOwnedSession !== false) lines.push(`Ctrl+C to cancel`);
 	} else if (running) {
 		const goalPreview = clean(mission.goal).slice(0, 80);
 		lines.push(`Current: Boss Planning`);
 		if (bossModel) lines.push(`Boss: ${prettyModel(bossModel)}`);
 		if (goalPreview) lines.push(`Goal: ${goalPreview}`);
 		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
-		lines.push(`Ctrl+C to cancel`);
+		if (input.isOwnedSession !== false) lines.push(`Ctrl+C to cancel`);
 	}
 
 	const unique = lines.slice(0, 8);
@@ -268,6 +269,7 @@ export function applyMissionProgressToUi(ui: ProgressUi, view: MissionProgressVi
 export function createMissionProgressSession(options: {
 	readonly store: MissionProgressInput["store"] & Pick<MissionStoreAdapter, "getMission" | "listEvents">;
 	readonly sanitizer?: MissionProgressInput["sanitizer"];
+	readonly isOwnedSession?: boolean;
 	readonly now?: () => Date;
 	readonly quietAfterMs?: number;
 	readonly maxCycles?: number;
@@ -279,6 +281,7 @@ export function createMissionProgressSession(options: {
 		store: options.store,
 		missionId,
 		...(live === undefined ? {} : { live }),
+		...(options.isOwnedSession === undefined ? {} : { isOwnedSession: options.isOwnedSession }),
 		...(options.sanitizer === undefined ? {} : { sanitizer: options.sanitizer }),
 		...(options.now === undefined ? {} : { now: options.now() }),
 		...(options.quietAfterMs === undefined ? {} : { quietAfterMs: options.quietAfterMs }),

@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import type {
 	ExtensionAPI,
@@ -1214,15 +1215,11 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		paintLive();
 	};
 	if (options.workerProgress) options.workerProgress.current = handleWorkerProgress;
-	const resumeLiveProgress = (ctx: ExtensionContext): void => {
-		const store = options.missionStore;
-		if (!store || !progressSession) return;
-		const missions = [...store.listMissions()];
-		const active = [...missions].reverse().find((mission) => mission.status === "running" || mission.status === "active" || mission.status === "planned");
-		if (active) {
-			startLiveProgress(ctx, String(active.missionId));
-			return;
-		}
+	const resumeLiveProgress = (_ctx: ExtensionContext): void => {
+		// Quiet Startup Contract (ADR-051 amended / ADR-054):
+		// Fresh startup / session_start MUST NOT automatically attach live progress UI,
+		// drain historical transcripts, or paint widgets for past/unowned missions.
+		return;
 	};
 	const recordAnalytics = (event: AnalyticsEventV1): void => {
 		try { const result = analyticsStore?.append(event); if (result && typeof (result as Promise<unknown>).then === "function") void (result as Promise<unknown>).catch(() => undefined); } catch { /* analytics is non-critical */ }
@@ -2509,7 +2506,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			const options = healthPresentation.map((option, index) => {
 				const { entry, pools } = entries[index]!;
 				const status = healthStore ? healthStore.status(health[entry.routeId]) : "Unknown";
-				const cooldown = health[entry.routeId]?.cooldownUntil ? ` until ${health[entry.routeId]!.cooldownUntil}` : "";
+				const nowMs = Date.now();
+				const isExpired = health[entry.routeId]?.cooldownUntil ? Date.parse(health[entry.routeId]!.cooldownUntil!) <= nowMs : true;
+				const cooldown = (health[entry.routeId]?.cooldownUntil && !isExpired) ? ` until ${health[entry.routeId]!.cooldownUntil}` : "";
 				return `${option.label} [${status}${cooldown}] (${pools.join(", ")})`;
 			});
 			if (ctx.mode !== "tui" && !ctx.hasUI) {
@@ -2532,7 +2531,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 					`health: ${healthStore.status(record)}`,
 					`last success: ${record?.lastSuccessAt ?? "unknown"}`,
 					`last failure: ${record?.lastFailureClass ?? "none"}`,
-					`cooldown until: ${record?.cooldownUntil ?? "none"}`,
+					`cooldown until: ${(record?.cooldownUntil && Date.parse(record.cooldownUntil) > Date.now()) ? record.cooldownUntil : "none"}`,
 					`quota remaining: unknown (no authoritative metadata)`,
 				].join("\n");
 				const action = await ctx.ui.select(details, ["Inspect", "Reset health", "Back"]);
@@ -3507,6 +3506,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			missionStoreUnavailable(ctx);
 			return;
 		}
+		const isOwned = Boolean(liveMissionId && liveMissionId === String(mission.missionId));
 		const details = [
 			`mission: ${mission.missionId}`,
 			`status: ${mission.status}`,
@@ -3522,7 +3522,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			`evidence: ${missionEvidence(store, String(mission.missionId)).length}`,
 			`checkpoints: ${missionCheckpoints(store, String(mission.missionId)).length}`,
 			`events: ${missionEvents(store, String(mission.missionId)).length}`,
-			`action: /mission-cancel ${mission.missionId}`,
+			...(isOwned ? [`action: /mission-cancel ${mission.missionId}`] : []),
 		].join("\n");
 		if (ctx.mode !== "tui" && !ctx.hasUI) {
 			ctx.ui.notify(details, "info");
@@ -3532,7 +3532,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			"Inspect", "Tasks", "Evidence", "Checkpoint",
 			...(mission.status === "paused" ? ["Resume mission"] : []),
 			...(mission.status === "active" || mission.status === "running" ? ["Pause mission"] : []),
-			"Start mission", "Awaiting review", "Complete", "Block", "Cancel", "Back",
+			"Start mission", "Awaiting review", "Complete", "Block",
+			...(isOwned ? ["Cancel"] : []),
+			"Back",
 		];
 		const action = await ctx.ui.select(details, actions);
 		if (!action || action === "Back") return;

@@ -130,9 +130,17 @@ export class SubagentExecutor {
 			};
 			let decision: import("../routing/index.js").RoutingDecision;
 			try {
-				decision = currentRouteId === undefined
-					? selectRoute(routingRequest)
-					: retrySelection(currentRouteId, routingRequest);
+				if (currentRouteId === undefined) {
+					decision = selectRoute(routingRequest);
+				} else {
+					decision = retrySelection(currentRouteId, routingRequest);
+					if (decision.kind !== "SELECTED" && routingRequest.policy.fallback.enabled) {
+						currentRouteId = undefined;
+						fallbackCount += 1;
+						retryIndex = 0;
+						decision = selectRoute(routingRequest);
+					}
+				}
 			} catch {
 				return resultBase(runId, request, "child_runtime_error", attempts, fallbackCount, "Route selection failed");
 			}
@@ -726,7 +734,10 @@ function isResultCapabilityEligible(single: SingleAttempt): boolean {
 function retrySelection(routeId: StableId, request: RoutingRequest): import("../routing/index.js").RoutingDecision {
 	const candidate = request.candidates.find((item) => item.routeId === routeId);
 	const weighted = request.schedulingPolicy === "weighted";
-	if (!candidate || candidate.poolId !== request.poolId || !candidate.globalEnabled || !candidate.poolEnabled || candidate.available === false || candidate.availability === "missing" || (weighted && candidate.availability === "stale") || candidate.availability === "unavailable" || candidate.availability === "unknown" || (weighted && (candidate.health?.circuit === "open" || candidate.health?.circuit === "probing")) || candidate.health?.probeInFlight) {
+	const now = request.now instanceof Date ? request.now : new Date(request.now);
+	const cooldownUntil = candidate?.health?.cooldownUntil;
+	const expiredHalfOpen = candidate?.health?.circuit === "open" && cooldownUntil !== undefined && Date.parse(cooldownUntil) <= now.getTime();
+	if (!candidate || candidate.poolId !== request.poolId || !candidate.globalEnabled || !candidate.poolEnabled || candidate.available === false || candidate.availability === "missing" || (weighted && candidate.availability === "stale") || candidate.availability === "unavailable" || candidate.availability === "unknown" || (weighted && (candidate.health?.circuit === "open" || candidate.health?.circuit === "probing") && !expiredHalfOpen) || candidate.health?.probeInFlight || (cooldownUntil !== undefined && Date.parse(cooldownUntil) > now.getTime())) {
 		return { kind: "NO_ELIGIBLE_ROUTE", poolId: request.poolId, reasons: [] };
 	}
 	return {

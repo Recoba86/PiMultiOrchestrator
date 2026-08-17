@@ -4,6 +4,21 @@ Last updated: 2026-08-17
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC31 — Real-World Hardening & Final Dogfood Before Publication (LOCAL UNPUBLISHED)
+
+- **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.
+  Development identity is `0.1.0-rc.31`. Not public, tagged, npm-published,
+  or a GitHub Release. Public RC30 remains immutable.
+- **Architectural Enhancements:**
+  1. Quiet startup: `resumeLiveProgress` guarantees zero UI widgets or auto-attaching on fresh Pi sessions for unowned historical missions.
+  2. Decoupled ownership leases: Mission execution leases are heartbeat-driven independently from UI progress intervals; all timers are safely `unref()`-guarded.
+  3. Non-stealing recovery: `recoverInterrupted` respects unexpired foreign leases, reconciling foreign executions silently only after true expiry. Stale executions transition to `awaiting-review` with `INTERRUPTED` terminal state (never falsely `CANCELLED`).
+  4. Atomic claiming: `claimMissionExecution` enforces atomic lease acquisition and transition to `running`; losing concurrent processes dispatch 0 tasks/attempts.
+  5. Owner-specific shutdown: `interruptOwnedExecution` provides clean, owner-scoped attempt/verification terminalization during host dispose without corrupting foreign leases.
+  6. Fallback resilience: Fixed executor abort-before-fallback regression when `retrySelection` fails under `fallback.enabled`.
+  7. Truthful health display: Cooldown timestamps that are expired are never displayed as active in `/routes` or `/orchestrator`.
+- **Verification:** Full test suite passes; typecheck/build passes; clean git diff check.
+
 ## RC31 — Read-only timeout salvage (ADR-048 generalization)
 
 - **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.

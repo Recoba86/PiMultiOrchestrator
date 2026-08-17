@@ -395,6 +395,64 @@ describe("M5 worker core", () => {
 			await rm(root, { recursive: true, force: true });
 		}
 	});
+
+	it("falls back to next eligible route when retrySelection fails on first route", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-worker-retry-fallback-"));
+		try {
+			// Pool of 3 routes; route-a fails with rate_limit, but its health opens/blocks same-route retry.
+			// Executor must not terminalize with no_eligible_route; it must fallback to route-b or route-c.
+			const adapter: RouteAttemptAdapter = {
+				policy: { ...policy, maxAttempts: 2, fallback: { enabled: true } },
+				routingRequest: ({ request, attemptedRouteIds, excludedRouteIds }) => ({
+					poolId: request.poolId,
+					candidates: [
+						candidate("route-a", 0),
+						candidate("route-b", 1),
+						candidate("route-c", 2),
+					].map((item) => ({
+						...item,
+						poolId: request.poolId,
+						...(attemptedRouteIds.includes(item.routeId) ? {
+							health: {
+								routeId: item.routeId,
+								consecutiveFailures: 1,
+								circuit: "open",
+								cooldownUntil: "2099-01-01T00:00:00.000Z",
+							},
+						} : {}),
+					})),
+					policy: { ...policy, maxAttempts: 2, fallback: { enabled: true } },
+					now: new Date(),
+					attemptedRouteIds,
+					excludedRouteIds,
+				}),
+				resolveRoute: (routeId) => ({
+					routeId,
+					remoteModelId: `remote/${routeId}`,
+					model: { id: `remote/${routeId}`, provider: "9router" } as ResolvedWorkerRoute["model"],
+					modelRuntime: {} as ResolvedWorkerRoute["modelRuntime"],
+				}),
+			};
+
+			const seen: string[] = [];
+			const executor = createSubagentExecutorForTesting({
+				routeAdapter: adapter,
+			}, {
+				create: async (options) => {
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, options.route.routeId === id("route-a") ? "rate" : "complete");
+				},
+			});
+
+			const result = await executor.run(request(root, "investigation"));
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(seen[0], id("route-a"));
+			assert.ok(seen.length >= 2, "Must have attempted fallback after route-a retry selection failed");
+			assert.equal(result.fallbackCount, 1);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 });
 
 function request(cwd: string, poolId: SubagentExecutionRequest["poolId"]): SubagentExecutionRequest {

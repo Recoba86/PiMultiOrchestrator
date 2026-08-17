@@ -110,4 +110,23 @@ describe("M4 runtime health store", () => {
 			await rm(root, { recursive: true, force: true });
 		}
 	});
+
+	it("does not report expired cooldownUntil as active in healthRecordStatus or blocked", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-health-expiry-"));
+		try {
+			const store = new HealthStore({ root });
+			const record = {
+				routeId: id,
+				consecutiveFailures: 1,
+				circuit: "degraded" as const,
+				cooldownUntil: "2026-01-01T00:00:00.000Z",
+				cooldownReason: "rate_limited" as const,
+			};
+			const futureDate = new Date("2026-01-01T00:05:00.000Z");
+			assert.equal(store.blocked(record, futureDate), false);
+			assert.equal(healthRecordStatus(record, futureDate), "Degraded");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 });

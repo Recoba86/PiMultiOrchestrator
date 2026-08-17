@@ -361,6 +361,8 @@ export interface MissionStoreAdapter extends QualityPersistence {
   rejectEvidence(evidenceId: EvidenceId | string, reason: string, actor?: MissionActor): EvidenceRecord;
   listEvidence(missionId: MissionId | string, status?: EvidenceStatus): readonly EvidenceRecord[];
   acquireLease(missionId: MissionId | string, owner: LeaseOwner | string, options?: { readonly ttlMs?: number; readonly forceRecover?: boolean }): LeaseRecord;
+  claimMissionExecution(missionId: MissionId | string, owner: LeaseOwner | string, options?: { readonly ttlMs?: number }): { readonly lease: LeaseRecord; readonly mission: MissionRecord };
+  interruptOwnedExecution(missionId: MissionId | string, owner: LeaseOwner | string, options?: { readonly reason?: string; readonly now?: Date }): { readonly interruptedAttempts: readonly AttemptRecord[]; readonly mission: MissionRecord };
   heartbeatLease(missionId: MissionId | string, owner: LeaseOwner | string, ttlMs?: number): LeaseRecord;
   releaseLease(missionId: MissionId | string, owner: LeaseOwner | string): void;
   recordCheckpoint(missionId: MissionId | string, kind?: CheckpointKind): CheckpointRecord;

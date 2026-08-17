@@ -332,4 +332,23 @@ describe("live Mission progress projection", () => {
 		applyMissionProgressToUi(ui, view);
 		assert.equal(ui.working.at(-1), undefined);
 	});
+
+	it("renders Ctrl+C to cancel only when isOwnedSession is true or omitted, and omits it when isOwnedSession is false", () => {
+		const mission = { missionId: "m-ctrlc", status: "running", goal: "inspect", createdAt: "2026-08-17T00:00:00.000Z", revision: 1 } as MissionRecord;
+		const ownedView = projectMissionProgress({
+			mission,
+			isOwnedSession: true,
+			live: { worker: { remoteModelId: "ocg/deepseek-v4-flash", startedAt: "2026-08-17T00:00:00.000Z" } },
+			now: new Date("2026-08-17T00:00:10.000Z"),
+		});
+		assert.match(ownedView.lines.join("\n"), /Ctrl\+C to cancel/);
+
+		const unownedView = projectMissionProgress({
+			mission,
+			isOwnedSession: false,
+			live: { worker: { remoteModelId: "ocg/deepseek-v4-flash", startedAt: "2026-08-17T00:00:00.000Z" } },
+			now: new Date("2026-08-17T00:00:10.000Z"),
+		});
+		assert.doesNotMatch(unownedView.lines.join("\n"), /Ctrl\+C to cancel/);
+	});
 });
