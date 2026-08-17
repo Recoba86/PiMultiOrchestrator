@@ -637,3 +637,14 @@ prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
 - **Decision:** Quality failure never becomes M4 infrastructure fallback. ADR-049 and ADR-050 remain unchanged.
 - **Rationale:** Forensic reconstruction of `mission-ecdeb469-146f-4cc5-8726-3ebddf8789df` showed workers answered the public version from `package.json` / `RELEASE_STATE.md`, while M7 blocked because reviewers used slug criterion names (and once `not_verified` for no-mod without git). Boss then requested `complete` while quality was blocked; the completion gate rejected; the same Task was re-dispatched four times without targeted repair.
 - **Consequences:** Development identity is `0.1.0-rc.31` LOCAL / UNPUBLISHED / DOGFOOD. Do not publish, tag, or GitHub-release RC31 in this ADR. Public RC30 is untouched.
+
+## ADR-053 — Complete Pi-native streaming and reliable cancellation
+
+- **Decision:** Split Mission presentation into two distinct, dedicated layers:
+  - **Layer A (Live Compact Status Widget):** `ctx.ui.setWidget` provides an updatable, current-state snapshot strictly capped at <= 8 lines, displaying phase, active agent/model, elapsed time, and cancellation hint. Historical logs are strictly excluded, eliminating the `MAX_WIDGET_LINES` (10) truncation boundary.
+  - **Layer B (Main Pi Activity Transcript):** Canonical Mission events, worker progression, and safe tool activity stream directly into the main Pi terminal transcript via `pi.appendEntry` and a registered custom entry renderer (`pi-multi-orchestrator:activity`).
+- **Decision:** Reliable foreground cancellation is triggered via a single `Ctrl+C` intercepted by `ctx.ui.onTerminalInput` while an active Mission is owned, invoking `ctx.abort()`. Cancellation propagates cleanly via `AbortSignal` through Boss, Worker, and M7 execution handles.
+- **Decision:** An explicit operator command `/mission-cancel [mission-id]` provides deterministic cancellation for active owned missions, fails closed on ambiguous/unowned missions, and updates durable state (`mission_cancelled`, attempt terminalization, verification blocked).
+- **Decision:** Interrupted terminal/process crashes remain distinctly recovered as `INTERRUPTED` without rewriting historical records to clean `CANCELLED`.
+- **Rationale:** Live dogfooding proved that widget history accumulation caused ugly truncation notices, activity was invisible in the main transcript, and `Ctrl+C` failed to abort active in-flight missions.
+- **Consequences:** Development identity is `0.1.0-rc.31` LOCAL / UNPUBLISHED / DOGFOOD. Not tagged, published, or released. RC30 remains the public immutable prerelease.

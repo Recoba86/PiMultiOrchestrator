@@ -4,6 +4,24 @@ Last updated: 2026-08-17
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC31 — Complete Pi-Native Streaming + Reliable Mission Cancellation (LOCAL UNPUBLISHED)
+
+- **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.
+  Development identity is `0.1.0-rc.31`. Not public, tagged, npm-published,
+  or a GitHub Release. Public RC30 remains immutable.
+- **Two Presentation Layers:**
+  1. Layer A (Compact Live Status Widget): `ctx.ui.setWidget` provides a bounded snapshot (<= 8 lines) of current state only, eliminating "(widget truncated)".
+  2. Layer B (Main Pi Activity Transcript): canonical events + worker tool progression stream directly to the main terminal transcript via `pi.appendEntry` and `pi.registerEntryRenderer("pi-multi-orchestrator:activity")`.
+- **Reliable Cancellation:**
+  - One `Ctrl+C` intercepted via `ctx.ui.onTerminalInput` and triggers `ctx.abort()`.
+  - Propagates cleanly through `AbortSignal` across Boss, Worker, and M7 in-process handles.
+  - Durable cancellation in MissionStore (`mission_cancelled`, attempt terminalization, verification blocked).
+  - Explicit `/mission-cancel [mission-id]` operator command supported.
+  - Interrupted terminal crashes remain distinctly classified as `INTERRUPTED` recovery.
+- **Unpublished candidate artifact:** `pi-multi-orchestrator-0.1.0-rc.31.tgz`
+  SHA-256 `ee4f947e60ca96e076d92c7001e306eadaa67434e3f521f76d4cc7e4c883e90e`.
+- **Dogfood:** Live multi-stage streaming verified. Cancellation verified. Stuck incident `mission-9fef55b8` recovered safely without rewriting history.
+
 ## RC31 — Live Mission Progress and M7 Repair Convergence (LOCAL UNPUBLISHED)
 
 - **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.

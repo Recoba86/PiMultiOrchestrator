@@ -7,18 +7,11 @@ Each milestone is independently reviewable, migratable, and testable without pai
 ## Current planning boundary
 
 RC31 (`0.1.0-rc.31`) is the current LOCAL / UNPUBLISHED / DOGFOOD
-development identity: Pi-native live Mission progress (ADR-051) and
-feedback-driven M7 repair convergence (ADR-052). It is not tagged,
+development identity: Pi-native live Mission streaming (ADR-051),
+feedback-driven M7 repair convergence (ADR-052), and reliable Ctrl+C
+cancellation with `/mission-cancel` (ADR-053). It is not tagged,
 npm-published, or a GitHub Release. RC30 remains the current public
-prerelease and adds autonomous Boss-led mutation recovery for local
-observable Implementation worktree edits when `submit_agent_result` is
-missing. RC29 (`0.1.0-rc.29`) remains a frozen unpublished verified
-candidate after live Mission
-`mission-23b92005-b7fd-4582-9517-09b5a6f05cbb` COMPLETED and was not
-published. RC28 remains a prior public immutable prerelease. Public
-identity: `0.1.0-rc.30`, source `ef344ad12abeace41e9ba4f88f552b6f67306107`,
-tag `v0.1.0-rc.30`, artifact SHA-256
-`46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`.
+prerelease.
 M10 remains the latest accepted development milestone; M11 remains
 implemented but not accepted. Live `routing.fallback.enabled` is true.
 Acceptance dogfood used `routing.maxAttempts=1`; ADR-049 adds non-mutating

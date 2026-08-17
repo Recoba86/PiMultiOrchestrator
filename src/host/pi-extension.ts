@@ -135,6 +135,16 @@ import {
 import { TrustStore, PathSafetyPolicy, ProjectTrustRequiredError, SecretSanitizer, getCapabilityMatrix } from "../core/security/index.js";
 import { PACKAGE_INFO } from "../core/package-info.js";
 import {
+	createMissionTranscriptSession,
+	renderTranscriptComponent,
+	MISSION_ACTIVITY_CUSTOM_TYPE,
+	type MissionTranscriptSession,
+} from "../core/mission/transcript.js";
+import {
+	cancelActiveMission,
+	handleTerminalInputForMission,
+} from "../core/mission/mission-cancel.js";
+import {
 	SmartRouter,
 	SmartRoutingSettingsStore,
 	createDefaultSmartRoutingSettings,
@@ -1095,6 +1105,9 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 	const progressSession = options.missionStore
 		? createMissionProgressSession({ store: options.missionStore, sanitizer })
 		: undefined;
+	const transcriptSession = options.missionStore
+		? createMissionTranscriptSession({ store: options.missionStore, sanitizer })
+		: undefined;
 	let liveMissionId: string | undefined;
 	let liveOverlay: LiveProgressOverlay = {};
 	let liveUi: ProgressUi | undefined;
@@ -1105,8 +1118,21 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		clearInterval(liveTimer);
 		liveTimer = undefined;
 	};
+	const flushTranscript = (): void => {
+		if (!liveMissionId || !transcriptSession || typeof (pi as unknown as { appendEntry?: unknown }).appendEntry !== "function") return;
+		try {
+			const entries = transcriptSession.drain(liveMissionId);
+			for (const entry of entries) {
+				(pi as unknown as { appendEntry: (type: string, data: unknown) => void }).appendEntry(
+					MISSION_ACTIVITY_CUSTOM_TYPE,
+					entry,
+				);
+			}
+		} catch { /* transcript drain is best-effort */ }
+	};
 	const paintLive = (): void => {
 		if (!liveMissionId || !liveUi || !progressSession) return;
+		flushTranscript();
 		const view = progressSession.project(liveMissionId, liveOverlay);
 		const liveSurface = liveUi.hasLiveSurface !== false && typeof liveUi.setWidget === "function";
 		if (liveSurface) {
@@ -1171,6 +1197,17 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 				tools.push(tool);
 			}
 			liveOverlay = { ...liveOverlay, tools: tools.slice(-12) };
+			if (liveMissionId && transcriptSession && typeof (pi as unknown as { appendEntry?: unknown }).appendEntry === "function") {
+				try {
+					const transcriptEvent = transcriptSession.projectWorkerEvent(liveMissionId, event);
+					if (transcriptEvent) {
+						(pi as unknown as { appendEntry: (type: string, data: unknown) => void }).appendEntry(
+							MISSION_ACTIVITY_CUSTOM_TYPE,
+							transcriptEvent,
+						);
+					}
+				} catch { /* transcript worker tool entry is best-effort */ }
+			}
 		} else if (event.type === "attempt_finished") {
 			liveOverlay = liveOverlayOmit("worker");
 		}
@@ -2939,6 +2976,21 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 		const broker = options.contextBroker;
 		const service = qualityService;
 		startLiveProgress(ctx, String(mission.missionId));
+		let disposeInputListener: (() => void) | undefined;
+		if (typeof (ctx.ui as unknown as { onTerminalInput?: unknown }).onTerminalInput === "function") {
+			try {
+				disposeInputListener = (ctx.ui as unknown as { onTerminalInput: (h: (data: string) => { consume?: boolean } | undefined) => () => void }).onTerminalInput(
+					handleTerminalInputForMission({
+						hasActiveMission: () => Boolean(liveMissionId && liveMissionId === String(mission.missionId)),
+						abort: () => {
+							if (typeof (ctx as unknown as { abort?: unknown }).abort === "function") {
+								(ctx as unknown as { abort: () => void }).abort();
+							}
+						},
+					}),
+				);
+			} catch { /* terminal input listener is best-effort */ }
+		}
 		try {
 			const routes = await bossRouteCandidates(config, profile);
 			const result = await runMissionGoalLoop({
@@ -3091,6 +3143,8 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			paintLive();
 			stopLiveHeartbeat();
 			return store.getMission(mission.missionId) ?? mission;
+		} finally {
+			try { disposeInputListener?.(); } catch { /* dispose is best-effort */ }
 		}
 	};
 
@@ -3468,6 +3522,7 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 			`evidence: ${missionEvidence(store, String(mission.missionId)).length}`,
 			`checkpoints: ${missionCheckpoints(store, String(mission.missionId)).length}`,
 			`events: ${missionEvents(store, String(mission.missionId)).length}`,
+			`action: /mission-cancel ${mission.missionId}`,
 		].join("\n");
 		if (ctx.mode !== "tui" && !ctx.hasUI) {
 			ctx.ui.notify(details, "info");
@@ -4209,9 +4264,45 @@ export function createPiHost(pi: ExtensionAPI, options: PiHostOptions): PiHost {
 
 	const registerCommands = (): void => {
 		registerSubagentTool();
+		if (typeof (pi as unknown as { registerEntryRenderer?: unknown }).registerEntryRenderer === "function") {
+			try {
+				(pi as unknown as { registerEntryRenderer: (type: string, renderer: (entry: { data: unknown }) => unknown) => void }).registerEntryRenderer(
+					MISSION_ACTIVITY_CUSTOM_TYPE,
+					(entry) => renderTranscriptComponent(entry.data as never),
+				);
+			} catch { /* entry renderer registration is best-effort */ }
+		}
 		pi.registerCommand("orchestrator", {
 			description: "Open Pi Multi-Orchestrator control center",
 			handler: async (_args, ctx) => openControlCenter(ctx),
+		});
+		pi.registerCommand("mission-cancel", {
+			description: "Cancel an active Mission (optional mission id)",
+			handler: async (args, ctx) => {
+				const store = options.missionStore;
+				if (!store) { missionStoreUnavailable(ctx); return; }
+				const requestedId = args.trim() || undefined;
+				const result = cancelActiveMission({
+					store,
+					...(requestedId !== undefined ? { missionId: requestedId } : {}),
+					...(liveMissionId !== undefined ? { activeOwnedMissionId: liveMissionId } : {}),
+				});
+				if (result.status === "cancelled") {
+					ctx.ui.notify(result.message ?? `Mission ${result.missionId} cancelled`, "info");
+					if (liveMissionId === result.missionId) {
+						stopLiveHeartbeat();
+						paintLive();
+					}
+				} else if (result.status === "already_terminal") {
+					ctx.ui.notify(result.message ?? `Mission is already terminal`, "warning");
+				} else if (result.status === "not_found") {
+					ctx.ui.notify(result.message ?? `Mission not found`, "error");
+				} else if (result.status === "no_active_mission") {
+					ctx.ui.notify(result.message ?? "No active Mission is currently running", "warning");
+				} else if (result.status === "ambiguous") {
+					ctx.ui.notify(result.message ?? "Multiple active Missions found", "warning");
+				}
+			},
 		});
 		pi.registerCommand("9router-models", {
 			description: "Manage enabled 9Router models (optional filter)",

@@ -124,7 +124,7 @@ const toolLine = (tool: LiveToolProjection): string => {
 };
 
 const terminalLabel = (status: string, payloadStatus?: string): string => {
-	if (payloadStatus === "SAFETY_STOP" || status === "blocked" && payloadStatus === "SAFETY_STOP") return "SAFETY_STOP";
+	if (payloadStatus === "SAFETY_STOP" || (status === "blocked" && payloadStatus === "SAFETY_STOP")) return "SAFETY_STOP";
 	if (payloadStatus === "COMPLETED" || status === "completed") return "COMPLETED";
 	if (payloadStatus === "AWAITING_USER" || status === "awaiting-review") return "AWAITING_USER";
 	if (payloadStatus === "CANCELLED" || status === "cancelled") return "CANCELLED";
@@ -132,6 +132,10 @@ const terminalLabel = (status: string, payloadStatus?: string): string => {
 	return status;
 };
 
+/**
+ * Renders a compact, current-state snapshot widget (<= 8 lines) for Pi's setWidget.
+ * Historical event logging is deferred to Pi's activity transcript.
+ */
 export function projectMissionProgress(input: MissionProgressInput): MissionProgressView {
 	const sanitizer = input.sanitizer ?? { sanitizeText: (value: unknown) => String(value ?? "") };
 	const clean = (value: unknown): string => sanitizer.sanitizeText(value).replace(/\s+/gu, " ").trim();
@@ -146,24 +150,16 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 	const decisions = input.store && missionId ? input.store.listQualityDecisions(missionId) : [];
 	const now = input.now ?? new Date();
 	const maxCycles = input.maxCycles ?? DEFAULT_MAX_CYCLES;
-	const quietAfterMs = input.quietAfterMs ?? DEFAULT_QUIET_MS;
 	const live = input.live;
 
-	const lines: string[] = [];
 	let cycle = 0;
 	let bossModel: string | undefined;
 	let lastWorker: string | undefined = live?.lastWorker;
 	let lastReason: string | undefined;
 	let attempts = input.counts?.attempts ?? 0;
 	let evidenceCount = input.counts?.evidence ?? 0;
-	let m7Rounds = input.counts?.m7Rounds ?? 0;
-	let m7Blocks = input.counts?.m7Blocks ?? 0;
 	let m7Pass = input.counts?.m7Pass ?? 0;
-
-	const push = (line: string): void => {
-		const text = clean(line);
-		if (text) lines.push(text);
-	};
+	let m7Blocks = input.counts?.m7Blocks ?? 0;
 
 	for (const event of events) {
 		const meta = safeMeta(event.payload);
@@ -172,135 +168,68 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 		if (typeof meta.cycle === "number") cycle = Math.max(cycle, meta.cycle);
 		if (kind === "boss-assignment" || kind === "boss-start" || event.kind === "mission_running") {
 			bossModel = remote ?? (typeof meta.routeId === "string" ? meta.routeId : bossModel);
-			if (bossModel) push(`Boss · ${prettyModel(bossModel)}`);
-			if (kind === "boss-assignment") push("✓ Assignment pinned");
-		} else if (kind === "boss-plan" || event.kind === "mission_updated" && kind === "boss-plan") {
-			const action = String(meta.action ?? "plan");
-			push(`✓ Plan created`);
-			if (action === "dispatch") push("→ Investigation dispatched");
-			else if (action === "replan") push("→ Targeted repair planned");
-			else if (action === "complete") push("→ Completion attempted");
-			else push(`→ ${action}`);
-		} else if (kind === "boss-evaluation") {
-			const action = String(meta.action ?? "evaluate");
-			push(`Boss · evaluation ${action}`);
-			if (action === "complete") push("→ Completion attempted");
-		} else if (kind === "boss-completion-rejected") {
-			push(`✗ Completion rejected: ${String(meta.summary ?? "durable gates were not met")}`);
-			lastReason = String(meta.summary ?? lastReason ?? "");
-		} else if (kind === "boss-fallback") {
-			push(`⚠ Route fallback ${prettyModel(String(meta.fromRouteId ?? ""))} → ${prettyModel(String(meta.toRouteId ?? remote ?? ""))}`);
-		} else if (event.kind === "task_created") {
-			const task = tasks.find((item) => String(item.taskId) === String(event.taskId));
-			push(`Task · ${task?.executionClass ?? "work"} · ${String(event.taskId)}`);
-			if (task) push(`status ${task.status} · packet revision ${task.packetRevision}`);
-		} else if (event.kind === "task_packet_created") {
-			push(`packet revision ${String(meta.packetRevision ?? "")}`.trim());
-		} else if (event.kind === "task_started") {
+		} else if (event.kind === "task_started" || event.kind.startsWith("attempt_")) {
 			attempts += 1;
-			push(`Worker · ${prettyModel(remote)} started`);
-		} else if (event.kind.startsWith("attempt_")) {
-			if (input.counts?.attempts === undefined) attempts += event.kind === "attempt_succeeded" || event.kind === "attempt_failed" || event.kind === "attempt_interrupted" ? 1 : 0;
-			push(`Worker · attempt ${event.kind.replace("attempt_", "")}`);
-		} else if (event.kind === "evidence_proposed" || event.kind === "evidence_accepted") {
-			if (input.counts?.evidence === undefined) evidenceCount += 1;
-			push(event.kind === "evidence_accepted" ? "✓ Evidence accepted" : "Evidence proposed");
-		} else if (event.kind === "verification_started") {
-			m7Rounds += input.counts?.m7Rounds === undefined ? 1 : 0;
-			const run = verifications.find((item) => item.verificationId === meta.verificationId) ?? verifications.at(-1);
-			push(`M7 · ${prettyModel(run?.reviewerRemoteModelId ?? remote)} · started`);
-		} else if (event.kind === "quality_pass" || event.kind === "quality_blocked" || event.kind === "quality_reject") {
+			if (remote) lastWorker = remote;
+		} else if (event.kind === "evidence_admitted" || event.kind === "evidence_accepted") {
+			evidenceCount += 1;
+		} else if (event.kind === "quality_pass") {
+			m7Pass += 1;
+		} else if (event.kind === "quality_blocked" || event.kind === "quality_reject") {
+			m7Blocks += 1;
 			const decision = decisions.find((item) => item.decisionId === meta.decisionId) ?? decisions.at(-1);
-			if (event.kind === "quality_pass") {
-				m7Pass += input.counts?.m7Pass === undefined ? 1 : 0;
-				push("✓ M7 PASS");
-			} else {
-				m7Blocks += input.counts?.m7Blocks === undefined ? 1 : 0;
-				const reason = decision?.reviewerSummary ?? "quality did not pass";
-				lastReason = reason;
-				push(`✗ BLOCKED`);
-				push(`Reason: ${reason}`);
-			}
+			lastReason = decision?.reviewerSummary ?? "quality did not pass";
 		} else if (event.kind === "mission_completed" || event.kind === "mission_awaiting-review" || event.kind === "mission_blocked" || event.kind === "mission_cancelled") {
 			lastReason = typeof meta.reason === "string" ? meta.reason : lastReason;
 			if (typeof meta.cycles === "number") cycle = Math.max(cycle, meta.cycles);
 		}
 	}
 
-	for (const item of evidence) {
-		if (item.kind === "recovery-assessment") push("Recovery assessment recorded");
-		if (item.status === "accepted" && !lines.some((line) => /Evidence accepted/u.test(line))) push("✓ Evidence accepted");
-	}
-
-	if (live?.tools) for (const tool of live.tools) push(toolLine(tool));
-	if (live?.boss) push(`Boss · ${prettyModel(live.boss.remoteModelId)} · running`);
-	if (live?.worker) {
-		lastWorker = live.worker.remoteModelId ?? lastWorker;
-		const elapsed = formatElapsed(now.getTime() - Date.parse(live.worker.startedAt));
-		push(`Worker · ${prettyModel(live.worker.remoteModelId)} · ${elapsed}`);
-		if (live.worker.retry) push("⚠ same-route retry");
-		if (live.worker.fallbackFrom) push(`⚠ route fallback from ${prettyModel(live.worker.fallbackFrom)}`);
-	}
-	if (live?.finalization) push(`Worker result finalization · ${live.finalization.outcome}`);
-	if (live?.recovery) {
-		push(`Boss recovery action · ${live.recovery.action}`);
-		if (live.recovery.summary) push(live.recovery.summary);
-	}
-	const lastEventAt = events.at(-1)?.createdAt ?? mission.createdAt;
-	const quietMs = now.getTime() - Date.parse(lastEventAt);
-	if (live?.m7) {
-		push(`M7 · ${prettyModel(live.m7.remoteModelId)} · running`);
-		push(`M7 verification in progress… ${formatElapsed(now.getTime() - Date.parse(live.m7.startedAt))}`);
-	} else if (live?.worker && now.getTime() - Date.parse(live.worker.startedAt) >= quietAfterMs) {
-		push(`${prettyModel(live.worker.remoteModelId)} still running… ${formatElapsed(now.getTime() - Date.parse(live.worker.startedAt))}`);
-	} else if (live?.boss && now.getTime() - Date.parse(live.boss.startedAt) >= quietAfterMs) {
-		push(`${prettyModel(live.boss.remoteModelId)} still running… ${formatElapsed(now.getTime() - Date.parse(live.boss.startedAt))}`);
-	} else if (!live?.m7 && !live?.worker && !live?.boss && quietMs >= quietAfterMs && mission.status === "running") {
-		push(`Boss still running… ${formatElapsed(quietMs)}`);
-	}
-
 	const elapsed = formatElapsed(now.getTime() - Date.parse(mission.createdAt));
 	const running = mission.status === "running" || mission.status === "active" || mission.status === "draft" || mission.status === "planned";
 	const terminal = ["completed", "awaiting-review", "blocked", "cancelled", "failed"].includes(mission.status);
 	const payloadTerminal = events.map((event) => safeMeta(event.payload).status).find((status) => typeof status === "string") as string | undefined;
-	const headerStatus = running && mission.status !== "draft" ? "running" : mission.status === "draft" ? "created" : mission.status;
-	const header = `Mission ${headerStatus} · Cycle ${cycle}/${maxCycles}`;
-	const goal = clean(mission.goal).slice(0, 180);
-	const prefixed = [
-		header,
-		`ID: ${String(mission.missionId)}`,
-		`Goal: ${goal}`,
-		`Status: ${mission.status}`,
-		`Elapsed: ${elapsed}`,
-		...lines,
-	];
 
-	if (live?.m7 === undefined && decisions.some((item) => item.verdict === "pass") && !prefixed.some((line) => /M7 PASS/u.test(line))) {
-		prefixed.push("✓ M7 PASS");
-	}
+	// Build compact snapshot (max 6-8 lines)
+	const lines: string[] = [];
+	const headerStatus = running && mission.status !== "draft" ? "running" : mission.status === "draft" ? "created" : mission.status;
+	lines.push(`Mission ${headerStatus} · Cycle ${cycle}/${maxCycles} · ${elapsed}`);
 
 	if (terminal) {
 		const label = terminalLabel(mission.status, typeof safeMeta(events.at(-1)?.payload).status === "string" ? String(safeMeta(events.at(-1)?.payload).status) : payloadTerminal);
-		const summary = [
-			`Mission ${label} · ${elapsed}`,
-			lastReason ? `Reason:\n${clean(lastReason)}` : "",
-			`Boss cycles: ${cycle || (typeof safeMeta(events.at(-1)?.payload).cycles === "number" ? Number(safeMeta(events.at(-1)?.payload).cycles) : 0)}`,
-			`Tasks: ${tasks.length || 1}`,
-			`Worker attempts: ${attempts || input.counts?.attempts || events.filter((event) => event.kind.startsWith("attempt_")).length}`,
-			`Evidence: ${evidenceCount || evidence.length}`,
-			m7Pass || decisions.some((item) => item.verdict === "pass") ? "M7: PASS" : m7Blocks ? `M7 blocks: ${m7Blocks || input.counts?.m7Blocks || 0}` : m7Rounds ? `M7 rounds: ${m7Rounds}` : "",
-			lastWorker ? `Final worker: ${prettyModel(lastWorker)}` : "",
-		].filter(Boolean);
-		prefixed.push("", ...summary);
+		lines.push(`Final status: ${label}`);
+		if (lastReason) lines.push(`Reason: ${clean(lastReason).slice(0, 100)}`);
+		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount} · M7: ${m7Pass ? "PASS" : m7Blocks ? "BLOCKED" : "none"}`);
+	} else if (live?.m7) {
+		const m7Elapsed = formatElapsed(now.getTime() - Date.parse(live.m7.startedAt));
+		lines.push(`Current: Quality Verification`);
+		lines.push(`Reviewer: ${prettyModel(live.m7.remoteModelId)} · ${m7Elapsed}`);
+		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
+		lines.push(`Ctrl+C to cancel`);
+	} else if (live?.worker) {
+		const workerElapsed = formatElapsed(now.getTime() - Date.parse(live.worker.startedAt));
+		const activeTask = tasks.find((t) => t.status === "running" || t.status === "pending");
+		lines.push(`Current: ${activeTask ? activeTask.executionClass : "Worker Execution"}`);
+		lines.push(`Worker: ${prettyModel(live.worker.remoteModelId)} · ${workerElapsed}`);
+		if (live.tools && live.tools.length > 0) {
+			lines.push(`Tool: ${toolLine(live.tools[live.tools.length - 1]!)}`);
+		}
+		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
+		lines.push(`Ctrl+C to cancel`);
+	} else if (running) {
+		const goalPreview = clean(mission.goal).slice(0, 80);
+		lines.push(`Current: Boss Planning`);
+		if (bossModel) lines.push(`Boss: ${prettyModel(bossModel)}`);
+		if (goalPreview) lines.push(`Goal: ${goalPreview}`);
+		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
+		lines.push(`Ctrl+C to cancel`);
 	}
 
-	const unique = [...new Set(prefixed.filter(Boolean))];
+	const unique = lines.slice(0, 8);
 	const fingerprint = unique.map((line) => line
-		.replace(/… \d+m \d+s/gu, "…")
-		.replace(/… \d+s/gu, "…")
-		.replace(/Elapsed: \d+m \d+s/gu, "Elapsed")
-		.replace(/Elapsed: \d+s/gu, "Elapsed")
-		.replace(/ · \d+s$/u, "")).join("\n");
+		.replace(/· \d+m \d+s/gu, "")
+		.replace(/· \d+s/gu, "")).join("\n");
+
 	const working = live?.m7
 		? `M7 · ${prettyModel(live.m7.remoteModelId)}`
 		: live?.worker
@@ -308,6 +237,7 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 			: running
 				? `Mission ${String(mission.missionId)}`
 				: undefined;
+
 	return {
 		active: true,
 		terminal,
@@ -356,5 +286,3 @@ export function createMissionProgressSession(options: {
 	});
 	return { project, replay: (missionId) => project(missionId) };
 }
-
-export type { EvidenceRecord, QualityDecisionRecord, VerificationRunRecord };

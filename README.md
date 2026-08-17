@@ -5,12 +5,14 @@ Pi Multi-Orchestrator is a Pi extension for coordinating a bounded Boss Mission 
 ## Status
 
 Local development identity is RC31 (`0.1.0-rc.31`): Pi-native live Mission
-progress and feedback-driven M7 repair convergence. It is unpublished,
-untagged, and not a GitHub Release. RC30 (`0.1.0-rc.30`) remains the current
-public prerelease on npm with `next`; RC28 is a prior public immutable
-prerelease. `latest` remains `0.1.0-rc.17`. RC29 (`0.1.0-rc.29`) remains a
-frozen unpublished verified candidate after a live Mission COMPLETED and
-must not be modified, republished, or retagged. RC31 projects canonical
+streaming (two-layer presentation: compact widget <= 8 lines + main transcript
+activity with safe worker tool progression), feedback-driven M7 repair
+convergence, and reliable Ctrl+C / `/mission-cancel` cancellation. It is
+unpublished, untagged, and not a GitHub Release. RC30 (`0.1.0-rc.30`) remains
+the current public prerelease on npm with `next`; RC28 is a prior public
+immutable prerelease. `latest` remains `0.1.0-rc.17`. RC29 (`0.1.0-rc.29`)
+remains a frozen unpublished verified candidate after a live Mission COMPLETED
+and must not be modified, republished, or retagged. RC31 projects canonical
 Mission events into Pi's live TUI and stops identical M7-blocked
 re-dispatch loops. RC30 recovers local Implementation worktree mutations when
 `submit_agent_result` is missing, while keeping ADR-049 CLASS A fallback.
