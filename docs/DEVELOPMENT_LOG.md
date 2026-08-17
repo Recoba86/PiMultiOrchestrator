@@ -4,6 +4,19 @@ Last updated: 2026-08-17
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC31 — Interactive Runtime Hardening & Pi-Native Cancellation (LOCAL UNPUBLISHED)
+
+- **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.
+  Development identity is `0.1.0-rc.31`. Not public, tagged, npm-published,
+  or a GitHub Release. Public RC30 remains immutable.
+- **Architectural Enhancements:**
+  1. Pi-native cancellation: Escape (`\x1b`, `app.interrupt`) and `Ctrl+C` (`\u0003`) are wired to `handleTerminalInputForMission` with live widget prompt displaying `Esc to cancel`.
+  2. M7 lifecycle observability: Authority-driven structured progress events for reviewer selection, start, fallback, and pass/block evaluation.
+  3. M7 full criterion coverage: Reviewer prompt explicitly mandates one `criterionResult` per acceptance criterion, preventing accidental omissions.
+  4. Truthful widget counters: Granular attempt & evidence counters respecting `listEvidence` durable state and max 8 lines constraint.
+  5. Quiet startup & decoupled leases: Clean session startup with zero historical widgets and independent unref'd heartbeat timers.
+- **Verification:** All 450 tests pass across 47 test files; `npm run check` passes.
+
 ## RC31 — Real-World Hardening & Final Dogfood Before Publication (LOCAL UNPUBLISHED)
 
 - **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.

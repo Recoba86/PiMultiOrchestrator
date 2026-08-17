@@ -641,9 +641,9 @@ prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
 ## ADR-053 — Complete Pi-native streaming and reliable cancellation
 
 - **Decision:** Split Mission presentation into two distinct, dedicated layers:
-  - **Layer A (Live Compact Status Widget):** `ctx.ui.setWidget` provides an updatable, current-state snapshot strictly capped at <= 8 lines, displaying phase, active agent/model, elapsed time, and cancellation hint. Historical logs are strictly excluded, eliminating the `MAX_WIDGET_LINES` (10) truncation boundary.
+  - **Layer A (Live Compact Status Widget):** `ctx.ui.setWidget` provides an updatable, current-state snapshot strictly capped at <= 8 lines, displaying phase, active agent/model, elapsed time, and cancellation hint (`Esc to cancel`). Historical logs are strictly excluded, eliminating the `MAX_WIDGET_LINES` (10) truncation boundary.
   - **Layer B (Main Pi Activity Transcript):** Canonical Mission events, worker progression, and safe tool activity stream directly into the main Pi terminal transcript via `pi.appendEntry` and a registered custom entry renderer (`pi-multi-orchestrator:activity`).
-- **Decision:** Reliable foreground cancellation is triggered via a single `Ctrl+C` intercepted by `ctx.ui.onTerminalInput` while an active Mission is owned, invoking `ctx.abort()`. Cancellation propagates cleanly via `AbortSignal` through Boss, Worker, and M7 execution handles.
+- **Decision:** Reliable foreground cancellation follows Pi-native semantics: `Escape` (`\x1b`, Pi `app.interrupt`) and `Ctrl+C` (`\u0003`) are intercepted by `ctx.ui.onTerminalInput` while an active Mission is owned, invoking `ctx.abort()`. Cancellation propagates cleanly via `AbortSignal` through Boss, Worker, and M7 execution handles.
 - **Decision:** An explicit operator command `/mission-cancel [mission-id]` provides deterministic cancellation for active owned missions, fails closed on ambiguous/unowned missions, and updates durable state (`mission_cancelled`, attempt terminalization, verification blocked).
 - **Decision:** Interrupted terminal/process crashes remain distinctly recovered as `INTERRUPTED` without rewriting historical records to clean `CANCELLED`.
 - **Decision:** Amendments to ADR-051 and RC31-01 for real-world hardening:
@@ -653,5 +653,5 @@ prerelease `pi-multi-orchestrator@0.1.0-rc.28`, tag `v0.1.0-rc.28`, source
   - Atomic claim: `claimMissionExecution` atomically acquires the mission lease and transitions to `running`; losers dispatch 0 tasks/attempts.
   - Owner shutdown: `interruptOwnedExecution` provides atomic, owner-specific terminalization during host dispose without corrupting foreign leases.
   - Truthful health display: Expired cooldown timestamps are never displayed as active in `/routes` or `/orchestrator`.
-- **Rationale:** Live dogfooding proved that widget history accumulation caused ugly truncation notices, activity was invisible in the main transcript, and `Ctrl+C` failed to abort active in-flight missions.
+- **Rationale:** Live dogfooding proved that widget history accumulation caused ugly truncation notices, activity was invisible in the main transcript, and `Ctrl+C` failed to abort active in-flight missions because Pi maps `Escape` to `app.interrupt` and `Ctrl+C` to `app.clear`.
 - **Consequences:** Development identity is `0.1.0-rc.31` LOCAL / UNPUBLISHED / DOGFOOD. Not tagged, published, or released. RC30 remains the public immutable prerelease.

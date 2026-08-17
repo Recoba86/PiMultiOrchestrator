@@ -158,7 +158,7 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 	let lastWorker: string | undefined = live?.lastWorker;
 	let lastReason: string | undefined;
 	let attempts = input.counts?.attempts ?? 0;
-	let evidenceCount = input.counts?.evidence ?? 0;
+	let evidenceCount = input.counts?.evidence ?? (input.store && missionId ? input.store.listEvidence(missionId).length : 0);
 	let m7Pass = input.counts?.m7Pass ?? 0;
 	let m7Blocks = input.counts?.m7Blocks ?? 0;
 
@@ -173,7 +173,7 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 			attempts += 1;
 			if (remote) lastWorker = remote;
 		} else if (event.kind === "evidence_admitted" || event.kind === "evidence_accepted") {
-			evidenceCount += 1;
+			if (!input.store) evidenceCount += 1;
 		} else if (event.kind === "quality_pass") {
 			m7Pass += 1;
 		} else if (event.kind === "quality_blocked" || event.kind === "quality_reject") {
@@ -206,7 +206,7 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 		lines.push(`Current: Quality Verification`);
 		lines.push(`Reviewer: ${prettyModel(live.m7.remoteModelId)} · ${m7Elapsed}`);
 		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
-		if (input.isOwnedSession !== false) lines.push(`Ctrl+C to cancel`);
+		if (input.isOwnedSession !== false) lines.push(`Esc to cancel`);
 	} else if (live?.worker) {
 		const workerElapsed = formatElapsed(now.getTime() - Date.parse(live.worker.startedAt));
 		const activeTask = tasks.find((t) => t.status === "running" || t.status === "pending");
@@ -216,14 +216,14 @@ export function projectMissionProgress(input: MissionProgressInput): MissionProg
 			lines.push(`Tool: ${toolLine(live.tools[live.tools.length - 1]!)}`);
 		}
 		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
-		if (input.isOwnedSession !== false) lines.push(`Ctrl+C to cancel`);
+		if (input.isOwnedSession !== false) lines.push(`Esc to cancel`);
 	} else if (running) {
 		const goalPreview = clean(mission.goal).slice(0, 80);
 		lines.push(`Current: Boss Planning`);
 		if (bossModel) lines.push(`Boss: ${prettyModel(bossModel)}`);
 		if (goalPreview) lines.push(`Goal: ${goalPreview}`);
 		lines.push(`Attempts: ${attempts} · Evidence: ${evidenceCount}`);
-		if (input.isOwnedSession !== false) lines.push(`Ctrl+C to cancel`);
+		if (input.isOwnedSession !== false) lines.push(`Esc to cancel`);
 	}
 
 	const unique = lines.slice(0, 8);

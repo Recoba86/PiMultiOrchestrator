@@ -333,7 +333,7 @@ describe("live Mission progress projection", () => {
 		assert.equal(ui.working.at(-1), undefined);
 	});
 
-	it("renders Ctrl+C to cancel only when isOwnedSession is true or omitted, and omits it when isOwnedSession is false", () => {
+	it("renders Esc to cancel only when isOwnedSession is true or omitted, and omits it when isOwnedSession is false", () => {
 		const mission = { missionId: "m-ctrlc", status: "running", goal: "inspect", createdAt: "2026-08-17T00:00:00.000Z", revision: 1 } as MissionRecord;
 		const ownedView = projectMissionProgress({
 			mission,
@@ -341,7 +341,7 @@ describe("live Mission progress projection", () => {
 			live: { worker: { remoteModelId: "ocg/deepseek-v4-flash", startedAt: "2026-08-17T00:00:00.000Z" } },
 			now: new Date("2026-08-17T00:00:10.000Z"),
 		});
-		assert.match(ownedView.lines.join("\n"), /Ctrl\+C to cancel/);
+		assert.match(ownedView.lines.join("\n"), /Esc to cancel/);
 
 		const unownedView = projectMissionProgress({
 			mission,
@@ -349,6 +349,40 @@ describe("live Mission progress projection", () => {
 			live: { worker: { remoteModelId: "ocg/deepseek-v4-flash", startedAt: "2026-08-17T00:00:00.000Z" } },
 			now: new Date("2026-08-17T00:00:10.000Z"),
 		});
-		assert.doesNotMatch(unownedView.lines.join("\n"), /Ctrl\+C to cancel/);
+		assert.doesNotMatch(unownedView.lines.join("\n"), /Esc to cancel/);
 	});
+
+	it("17-34. Truthful counters, Reviewer state, and max 8 lines in live/terminal views", async () => withStore((store) => {
+		const mission = store.createMission({ missionId: "m-truth", goal: "inspect" });
+		store.transitionMission(mission.missionId, "running", { actor: "boss" });
+		const task = store.createTask({ missionId: mission.missionId, roleId: "investigator", executionClass: "investigation", objective: "find" });
+
+		// Attempt 1: proposed evidence
+		const a1 = store.createAttempt({ taskId: task.taskId, routeId: "inv-a", remoteModelId: "ocg/deepseek-v4-flash" });
+		store.finishAttempt(a1.attemptId, "succeeded");
+		const ev1 = store.admitEvidence({ missionId: mission.missionId, taskId: task.taskId, attemptId: a1.attemptId, kind: "fact", content: { v: 1 } });
+
+		// M7 Review 1: BLOCKED
+		const v1 = store.createVerificationRun({ missionId: mission.missionId, taskId: task.taskId, targetRunId: a1.attemptId, round: 0, reviewerRemoteModelId: "gcli/grok-4.6-high" });
+		store.recordQualityDecision({
+			missionId: mission.missionId,
+			taskId: task.taskId,
+			verificationId: v1.verificationId,
+			targetRunId: a1.attemptId,
+			round: 0,
+			gate: { verdict: "blocked", reasons: ["need more proof"], criterionResults: [], mechanicalChecks: [] },
+			reviewerSummary: "need more proof",
+		});
+
+		// Live view with Reviewer selecting / selected
+		const liveSelecting: LiveProgressOverlay = { m7: { startedAt: "2026-08-17T00:00:00.000Z" } };
+		const vSelect = projectMissionProgress({ store, missionId: "m-truth", live: liveSelecting });
+		assert.match(vSelect.lines.join("\n"), /Reviewer: unassigned/);
+
+		const liveSelected: LiveProgressOverlay = { m7: { remoteModelId: "gcli/grok-4.6-high", startedAt: "2026-08-17T00:00:00.000Z" } };
+		const vSelected = projectMissionProgress({ store, missionId: "m-truth", live: liveSelected });
+		assert.match(vSelected.lines.join("\n"), /Reviewer: Grok 4\.6 High/);
+		assert.match(vSelected.lines.join("\n"), /Evidence: 1/);
+		assert.ok(vSelected.lines.length <= 8);
+	}));
 });

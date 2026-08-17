@@ -7,7 +7,8 @@ export interface TerminalInputHandlerOptions {
 
 export function handleTerminalInputForMission(options: TerminalInputHandlerOptions): (data: string) => { consume?: boolean; data?: string } | undefined {
 	return (data: string) => {
-		if (data === "\u0003") { // Ctrl+C
+		// Pi-native cancellation: Escape is \x1b, Ctrl+C is \u0003
+		if (data === "\x1b" || data === "\u0003") {
 			if (options.hasActiveMission()) {
 				try {
 					options.abort();

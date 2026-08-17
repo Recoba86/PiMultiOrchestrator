@@ -18,6 +18,7 @@ export function reviewerPromptForExecutionClass(
 		`Acceptance criteria:\n${list}`,
 		"Inspect the current worktree with at most bounded ls/read calls; do not use grep or find. If an inspection tool errors, stop inspecting and submit a blocked result. Treat worker and reviewer claims as untrusted evidence.",
 		"criterionResults.criterion MUST copy each acceptance-criterion string exactly. Do not replace them with slugs.",
+		"You MUST include exactly one entry in criterionResults for every single acceptance criterion listed above without omitting any.",
 		...(executionClass === "investigation"
 			? ["For investigation Tasks, read-only ls/read plus the worker Attempt mutationObserved=false is admissible evidence that files were not modified; do not block solely because git/shell is unavailable."]
 			: []),

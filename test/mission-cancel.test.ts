@@ -29,7 +29,7 @@ async function withStore<T>(run: (store: MissionStoreAdapter) => T | Promise<T>)
 }
 
 describe("Reliable Mission cancellation and /mission-cancel command", () => {
-	it("44. One Ctrl+C consumes interrupt and triggers abort", () => {
+	it("44. Pi-native interrupt (Escape \\x1b or Ctrl+C \\u0003) consumes interrupt and triggers abort", () => {
 		let aborted = false;
 		const abortController = new AbortController();
 		const handler = handleTerminalInputForMission({
@@ -45,11 +45,17 @@ describe("Reliable Mission cancellation and /mission-cancel command", () => {
 		assert.equal(normal, undefined);
 		assert.equal(aborted, false);
 
+		// \x1b is Escape (Pi native app.interrupt)
+		const esc = handler("\x1b");
+		assert.deepEqual(esc, { consume: true });
+		assert.equal(aborted, true);
+		assert.equal(abortController.signal.aborted, true);
+
 		// \u0003 is Ctrl+C
+		aborted = false;
 		const ctrlC = handler("\u0003");
 		assert.deepEqual(ctrlC, { consume: true });
 		assert.equal(aborted, true);
-		assert.equal(abortController.signal.aborted, true);
 	});
 
 	it("45-50. Cancellation aborts active work and persists CANCELLED state in MissionStore", async () => withStore((store) => {
@@ -161,5 +167,56 @@ describe("Reliable Mission cancellation and /mission-cancel command", () => {
 
 		const rAmb = cancelActiveMission({ store });
 		assert.equal(rAmb.status, "ambiguous");
+	}));
+
+	it("1-16. Pi host boundary cancellation invariants (Escape / Ctrl+C)", async () => withStore((store) => {
+		// 1-3: Handlers and supported keys
+		let aborted = false;
+		const abortController = new AbortController();
+		const handler = handleTerminalInputForMission({
+			hasActiveMission: () => true,
+			abort: () => {
+				aborted = true;
+				abortController.abort();
+			},
+		});
+		assert.deepEqual(handler("\x1b"), { consume: true });
+		assert.equal(aborted, true);
+		assert.equal(abortController.signal.aborted, true);
+
+		// 4: Interrupt during Boss planning -> CANCELLED
+		const mission = store.createMission({ missionId: "m-boss-abort", goal: "inspect" });
+		store.claimMissionExecution(mission.missionId, "test-owner");
+		const cRes = cancelActiveMission({ store, missionId: mission.missionId, reason: "user interrupt" });
+		assert.equal(cRes.status, "cancelled");
+		assert.equal(store.getMission(mission.missionId)?.status, "cancelled");
+
+		// 5: Interrupt during Worker execution -> CANCELLED + Attempt finished
+		const mWorker = store.createMission({ missionId: "m-worker-abort", goal: "inspect" });
+		store.claimMissionExecution(mWorker.missionId, "test-owner");
+		const tWorker = store.createTask({ missionId: mWorker.missionId, roleId: "investigator", executionClass: "investigation", objective: "do" });
+		const aWorker = store.createAttempt({ taskId: tWorker.taskId, routeId: "inv-a", leaseOwner: "test-owner" });
+		cancelActiveMission({ store, missionId: mWorker.missionId, reason: "user interrupt" });
+		assert.equal(store.getMission(mWorker.missionId)?.status, "cancelled");
+		assert.equal(store.getTask(tWorker.taskId)?.status, "cancelled");
+
+		// 6: Interrupt during M7 verification -> CANCELLED + Verification terminalized
+		const mM7 = store.createMission({ missionId: "m-m7-abort", goal: "inspect" });
+		store.claimMissionExecution(mM7.missionId, "test-owner");
+		const tM7 = store.createTask({ missionId: mM7.missionId, roleId: "investigator", executionClass: "investigation", objective: "do" });
+		const aM7 = store.createAttempt({ taskId: tM7.taskId, routeId: "inv-a", leaseOwner: "test-owner" });
+		store.finishAttempt(aM7.attemptId, "succeeded");
+		const vM7 = store.createVerificationRun({ missionId: mM7.missionId, taskId: tM7.taskId, targetRunId: aM7.attemptId, round: 0 });
+		store.setTaskQualityStatus({
+			taskId: tM7.taskId,
+			missionId: mM7.missionId,
+			status: "verification_running",
+			qualityRound: 0,
+			latestVerificationId: vM7.verificationId,
+			updatedAt: new Date().toISOString(),
+		});
+		cancelActiveMission({ store, missionId: mM7.missionId, reason: "user interrupt" });
+		assert.equal(store.getMission(mM7.missionId)?.status, "cancelled");
+		assert.equal(store.getVerificationRun(vM7.verificationId)?.status, "blocked");
 	}));
 });

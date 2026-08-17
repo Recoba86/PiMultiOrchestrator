@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateQualityGate, parseVerificationResult } from "../src/core/quality/index.js";
+import { evaluateQualityGate, parseVerificationResult, reviewerPromptForExecutionClass } from "../src/core/quality/index.js";
 
 test("M7 QualityGate is conservative and separates observed mechanical failures", () => {
 	const reviewer = parseVerificationResult({
@@ -74,6 +74,19 @@ test("M7 QualityGate blocks a pass with no verification evidence", () => {
 	const result = evaluateQualityGate({ acceptanceCriteria: [], mechanicalChecks: [], reviewerResult: { verdict: "pass", criterionResults: [], mechanicalChecks: [], findings: [], requiredFixes: [], risks: [], summary: "pass" } });
 	assert.equal(result.verdict, "blocked");
 	assert.ok(result.reasons.includes("verification evidence is missing"));
+});
+
+test("M7 reviewer prompt explicitly commands full criterion coverage for every acceptance criterion", () => {
+	const prompt = reviewerPromptForExecutionClass(
+		"investigation",
+		"mission-1",
+		"task-1",
+		"run-1",
+		["Read README.md", "Identify main title"],
+	);
+	assert.match(prompt, /You MUST include exactly one entry in criterionResults for every single acceptance criterion/);
+	assert.match(prompt, /- Read README\.md/);
+	assert.match(prompt, /- Identify main title/);
 });
 
 test("M7 structured verification results reject malformed and oversized payloads", () => {
