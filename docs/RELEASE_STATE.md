@@ -12,11 +12,11 @@ This file records releasable product state. It does not promote development prog
 | Accepted development commit | `3a6990d` |
 | Accepted evidence HEAD | `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |
 | Public stable release | NONE |
-| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.30` — npm `next`; `latest` remains `0.1.0-rc.17` |
-| Product version | `0.1.0-rc.30` public prerelease (immutable) |
-| Development manifest version | `0.1.0-rc.31` — RC31 Live Mission Progress, M7 Repair Convergence, cancellation, ADR-048 timeout salvage, and Hardened Ownership Lifecycle; LOCAL / UNPUBLISHED / DOGFOOD; public RC30 remains unmodified |
-| RC31 development line | ADR-048 timeout salvage, ADR-051 Pi-native live Mission progress, ADR-052 feedback-driven M7 repair convergence, ADR-053 cancellation, quiet startup, decoupled ownership leases, atomic claiming, and truthful health; `0.1.0-rc.31`; live timeout-salvage Mission `mission-c0b9400a-b487-4dce-8e43-14bd7edfa7e5` COMPLETED with M7 pass; unpublished candidate SHA-256 `0e45f468e3ac3eff67e11369750d05bbaf7a283e848ca04635d00be236ee6051`; not tagged, npm-published, or a GitHub Release |
-| RC30 development line | ADR-050 autonomous mutation recovery; `0.1.0-rc.30`; public prerelease SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`; source `ef344ad12abeace41e9ba4f88f552b6f67306107`; tag `v0.1.0-rc.30`; live implementation Mission `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED |
+| Public prerelease | `pi-multi-orchestrator@0.1.0-rc.31` — npm `next`; `latest` remains `0.1.0-rc.17` |
+| Product version | `0.1.0-rc.31` public prerelease (immutable) |
+| Development manifest version | `0.1.0-rc.31` |
+| RC31 release line | ADR-048 timeout salvage, ADR-051 Pi-native live Mission progress, ADR-052 feedback-driven M7 repair convergence, ADR-053 cancellation, quiet startup, decoupled ownership leases, atomic claiming, and truthful health; `0.1.0-rc.31`; source `132857f62a0e4948c28a89fccbd5ac5111dcb484`; tag `v0.1.0-rc.31`; artifact SHA-256 `935d12caaa957f81dc9c27e00612048a33186dcfb8400cd6e156c3395c58b09c`; live fresh Mission `mission-f36edb90-5681-42de-9a1d-0dee825e4f8b` COMPLETED with M7 pass; cancellation Mission `mission-6de0e5c7-209c-4261-8322-aad4862e0694` CANCELLED |
+| RC30 development line | ADR-050 autonomous mutation recovery; `0.1.0-rc.30`; prior public prerelease SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`; source `ef344ad12abeace41e9ba4f88f552b6f67306107`; tag `v0.1.0-rc.30`; live implementation Mission `mission-2b90e51e-ce8c-4c1f-8904-491a298d4a64` COMPLETED |
 | RC29 development line | ADR-046/048/049 plus live Mission COMPLETED; `0.1.0-rc.29`; unpublished candidate SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not tagged or npm-published |
 | RC28 release line | Canonical Pi Boss-response normalization, classified invocation diagnostics, scheduling vs infrastructure-fallback eligibility, and truthful Boss Profile UI; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
 | RC27 release line | Autonomous Mission Task bootstrap, Boss protocol validation, zero-task loop repair, Goal acceptance-criteria durability, and Inspect diagnostics; public immutable prerelease; source `267612d15dcc0784856e7dafd6704d2f802272b9`; artifact SHA-256 `d8589943434a6ea1796f2c908fa2123464f7c8accca0557bb6547338bea83a55` |
@@ -29,11 +29,11 @@ This file records releasable product state. It does not promote development prog
 | RC19 onboarding/adoption release | Pi `0.84.1` external-provider adoption, secure TUI Test & Save, Pi-auth bridge, U/I/TUI/RPC coverage, and public npm/Pi dogfood PASS |
 | Final Planner/manual acceptance | PASS — `PMO_FINAL_PLANNER_ACCEPTANCE_PASS` for RC17 |
 | Local technical release readiness | RC31 local unpublished dogfood on `0.1.0-rc.31`; RC30 remains the public prerelease; RC29 unpublished verified candidate remains frozen and was not published; RC28 remains a prior public immutable prerelease |
-| Release tag | `v0.1.0-rc.30` → `ef344ad12abeace41e9ba4f88f552b6f67306107` |
-| Release commit | `ef344ad12abeace41e9ba4f88f552b6f67306107` |
-| Release artifact | `pi-multi-orchestrator-0.1.0-rc.30.tgz`; SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc` |
-| GitHub release | `v0.1.0-rc.30` — public prerelease; RC30 is immutable |
-| Installable production release | NONE; RC30 is a prerelease |
+| Release tag | `v0.1.0-rc.31` → `132857f62a0e4948c28a89fccbd5ac5111dcb484` |
+| Release commit | `132857f62a0e4948c28a89fccbd5ac5111dcb484` |
+| Release artifact | `pi-multi-orchestrator-0.1.0-rc.31.tgz`; SHA-256 `935d12caaa957f81dc9c27e00612048a33186dcfb8400cd6e156c3395c58b09c` |
+| GitHub release | `v0.1.0-rc.31` — public prerelease; RC31 is immutable |
+| Installable production release | NONE; RC31 is a prerelease |
 | Production-ready | NO |
 | Release rollback target | Prior M10 accepted package representation; isolated rollback procedure documented, not a public release |
 | Accepted development recovery reference | M10 implementation commit `3a6990d`; evidence HEAD `13bed07b6cbc7c9a600820b1f39d54400a9828ca` |

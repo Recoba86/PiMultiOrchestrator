@@ -4,18 +4,23 @@ Last updated: 2026-08-17
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
-## RC31 — Interactive Runtime Hardening & Pi-Native Cancellation (LOCAL UNPUBLISHED)
+## RC31 — Interactive Runtime Hardening, Pi-Native Cancellation & Public Prerelease
 
-- **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.
-  Development identity is `0.1.0-rc.31`. Not public, tagged, npm-published,
-  or a GitHub Release. Public RC30 remains immutable.
+- **Date/status:** 2026-08-17; `PUBLIC PRERELEASE`.
+  Released as `pi-multi-orchestrator@0.1.0-rc.31` on npm `next`; `latest` remains `0.1.0-rc.17`.
+  Source commit: `132857f62a0e4948c28a89fccbd5ac5111dcb484`.
+  Tag: `v0.1.0-rc.31`.
+  Artifact SHA-256: `935d12caaa957f81dc9c27e00612048a33186dcfb8400cd6e156c3395c58b09c`.
 - **Architectural Enhancements:**
   1. Pi-native cancellation: Escape (`\x1b`, `app.interrupt`) and `Ctrl+C` (`\u0003`) are wired to `handleTerminalInputForMission` with live widget prompt displaying `Esc to cancel`.
   2. M7 lifecycle observability: Authority-driven structured progress events for reviewer selection, start, fallback, and pass/block evaluation.
   3. M7 full criterion coverage: Reviewer prompt explicitly mandates one `criterionResult` per acceptance criterion, preventing accidental omissions.
   4. Truthful widget counters: Granular attempt & evidence counters respecting `listEvidence` durable state and max 8 lines constraint.
   5. Quiet startup & decoupled leases: Clean session startup with zero historical widgets and independent unref'd heartbeat timers.
-- **Verification:** All 450 tests pass across 47 test files; `npm run check` passes.
+- **Accepted Live Evidence:**
+  - Fresh interactive Mission: `mission-f36edb90-5681-42de-9a1d-0dee825e4f8b` (1 Boss cycle, 1 Worker attempt, 1 M7 round, reviewer `ocg/deepseek-v4-pro`, 2/2 criteria satisfied, verdict PASS, status COMPLETED, duration 70.7s).
+  - Cancellation Mission: `mission-6de0e5c7-209c-4261-8322-aad4862e0694` (native Escape interrupt, status CANCELLED, lease released, quiet restart).
+- **Verification:** 451/451 tests pass across 47 test files; 20/20 release integrity attacks pass; privacy clean; registry and GitHub byte identity verified.
 
 ## RC31 — Real-World Hardening & Final Dogfood Before Publication (LOCAL UNPUBLISHED)
 

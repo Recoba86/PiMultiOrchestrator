@@ -6,13 +6,12 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 ## Current planning boundary
 
-RC31 (`0.1.0-rc.31`) is the current LOCAL / UNPUBLISHED / DOGFOOD
-development identity: Pi-native live Mission streaming (ADR-051),
-feedback-driven M7 repair convergence (ADR-052), reliable Ctrl+C
+RC31 (`0.1.0-rc.31`) is the current public prerelease on npm `next`
+(`latest` remains `0.1.0-rc.17`): Pi-native live Mission streaming (ADR-051),
+feedback-driven M7 repair convergence (ADR-052), reliable Pi-native Escape
 cancellation with `/mission-cancel` (ADR-053), ADR-048 capture-only
 timeout salvage for read-only workers, quiet startup, decoupled ownership leases,
-atomic execution claiming, and truthful route health. It is not tagged,
-npm-published, or a GitHub Release. RC30 remains the current public
+atomic execution claiming, and truthful route health. RC30 remains a prior public
 prerelease.
 M10 remains the latest accepted development milestone; M11 remains
 implemented but not accepted. Live `routing.fallback.enabled` is true.
