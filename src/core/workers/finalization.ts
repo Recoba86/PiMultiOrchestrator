@@ -12,8 +12,17 @@ export function shouldRunResultFinalization(input: {
 	readonly safetyTerminated: boolean;
 	readonly providerSucceeded: boolean;
 	readonly protocolViolation?: boolean;
+	readonly timedOut?: boolean;
+	readonly mutationObserved?: boolean;
+	readonly hasUsefulWork?: boolean;
 }): boolean {
-	return input.providerSucceeded && !input.captured && !input.cancelled && !input.safetyTerminated && input.protocolViolation !== true;
+	if (input.captured || input.cancelled || input.safetyTerminated || input.protocolViolation === true) return false;
+	if (input.providerSucceeded) return true;
+	return input.timedOut === true && input.hasUsefulWork === true && input.mutationObserved !== true;
+}
+
+export function hasUsefulTaskWork(observations: readonly { readonly toolName: string }[], resultToolName: string): boolean {
+	return observations.some((item) => item.toolName !== resultToolName);
 }
 
 export function restrictSessionToResultTool(session: AgentSession, toolName: string): readonly string[] {

@@ -8,8 +8,10 @@ Each milestone is independently reviewable, migratable, and testable without pai
 
 RC31 (`0.1.0-rc.31`) is the current LOCAL / UNPUBLISHED / DOGFOOD
 development identity: Pi-native live Mission streaming (ADR-051),
-feedback-driven M7 repair convergence (ADR-052), and reliable Ctrl+C
-cancellation with `/mission-cancel` (ADR-053). It is not tagged,
+feedback-driven M7 repair convergence (ADR-052), reliable Ctrl+C
+cancellation with `/mission-cancel` (ADR-053), and ADR-048 capture-only
+timeout salvage for read-only workers that time out after useful tool
+activity. It is not tagged,
 npm-published, or a GitHub Release. RC30 remains the current public
 prerelease.
 M10 remains the latest accepted development milestone; M11 remains
@@ -512,13 +514,20 @@ Deliverables:
 - feedback-driven M7 repair: normalized criterion matching, investigation
   no-mod contract, synthesized requiredFixes, Boss complete precondition,
   repair packets with rejection context, identical-fingerprint anti-repeat
-  (ADR-052).
+  (ADR-052);
+- ADR-048 timeout salvage: a read-only work-phase timeout after useful tool
+  activity may run exactly one same-session capture-only `submit_agent_result`
+  turn. Mutation, CANCELLED, and SAFETY_STOP skip salvage. A salvage miss
+  remains M4 timeout. Worker-incomplete anti-repeat remains a one-cycle Boss
+  stop and does not re-dispatch the identical incomplete strategy.
 
 Exit evidence: `test/mission-progress.test.ts`, `test/rc31-convergence.test.ts`,
-ADR-051, ADR-052, RC31-01/02, `npm test` / `npm run check` `405/405`, local
+`test/worker-result-finalization.test.ts`, ADR-048/051/052, RC31-01/02, local
 unpublished candidate, Phase A live Mission
-`mission-423167a5-7c71-46bc-bad8-cbcaaff9b5ab`, and combined dogfood Mission
-`mission-5b5d4a11-8d0b-4974-9809-0bf64496cf01` COMPLETED with M7 pass.
+`mission-423167a5-7c71-46bc-bad8-cbcaaff9b5ab`, combined dogfood Mission
+`mission-5b5d4a11-8d0b-4974-9809-0bf64496cf01` COMPLETED with M7 pass, and
+timeout-salvage Mission `mission-c0b9400a-b487-4dce-8e43-14bd7edfa7e5`
+COMPLETED with M7 pass (public `0.1.0-rc.30`; local RC31 unpublished).
 Publication, tagging, and GitHub Release are not authorized.
 
 ## RC30 — Autonomous Boss-Led Mutation Recovery

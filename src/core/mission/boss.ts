@@ -343,7 +343,17 @@ const latestDecisionFor = (store: MissionStoreAdapter, missionId: string, taskId
 
 const rejectionFingerprintFor = (store: MissionStoreAdapter, missionId: string, taskId: string, repairInstruction?: string): string | undefined => {
 	const decision = latestDecisionFor(store, missionId, taskId);
-	if (!decision || decision.verdict === "pass") return undefined;
+	if (!decision || decision.verdict === "pass") {
+		const task = store.getTask(taskId);
+		const attempt = task?.lastRunId ? store.getAttempt(task.lastRunId) : undefined;
+		if (!attempt || attempt.status === "succeeded") return undefined;
+		return qualityRejectionFingerprint({
+			taskId,
+			verdict: "worker-incomplete",
+			requiredFixes: [attempt.terminalState ?? attempt.status],
+			evidenceKind: attempt.status,
+		});
+	}
 	const evidence = store.listEvidence(missionId).filter((item) => item.taskId !== undefined && String(item.taskId) === taskId).at(-1);
 	return qualityRejectionFingerprint({
 		taskId,
@@ -353,6 +363,20 @@ const rejectionFingerprintFor = (store: MissionStoreAdapter, missionId: string, 
 		...(evidence?.kind === undefined ? {} : { evidenceKind: evidence.kind }),
 		...(repairInstruction === undefined ? {} : { repairInstruction }),
 	});
+};
+
+const repeatRejectedReason = (decision: ReturnType<typeof latestDecisionFor>, fallback: string): string => {
+	const fix = decision?.requiredFixes[0] ?? decision?.reviewerSummary ?? fallback;
+	if (!decision || decision.verdict === "pass") {
+		return `Identical worker-incomplete strategy was not re-dispatched. Last outcome: ${fix}`.slice(0, 240);
+	}
+	return `Identical M7 rejection and repair strategy repeated. Last required fix: ${fix}`.slice(0, 240);
+};
+
+const incompleteRepeatThreshold = (store: MissionStoreAdapter, taskId: string): number => {
+	const task = store.getTask(taskId);
+	const attempt = task?.lastRunId ? store.getAttempt(task.lastRunId) : undefined;
+	return attempt?.terminalState === "no_eligible_route" ? 1 : 2;
 };
 
 export function qualityPrecludesComplete(store: MissionStoreAdapter, missionId: string): { readonly summary: string; readonly requiredFixes: readonly string[]; readonly fingerprint?: string } | undefined {
@@ -758,11 +782,10 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 				continue;
 			}
 			const plannedFingerprint = rejectionFingerprintFor(options.store, missionId, String(task.taskId), spec.objective);
-			if (plannedFingerprint && state.lastRejectionFingerprint === plannedFingerprint && (state.repeatedRejectionCount ?? 0) >= 2) {
+			if (plannedFingerprint && state.lastRejectionFingerprint === plannedFingerprint && (state.repeatedRejectionCount ?? 0) >= incompleteRepeatThreshold(options.store, String(task.taskId))) {
 				const decision = latestDecisionFor(options.store, missionId, String(task.taskId));
 				mission = persistState(options.store, mission, state, { kind: "boss-repeat-rejected", fingerprint: plannedFingerprint, repeatedRejectionCount: state.repeatedRejectionCount, taskId: String(task.taskId) });
-				const fix = decision?.requiredFixes[0] ?? decision?.reviewerSummary ?? "M7 rejected the same evidence strategy";
-				return terminal(options.store, mission, state, "AWAITING_USER", `Identical M7 rejection and repair strategy were not re-dispatched. Last required fix: ${fix}`.slice(0, 240), cycle + 1, options, clock);
+				return terminal(options.store, mission, state, "AWAITING_USER", repeatRejectedReason(decision, "worker did not complete"), cycle + 1, options, clock);
 			}
 			const context: BossLoopContext = { cycle, assignment, ...(feedback === undefined ? {} : { feedback }) };
 			let outcome: BossTaskOutcome;
@@ -792,11 +815,10 @@ export async function runMissionGoalLoop(options: MissionGoalLoopOptions): Promi
 					if (fp) {
 						const count = state.lastRejectionFingerprint === fp ? (state.repeatedRejectionCount ?? 1) + 1 : 1;
 						state = { ...state, lastRejectionFingerprint: fp, repeatedRejectionCount: count };
-						if (count >= 2) {
+						if (count >= incompleteRepeatThreshold(options.store, String(task.taskId))) {
 							mission = persistState(options.store, mission, state, { kind: "boss-repeat-rejected", fingerprint: fp, repeatedRejectionCount: count, taskId: String(task.taskId) });
 							const decision = latestDecisionFor(options.store, missionId, String(task.taskId));
-							const fix = decision?.requiredFixes[0] ?? verification.summary;
-							return terminal(options.store, mission, state, "AWAITING_USER", `Identical M7 rejection and repair strategy repeated. Last required fix: ${fix}`.slice(0, 240), cycle + 1, options, clock);
+							return terminal(options.store, mission, state, "AWAITING_USER", repeatRejectedReason(decision, verification.summary), cycle + 1, options, clock);
 						}
 					}
 				}

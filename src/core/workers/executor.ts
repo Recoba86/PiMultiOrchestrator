@@ -26,6 +26,7 @@ import {
 	restrictSessionToResultTool,
 	resultFinalizationPrompt,
 	shouldRunResultFinalization,
+	hasUsefulTaskWork,
 	skippedSafetyFinalization,
 } from "./finalization.js";
 import { isPotentiallyMutatingTool, toolProfileForPool, toolProfileForWorker, workerProfileFor } from "./profiles.js";
@@ -378,6 +379,37 @@ export class SubagentExecutor {
 				outcome = "timed_out";
 				failure = classifyFailure({ timeout: true });
 				terminalState = "aborted";
+				const usefulWork = hasUsefulTaskWork([...observations, ...observationByCall.values()], resultProtocol.toolName);
+				const mutationObserved = observations.some((item) => item.potentialMutation) || [...observationByCall.values()].some((item) => item.potentialMutation);
+				if (handle && shouldRunResultFinalization({
+					captured: readProtocolResult(resultProtocol, handle.protocolState) !== undefined,
+					cancelled: options.signal?.aborted === true,
+					safetyTerminated: handle.safetyTerminated === true,
+					providerSucceeded: false,
+					timedOut: true,
+					mutationObserved,
+					hasUsefulWork: usefulWork,
+				})) {
+					try { await handle.session.abort(); } catch { /* work-phase timeout already aborted the child */ }
+					const finalized = await this.runResultFinalization(handle.session, resultProtocol, handle.protocolState, options.request.timeoutMs ?? this.routeAdapter.policy.timeoutMs, options.signal);
+					resultFinalization = finalized.report;
+					if (finalized.prompt.kind === "cancelled" || options.signal?.aborted) {
+						outcome = "cancelled";
+						failure = classifyFailure({ cancelled: true });
+						terminalState = "aborted";
+						resultFinalization = { required: true, attempted: true, succeeded: false, outcome: "cancelled", ...(finalized.report.toolsExposed === undefined ? {} : { toolsExposed: finalized.report.toolsExposed }) };
+					} else if (finalized.prompt.kind === "done") {
+						result = readProtocolResult(resultProtocol, handle.protocolState);
+						protocolViolation = handle.protocolState.protocolViolation && result === undefined;
+						resultFinalization = reportFromCapture(handle.protocolState, finalized.report.toolsExposed ?? [], result);
+						if (result !== undefined && !protocolViolation) {
+							outcome = "completed";
+							failure = undefined;
+							providerSucceeded = true;
+							terminalState = "idle";
+						}
+					}
+				}
 			} else if (promptResult.kind === "error") {
 				failure = classifyFailure(failureInputFromError(promptResult.error));
 				outcome = failure.class === "cancelled" ? "cancelled" : failure.class === "timeout" ? "timed_out" : "infrastructure_failure";

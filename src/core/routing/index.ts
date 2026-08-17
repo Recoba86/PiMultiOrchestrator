@@ -317,7 +317,11 @@ function evaluateCandidate(
 	else if (candidate.availability === "stale" && schedulingPolicy === "weighted") reasons.push("route catalog is stale");
 	else if (candidate.availability === "unavailable" || candidate.available === false) reasons.push("route unavailable");
 	else if (candidate.availability === "unknown") reasons.push("route availability unknown");
-	if (schedulingPolicy === "weighted" && (candidate.health?.circuit === "open" || candidate.health?.circuit === "probing")) reasons.push("route health is not ready");
+	if (schedulingPolicy === "weighted" && (candidate.health?.circuit === "open" || candidate.health?.circuit === "probing")) {
+		const cooldownUntil = candidate.health?.cooldownUntil;
+		const expiredHalfOpen = candidate.health?.circuit === "open" && cooldownUntil !== undefined && !isFuture(cooldownUntil, now);
+		if (!expiredHalfOpen) reasons.push("route health is not ready");
+	}
 	if (schedulingPolicy === "weighted") {
 		const weight = candidate.weight ?? 1;
 		if (!Number.isSafeInteger(weight) || weight < 0) reasons.push("route weight is invalid");

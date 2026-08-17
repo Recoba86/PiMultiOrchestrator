@@ -10,7 +10,7 @@ import type { StableId } from "../src/core/config/types.js";
 import type { RoutingCandidate, RoutingPolicy } from "../src/core/routing/index.js";
 import { createProtocolCaptureState, createProtocolOnlyCaptureTool } from "../src/core/workers/result-tool.js";
 import { createSubagentExecutorForTesting } from "../src/core/workers/executor.js";
-import { resultFinalizationPrompt } from "../src/core/workers/finalization.js";
+import { resultFinalizationPrompt, shouldRunResultFinalization } from "../src/core/workers/finalization.js";
 import type {
 	ChildResultProtocol,
 	ChildSessionFactory,
@@ -44,7 +44,11 @@ type FakeMode =
 	| "mutate-omit-then-finalize"
 	| "mutate-omit-then-missing"
 	| "mutate-omit-then-infra"
-	| "hang";
+	| "hang"
+	| "read-then-hang-then-finalize"
+	| "read-then-hang-then-missing"
+	| "mutate-then-hang"
+	| "safety-then-hang";
 
 describe("RC29 two-phase worker result finalization", () => {
 	it("does not invoke finalization when work phase captured submit_agent_result", async () => {
@@ -539,6 +543,133 @@ describe("RC29 two-phase worker result finalization", () => {
 		assert.match(resultFinalizationPrompt("submit_agent_result"), /Submit the result of the work already performed/u);
 		assert.match(resultFinalizationPrompt("submit_agent_result"), /submit_agent_result exactly once/u);
 	});
+
+	it("allows timeout salvage only for useful non-mutating incomplete work", () => {
+		assert.equal(shouldRunResultFinalization({ captured: false, cancelled: false, safetyTerminated: false, providerSucceeded: true }), true);
+		assert.equal(shouldRunResultFinalization({ captured: false, cancelled: false, safetyTerminated: false, providerSucceeded: false, timedOut: true, hasUsefulWork: true, mutationObserved: false }), true);
+		assert.equal(shouldRunResultFinalization({ captured: false, cancelled: false, safetyTerminated: false, providerSucceeded: false, timedOut: true, hasUsefulWork: false, mutationObserved: false }), false);
+		assert.equal(shouldRunResultFinalization({ captured: false, cancelled: false, safetyTerminated: false, providerSucceeded: false, timedOut: true, hasUsefulWork: true, mutationObserved: true }), false);
+		assert.equal(shouldRunResultFinalization({ captured: false, cancelled: true, safetyTerminated: false, providerSucceeded: false, timedOut: true, hasUsefulWork: true, mutationObserved: false }), false);
+		assert.equal(shouldRunResultFinalization({ captured: false, cancelled: false, safetyTerminated: true, providerSucceeded: false, timedOut: true, hasUsefulWork: true, mutationObserved: false }), false);
+		assert.equal(shouldRunResultFinalization({ captured: true, cancelled: false, safetyTerminated: false, providerSucceeded: false, timedOut: true, hasUsefulWork: true, mutationObserved: false }), false);
+	});
+
+	it("salvages a read-only timeout with useful tool work via one capture-only finalization", async () => {
+		const root = await tmp();
+		try {
+			const { executor, tracker } = executorFor("read-then-hang-then-finalize", [], { ...policy, maxAttempts: 1, fallback: { enabled: false }, timeoutMs: 40 });
+			const result = await executor.run({ ...request(root, "investigation"), timeoutMs: 40 });
+			assert.equal(tracker.promptCount, 2);
+			assert.deepEqual(tracker.finalizationTools, ["submit_agent_result"]);
+			assert.equal(tracker.finalizationTools?.includes("read"), false);
+			assert.equal(tracker.workTools.includes("read"), true);
+			assert.equal(result.attempts.length, 1);
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(result.resultFinalization?.attempted, true);
+			assert.equal(result.resultFinalization?.outcome, "succeeded");
+			assert.equal(result.structuredResult?.summary, "finalized");
+			assert.equal(result.fallbackCount, 0);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not loop when timeout salvage also misses the structured result", async () => {
+		const root = await tmp();
+		try {
+			const { executor, tracker } = executorFor("read-then-hang-then-missing", [], { ...policy, maxAttempts: 1, fallback: { enabled: false }, timeoutMs: 40 });
+			const result = await executor.run({ ...request(root, "investigation"), timeoutMs: 40 });
+			assert.equal(tracker.promptCount, 2);
+			assert.equal(result.attempts.length, 1);
+			assert.notEqual(result.terminalStatus, "completed");
+			assert.equal(result.resultFinalization?.attempted, true);
+			assert.equal(result.structuredResult, undefined);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not salvage a mutating timeout", async () => {
+		const root = await tmp();
+		try {
+			const { executor, tracker } = executorFor("mutate-then-hang", [], { ...policy, maxAttempts: 1, fallback: { enabled: false }, timeoutMs: 40 });
+			const result = await executor.run({ ...request(root, "implementation"), timeoutMs: 40 });
+			assert.equal(tracker.promptCount, 1);
+			assert.equal(result.potentialMutationObserved, true);
+			assert.equal(result.resultFinalization?.attempted ?? false, false);
+			assert.notEqual(result.terminalStatus, "completed");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not salvage a cancelled read-only hang with useful tool work", async () => {
+		const root = await tmp();
+		try {
+			const adapter = adapterFor([candidate("route-a", 0)], { ...policy, maxAttempts: 1, fallback: { enabled: false }, timeoutMs: 5_000 });
+			const tracker = createTracker();
+			let createdResolve!: () => void;
+			const created = new Promise<void>((resolve) => { createdResolve = resolve; });
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+				create: async (options) => {
+					createdResolve();
+					return fakeSessionHandle(options.resultProtocol, "read-then-hang-then-finalize", tracker);
+				},
+			});
+			const controller = new AbortController();
+			const pending = executor.run({ ...request(root, "investigation"), timeoutMs: 5_000 }, controller.signal);
+			await created;
+			controller.abort();
+			const result = await pending;
+			assert.equal(result.terminalStatus, "cancelled");
+			assert.equal(tracker.promptCount <= 1, true);
+			assert.equal(result.resultFinalization?.attempted ?? false, false);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not salvage a SAFETY_STOP hang", async () => {
+		const root = await tmp();
+		try {
+			const { executor, tracker } = executorFor("safety-then-hang", [], { ...policy, maxAttempts: 1, fallback: { enabled: false }, timeoutMs: 40 });
+			const result = await executor.run({ ...request(root, "investigation"), timeoutMs: 40 });
+			assert.equal(tracker.promptCount, 1);
+			assert.equal(result.resultFinalization?.attempted ?? false, false);
+			assert.notEqual(result.terminalStatus, "completed");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps failed timeout salvage on the M4 timeout path instead of result-capability fallback", async () => {
+		const root = await tmp();
+		try {
+			const seen: string[] = [];
+			const tracker = createTracker();
+			const routingPolicy: RoutingPolicy = { ...policy, maxAttempts: 2, timeoutMs: 40, fallback: { enabled: true } };
+			const adapter = adapterFor([candidate("route-a", 0), candidate("route-b", 1)], routingPolicy);
+			let creates = 0;
+			const executor = createSubagentExecutorForTesting({ routeAdapter: adapter }, {
+				create: async (options) => {
+					creates += 1;
+					seen.push(options.route.routeId);
+					return fakeSessionHandle(options.resultProtocol, creates === 1 ? "read-then-hang-then-missing" : "complete", tracker);
+				},
+			});
+			const result = await executor.run({ ...request(root, "investigation"), timeoutMs: 40 });
+			assert.equal(creates, 2);
+			assert.deepEqual(seen, [id("route-a"), id("route-a")]);
+			assert.equal(result.attempts[0]?.resultFinalization?.attempted, true);
+			assert.equal(result.attempts[0]?.infrastructureFailure?.class, "timeout");
+			assert.equal(result.attempts[0]?.failureAction, "RETRY_SAME_ROUTE");
+			assert.equal(result.fallbackCount, 0);
+			assert.equal(result.terminalStatus, "completed");
+			assert.equal(result.structuredResult?.summary, "child complete");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 });
 
 interface Tracker {
@@ -618,7 +749,7 @@ function fakeSessionHandle(
 	const submitTool = createProtocolOnlyCaptureTool(protocol, protocolState);
 	let listener: ((event: unknown) => void) | undefined;
 	let activeTools = ["read", "grep", "find", "ls", submitTool.name];
-	let safetyTerminated = mode === "safety-stop";
+	let safetyTerminated = mode === "safety-stop" || mode === "safety-then-hang";
 	let turn = 0;
 	const emitRead = () => {
 		listener?.({ type: "tool_execution_start", toolCallId: "read-1", toolName: "read" });
@@ -653,7 +784,12 @@ function fakeSessionHandle(
 			tracker.promptCount += 1;
 			turn += 1;
 			if (turn === 1) tracker.workTools = [...activeTools];
-			if (mode === "hang") await new Promise<void>(() => undefined);
+			if (mode === "hang" && turn === 1) await new Promise<void>(() => undefined);
+			if ((mode === "read-then-hang-then-finalize" || mode === "read-then-hang-then-missing" || mode === "mutate-then-hang" || mode === "safety-then-hang") && turn === 1) {
+				if (mode === "mutate-then-hang") emitEdit();
+				else emitRead();
+				await new Promise<void>(() => undefined);
+			}
 			if (mode === "rate") throw Object.assign(new Error("rate"), { status: 429 });
 			if (turn === 1) {
 				if (mode.startsWith("mutate-")) emitEdit();
@@ -686,7 +822,7 @@ function fakeSessionHandle(
 				finish("toolUse");
 				return;
 			}
-			if (mode === "omit-then-finalize" || mode === "mutate-omit-then-finalize" || mode === "protocol-invalid-then-finalize") {
+			if (mode === "omit-then-finalize" || mode === "mutate-omit-then-finalize" || mode === "protocol-invalid-then-finalize" || mode === "read-then-hang-then-finalize") {
 				await emitSubmit({ status: "completed", summary: "finalized" });
 				finish("toolUse");
 				return;
@@ -701,6 +837,6 @@ function fakeSessionHandle(
 		toolNames: ["read", submitTool.name],
 		protocolState,
 		dispose: () => undefined,
-		...(safetyTerminated ? { safetyTerminated: true } : {}),
+		get safetyTerminated() { return safetyTerminated; },
 	};
 }

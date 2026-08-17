@@ -257,15 +257,18 @@ an untrusted caller from registering a `submit_evil` handler that can mutate
 the workspace through Pi's child-session API.
 
 RC29 separates worker task execution from result handoff. If a child reaches a
-normal provider-success boundary without a captured result protocol tool, the
-same `AgentSession` may run exactly one capture-only finalization turn with
-only that tool exposed. Finalization cannot call work tools, cannot mutate the
-worktree, and cannot create another Task or Attempt. After a potential
-mutation, missing capture or finalization infrastructure failure does not
-replay the worker on another route. After a non-mutating miss, ADR-049 may
-select `FALLBACK_NEXT_ROUTE` as `result_capability` for another eligible
-route on the same Task. MissionStore persists metadata-only finalization
-diagnostics on the attempt event payload.
+normal provider-success boundary without a captured result protocol tool, or a
+read-only work phase times out after useful tool activity without mutation,
+cancellation, or SAFETY_STOP, the same `AgentSession` may run exactly one
+capture-only finalization turn with only that tool exposed. Finalization cannot
+call work tools, cannot mutate the worktree, and cannot create another Task,
+Attempt, or Boss cycle. After a potential mutation, missing capture or
+finalization infrastructure failure does not replay the worker on another
+route. A timeout-salvage miss remains an M4 infrastructure timeout. After a
+non-mutating provider-success miss, ADR-049 may select `FALLBACK_NEXT_ROUTE`
+as `result_capability` for another eligible route on the same Task.
+MissionStore persists metadata-only finalization diagnostics on the attempt
+event payload.
 
 RC30 adds Boss-led autonomous mutation recovery above M4. After an
 Implementation Worker mutates the local worktree and still misses

@@ -253,6 +253,8 @@ describe("M4 pure routing", () => {
 		assert.deepEqual(first, second);
 		const excluded = selectRoute({ poolId: "implementation", candidates: [candidate("route-a", 0, { weight: 5, availability: "stale" }), candidate("route-b", 1, { weight: 3, health: { circuit: "open" } })], policy: policy(), now: "2026-01-01T00:00:00.000Z", schedulingPolicy: "weighted", schedulingKey: "ineligible" });
 		assert.equal(excluded.kind, "NO_ELIGIBLE_ROUTE");
+		const halfOpen = selectRoute({ poolId: "implementation", candidates: [candidate("route-b", 0, { weight: 3, health: { circuit: "open", cooldownUntil: "2025-12-31T00:00:00.000Z" } })], policy: policy(), now: "2026-01-01T00:00:00.000Z", schedulingPolicy: "weighted", schedulingKey: "half-open" });
+		assert.equal(halfOpen.kind, "SELECTED");
 		const priorityStale = selectRoute({ poolId: "implementation", candidates: [candidate("route-a", 0, { availability: "stale" })], policy: policy(), now: "2026-01-01T00:00:00.000Z" });
 		assert.equal(priorityStale.kind, "SELECTED");
 	});

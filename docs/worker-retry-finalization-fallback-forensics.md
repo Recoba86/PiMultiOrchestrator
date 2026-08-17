@@ -18,6 +18,12 @@ terminal protocol (`invalid_child_result`) returning to Boss, not M4
 
 No runtime source change is authorized from this finding.
 
+Correction 2026-08-17: RC31 later generalized ADR-048 so a *read-only*
+timeout after useful tool activity may run the same capture-only finalization
+turn. That does not rewrite this incident: hang-without-useful-work and
+mutating timeouts remain M4 infrastructure, and a timeout-salvage miss is
+still timeout rather than `result_capability`.
+
 ## 1. Exact real Attempt timeline
 
 Read-only snapshot of

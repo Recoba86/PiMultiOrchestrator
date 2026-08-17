@@ -4,6 +4,30 @@ Last updated: 2026-08-17
 
 This is an append-oriented record of meaningful milestone outcomes, not a daily diary. Do not rewrite accepted history to match later intentions; add an explicit correction when evidence changes.
 
+## RC31 — Read-only timeout salvage (ADR-048 generalization)
+
+- **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.
+  Development identity is `0.1.0-rc.31`. Not public, tagged, npm-published,
+  or a GitHub Release. Public RC30 remains immutable.
+- **Incident:** `mission-0fda6357-6e16-4ad3-bf2c-8284bf4e7824` stopped after
+  one Boss cycle with worker-incomplete anti-repeat. The read-only worker had
+  already inspected package/docs, was not cancelled, observed no mutation,
+  and hit the 60s child timeout before `submit_agent_result`.
+- **Fix:** generalize ADR-048 `shouldRunResultFinalization` to that
+  read-only timeout/no-result state. Same session, same Attempt, one
+  capture-only turn, `submit_agent_result` only. Mutation / CANCELLED /
+  SAFETY_STOP still skip salvage. Salvage miss stays M4 timeout, not
+  `result_capability`. The 60s work timeout is unchanged. Anti-repeat is
+  unchanged.
+- **Live dogfood:** Mission `mission-c0b9400a-b487-4dce-8e43-14bd7edfa7e5`
+  COMPLETED in 7m 44s with M7 pass. First investigation Attempt
+  `attempt-03979228-4f8d-4fa1-bb5b-0bec0954414f` salvaged
+  (`finalizationSucceeded=true`) after 67.5s. Terminal reason reports
+  public `0.1.0-rc.30` and local unpublished RC31. Extra Boss cycles were
+  caused by first M7 `no_eligible_route` on the verification pool, not by
+  repeating an incomplete worker strategy.
+- **Publication boundary:** do not publish, tag, or GitHub-release RC31.
+
 ## RC31 — Complete Pi-Native Streaming + Reliable Mission Cancellation (LOCAL UNPUBLISHED)
 
 - **Date/status:** 2026-08-17; `LOCAL / UNPUBLISHED / DOGFOOD`.

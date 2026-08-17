@@ -131,6 +131,12 @@ describe("RC31 M7 repair convergence", () => {
 		const different = qualityRejectionFingerprint({ taskId: "t1", verdict: "blocked", requiredFixes: ["get registry proof"], repairInstruction: "Do not repeat general inspection. Obtain public registry evidence." });
 		assert.equal(same, repeat);
 		assert.notEqual(same, different);
+		const incomplete = qualityRejectionFingerprint({ taskId: "t1", verdict: "worker-incomplete", requiredFixes: ["no_eligible_route"], evidenceKind: "failed" });
+		const incompleteRepeat = qualityRejectionFingerprint({ taskId: "t1", verdict: "worker-incomplete", requiredFixes: ["no_eligible_route"], evidenceKind: "failed" });
+		const volatileIfObjectiveIncluded = qualityRejectionFingerprint({ taskId: "t1", verdict: "worker-incomplete", requiredFixes: ["no_eligible_route"], evidenceKind: "failed", repairInstruction: "Identify version (cycle 2)." });
+		assert.equal(incomplete, incompleteRepeat);
+		assert.notEqual(incomplete, volatileIfObjectiveIncluded);
+		assert.notEqual(same, incomplete);
 	});
 
 	it("does not blindly re-dispatch the same blocked repair strategy", async () => {
@@ -222,6 +228,149 @@ describe("RC31 M7 repair convergence", () => {
 			});
 			assert.equal(result.status, "completed");
 			assert.equal(result.terminal, "COMPLETED");
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not burn the Boss cycle budget re-dispatching a worker-incomplete task that never reached M7", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc31-incomplete-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "m-incomplete", goal: "report public version", acceptanceCriteria: ["report the public version"] });
+			let created: TaskRecord | undefined;
+			let dispatches = 0;
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a")],
+				invoke: async (request): Promise<BossDecision> => {
+					const objective = `Identify the current public version from package/repo metadata (cycle ${request.cycle}).`;
+					if (request.phase === "plan") {
+						return {
+							action: "dispatch",
+							summary: "inspect metadata",
+							tasks: [{ ...(created?.taskId === undefined ? {} : { taskId: created.taskId }), roleId: "investigator", executionClass: "investigation", poolId: "investigation", objective, acceptanceCriteria: ["Identify the current public version", "Verify that no files have been modified."] }],
+						};
+					}
+					return { action: "replan", summary: "worker did not complete", tasks: [{ ...(created?.taskId === undefined ? {} : { taskId: created.taskId }), roleId: "investigator", executionClass: "investigation", poolId: "investigation", objective, acceptanceCriteria: ["Identify the current public version", "Verify that no files have been modified."] }] };
+				},
+				dispatch: async (task) => {
+					created ??= task;
+					dispatches += 1;
+					const attempt = store.createAttempt({ taskId: task.taskId });
+					store.finishAttempt(attempt.attemptId, "failed", { terminalState: "no_eligible_route" });
+					return { taskId: String(task.taskId), status: "failed", summary: "No eligible route is available" };
+				},
+				verify: async (task, outcome) => {
+					if (outcome.status !== "succeeded") return { taskId: String(task.taskId), verdict: "blocked", summary: "M7 verification cannot start because the worker did not complete" };
+					return { taskId: String(task.taskId), verdict: "blocked", summary: "unexpected M7 start" };
+				},
+				maxCycles: 4,
+			});
+			assert.equal(store.listQualityDecisions(String(mission.missionId)).length, 0);
+			assert.equal(store.listEvidence(String(mission.missionId)).length, 0);
+			assert.equal(dispatches, 1);
+			assert.equal(result.terminal, "AWAITING_USER");
+			assert.ok(store.listEvents(String(mission.missionId)).some((event) => isRecord(event.payload) && event.payload.kind === "boss-repeat-rejected"));
+			assert.match(String((isRecord(result.mission.plan) && isRecord(result.mission.plan.orchestration) ? result.mission.plan.orchestration.terminalReason : "") ?? ""), /worker-incomplete|did not complete|no_eligible_route/iu);
+			assert.doesNotMatch(String((isRecord(result.mission.plan) && isRecord(result.mission.plan.orchestration) ? result.mission.plan.orchestration.terminalReason : "") ?? ""), /safety budget exhausted/iu);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not treat Boss objective rewording as a new strategy after interrupted worker-incomplete attempts", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc31-interrupted-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "m-interrupted", goal: "report public version", acceptanceCriteria: ["report the public version"] });
+			let created: TaskRecord | undefined;
+			let dispatches = 0;
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a")],
+				invoke: async (request): Promise<BossDecision> => {
+					const objective = `Inspect metadata files for the public version — attempt wording ${request.cycle}.`;
+					return {
+						action: request.phase === "plan" ? "dispatch" : "replan",
+						summary: "continue inspection",
+						tasks: [{ ...(created?.taskId === undefined ? {} : { taskId: created.taskId }), roleId: "investigator", executionClass: "investigation", poolId: "investigation", objective, acceptanceCriteria: ["Identify the current public version"] }],
+					};
+				},
+				dispatch: async (task) => {
+					created ??= task;
+					dispatches += 1;
+					const attempt = store.createAttempt({ taskId: task.taskId });
+					store.finishAttempt(attempt.attemptId, "interrupted", { terminalState: "recovered_interrupted" });
+					return { taskId: String(task.taskId), status: "failed", summary: "Attempt recovered as interrupted" };
+				},
+				verify: async (task, outcome) => {
+					if (outcome.status !== "succeeded") return { taskId: String(task.taskId), verdict: "blocked", summary: "M7 verification cannot start because the worker did not complete" };
+					return { taskId: String(task.taskId), verdict: "blocked", summary: "unexpected M7 start" };
+				},
+				maxCycles: 4,
+			});
+			assert.equal(dispatches, 2);
+			assert.equal(result.terminal, "AWAITING_USER");
+			assert.ok(store.listEvents(String(mission.missionId)).some((event) => isRecord(event.payload) && event.payload.kind === "boss-repeat-rejected"));
+			assert.doesNotMatch(String((isRecord(result.mission.plan) && isRecord(result.mission.plan.orchestration) ? result.mission.plan.orchestration.terminalReason : "") ?? ""), /safety budget exhausted/iu);
+			store.close();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("completes in one Boss cycle after a salvaged worker structured result", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pmo-rc31-salvage-complete-"));
+		try {
+			const store = createMissionStore({ root });
+			const mission = store.createMission({ missionId: "m-salvage", goal: "report public version", acceptanceCriteria: ["report the public version"] });
+			const quality = new QualityService(store);
+			let dispatches = 0;
+			const result = await runMissionGoalLoop({
+				store,
+				missionId: mission.missionId,
+				entries: [route("boss-a")],
+				invoke: async (request): Promise<BossDecision> => {
+					if (request.phase === "plan") {
+						return { action: "dispatch", summary: "inspect", tasks: [{ roleId: "investigator", executionClass: "investigation", poolId: "investigation", objective: "Report the public version.", acceptanceCriteria: ["report the public version"] }] };
+					}
+					return { action: "complete", summary: "public version is 0.1.0-rc.30", tasks: [], acceptanceSatisfied: true };
+				},
+				dispatch: async (task) => {
+					dispatches += 1;
+					const attempt = store.createAttempt({ taskId: task.taskId });
+					store.finishAttempt(attempt.attemptId, "succeeded", { result: { status: "completed", summary: "public prerelease 0.1.0-rc.30" } });
+					store.admitEvidence({ missionId: mission.missionId, taskId: task.taskId, attemptId: attempt.attemptId, kind: "implementation-result", content: { status: "completed", summary: "public prerelease 0.1.0-rc.30" }, actor: "worker" });
+					return { taskId: String(task.taskId), status: "succeeded", summary: "salvaged structured result" };
+				},
+				verify: async (task) => {
+					const attemptId = store.getTask(task.taskId)?.lastRunId;
+					assert.ok(attemptId);
+					const verification = quality.startVerification({ missionId: mission.missionId, taskId: task.taskId, targetRunId: attemptId, round: 0 });
+					quality.completeVerification(verification.verificationId, {
+						verdict: "pass",
+						criterionResults: [{ criterion: "report the public version", status: "satisfied", evidenceSummary: "npm next is 0.1.0-rc.30" }],
+						mechanicalChecks: [],
+						findings: [],
+						requiredFixes: [],
+						risks: [],
+						summary: "pass",
+					}, task.acceptanceCriteria);
+					return { verdict: "pass", summary: "pass" };
+				},
+				maxCycles: 4,
+			});
+			assert.equal(dispatches, 1);
+			assert.equal(result.cycles, 1);
+			assert.equal(result.terminal, "COMPLETED");
+			assert.equal(store.listEvidence(String(mission.missionId)).length > 0, true);
+			assert.equal(store.listQualityDecisions(String(mission.missionId)).at(-1)?.verdict, "pass");
+			assert.equal(store.listEvents(String(mission.missionId)).some((event) => isRecord(event.payload) && event.payload.kind === "boss-repeat-rejected"), false);
 			store.close();
 		} finally {
 			await rm(root, { recursive: true, force: true });

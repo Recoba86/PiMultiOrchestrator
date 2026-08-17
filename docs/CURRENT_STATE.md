@@ -33,7 +33,7 @@ Read this first for a fast operational snapshot. Git and verification evidence t
 | RC21 release | `0.1.0-rc.21` — public prerelease; source commit `68c0c0f82c5c82d7944512ea64aadd05a2e4569e`, tag `v0.1.0-rc.21`, artifact SHA-256 `67e5fe663bc8ec05d3f02ec1183841552b3e70b13fd92901962fddbef8b6a266` |
 | RC22 local candidate | `0.1.0-rc.22` — canonical model selector presentation; source commit `288c77cfac92dc7ffa8a0f0b16a69d140ada3aea`, artifact SHA-256 `7d9b9451d1c2590d5b2632b6dd7aadd250bd2851af8dd79d79c25113693dbdea`; local only, not published |
 | RC25 release | `0.1.0-rc.25` — source commit `52b665f6ace6eec078cbe8a28c35cce36a9cb045`, tag `v0.1.0-rc.25`, artifact SHA-256 `32a8a9f1f968ff4bacf38385afd52869c4c793480e63f4335507ffd11a2a7ec5`; public prerelease |
-| RC31 development line | `0.1.0-rc.31` — Complete Pi-Native Streaming + Reliable Mission Cancellation; LOCAL / UNPUBLISHED / DOGFOOD; candidate artifact SHA-256 `ee4f947e60ca96e076d92c7001e306eadaa67434e3f521f76d4cc7e4c883e90e`; not tagged, npm-published, or a GitHub Release; public RC30 remains immutable |
+| RC31 development line | `0.1.0-rc.31` — Complete Pi-Native Streaming, Reliable Mission Cancellation, and ADR-048 read-only timeout salvage; LOCAL / UNPUBLISHED / DOGFOOD; prior candidate artifact SHA-256 `ee4f947e60ca96e076d92c7001e306eadaa67434e3f521f76d4cc7e4c883e90e`; not tagged, npm-published, or a GitHub Release; public RC30 remains immutable |
 | RC30 development line | `0.1.0-rc.30` — Autonomous Boss-Led Mutation Recovery; public prerelease; source `ef344ad12abeace41e9ba4f88f552b6f67306107`, tag `v0.1.0-rc.30`, artifact SHA-256 `46e9cf0e4d13bb8707551d4a602a8491b66cae6e3436bf4ed275f94ed0cd58dc`; RC29 frozen unpublished artifact SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b` was not published |
 | RC29 development line | `0.1.0-rc.29` — Mission Runtime Convergence; UNPUBLISHED CANDIDATE / LIVE MISSION COMPLETED; artifact SHA-256 `fec5a819fd6ae149296bd4328924862abde3defe35893505ba8fbb046dc29f7b`; source `d975a5d2987df7116d07d6a15a9ed6a51269f1d3`; not public, accepted, tagged, npm-published, or production-ready |
 | RC28 release | `0.1.0-rc.28` — Real Boss Invocation Compatibility, Failure Diagnostics & Fallback Semantics; public immutable prerelease; source `aad28c33260326665ec17e347d50fe985b18a953`, tag `v0.1.0-rc.28`, artifact SHA-256 `9f516b23af13749148289c616298db0f48b1a51c8cb61e9814e09097db1a0fa3` |
@@ -153,6 +153,38 @@ Read this first for a fast operational snapshot. Git and verification evidence t
   Artifact source commit `0bc66b81b36e52a748c4fe2ef94b3c9465e197a7`.
   Detached `npm run release:verify` PASS: `405/405`, integrity `20/20`,
   privacy clean.
+
+## RC31 read-only timeout salvage (ADR-048 generalization)
+
+- **Status:** `LOCAL / UNPUBLISHED / DOGFOOD`. Development identity remains
+  `0.1.0-rc.31`. Not tagged, npm-published, accepted, or a GitHub Release.
+  Public RC30 remains immutable. The 60s worker timeout was not raised.
+- **Contract:** ADR-048 now allows exactly one same-session capture-only
+  finalization turn when a read-only work phase times out after useful
+  non-result tool activity, with `mutationObserved` not true, no CANCELLED,
+  and no SAFETY_STOP. Salvage exposes only `submit_agent_result`. A salvage
+  miss remains M4 timeout; ADR-049 `result_capability` still requires
+  provider success. Worker-incomplete anti-repeat remains a one-cycle Boss
+  stop and does not restore repeated Boss re-dispatch.
+- **Deterministic tests:** timeout salvage, mutation/CANCELLED/SAFETY_STOP
+  skip, salvage-miss M4 retry, existing ADR-048 provider-success
+  finalization, and ADR-049 result-capability fallback remain green in
+  `test/worker-result-finalization.test.ts`; anti-repeat remains green in
+  `test/rc31-convergence.test.ts`.
+- **Live dogfood:** Mission
+  `mission-c0b9400a-b487-4dce-8e43-14bd7edfa7e5` Goal was the same Persian
+  public-version inspection. Investigation attempt
+  `attempt-03979228-4f8d-4fa1-bb5b-0bec0954414f` ran 67.5s with
+  `finalizationAttempted=true` / `finalizationSucceeded=true`,
+  `mutation_observed=0`, `find` blocked as `PROTECTED_PATH_DESCENDANT`
+  without SAFETY_STOP. Evidence was proposed. Durable terminal is
+  `COMPLETED` with M7 `pass`. Boss summary: public prerelease
+  `0.1.0-rc.30` (`next`); `latest` remains `0.1.0-rc.17`; local RC31 is
+  unpublished. First M7 on that Attempt was `blocked` with
+  `No eligible route is available`, so Boss used additional cycles
+  (`orchestration.cycle=2`) before M7 pass. That is verification-pool
+  routing, not worker-incomplete re-dispatch and not a salvage miss.
+- **Publication boundary:** do not publish, tag, or GitHub-release RC31.
 
 ## RC30 Autonomous Boss-led mutation recovery (PUBLIC PRERELEASE)
 
